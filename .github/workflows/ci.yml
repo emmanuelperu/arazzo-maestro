@@ -81,14 +81,15 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        # @v7 is required to pin a v2.x golangci-lint binary. @v6 only
-        # supports v1.x and rejects v2 with "you must update to v7".
+        # The action major is kept in sync with the binary major:
+        # action @v9 supports golangci-lint v2.x (which our
+        # .golangci.yml requires — `version: "2"` header). Earlier
+        # action majors (@v6 and below) only accept v1.x binaries.
         uses: golangci/golangci-lint-action@v9
         with:
-          # v2.x is required because (a) our .golangci.yml uses the v2
-          # config format (version: "2"), and (b) the v1.64.8 default
-          # is built with Go 1.24 and refuses to lint a project
-          # targeting Go 1.25 (our go.mod).
+          # v2.x is required because our .golangci.yml uses the v2
+          # format and our go.mod targets Go 1.25 — the v1.64.x line
+          # is built with Go 1.24 and refuses to lint newer modules.
           version: v2.12.2
 
   govulncheck:
