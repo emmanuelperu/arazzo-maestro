@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+#
+# Release Dockerfile used by goreleaser. Unlike the dev-time
+# ./Dockerfile (which builds from source), this one assumes goreleaser
+# has already produced the static binary and just packages it.
+#
+# Build context is the goreleaser temp dir containing the binary
+# `arazzo-maestro` ready to be COPYd in.
+
+FROM scratch
+
+LABEL org.opencontainers.image.title="arazzo-maestro" \
+      org.opencontainers.image.description="Lint and render Arazzo workflow specifications." \
+      org.opencontainers.image.source="https://github.com/emmanuelperu/arazzo-maestro" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+COPY arazzo-maestro /arazzo-maestro
+
+ENTRYPOINT ["/arazzo-maestro"]
