@@ -6,6 +6,10 @@
 # vertical rail connecting steps, monospace step headers, single warm
 # accent (amber). Deliberately distinct from the dotted-background /
 # emerald-gradient look common to other Arazzo editors.
+#
+# A third built-in, "pb33f", is a neon homage to Princess Beef Heavy
+# Industries (pb33f), Dave Shanley's company behind libopenapi and vacuum:
+# hot pink and electric blue on near-black, monospace, square. WCAG AA.
 
 themes:
   - name: light
@@ -75,3 +79,40 @@ themes:
       badgeBorder: "#e7e5e4"
       badgeText: "#e7e5e4"
       footer: "#a8a29e"
+
+  # "pb33f", neon homage to Princess Beef Heavy Industries (pink + blue
+  # on near-black, hacker-terminal vibe). Pink #f83aff and dark #0d1117
+  # are pb33f's own colours; the blue is an inferred neon azure.
+  - name: pb33f
+    font: mono       # hacker-terminal homage (system mono stack)
+    shape: square
+    colors:
+      bg: "#0d1117"             # pb33f near-black
+      bgGrid: "#1c2433"         # faint blue-tinted schematic grid
+      text: "#e6edf3"
+      textMuted: "#9da8b8"      # (≥7:1 on bg)
+      heading: "#f0f6fc"
+      cardBg: "#0d1117"         # flat schematic feel
+      cardBorder: "#586a86"     # blue-gray hairline (≥3:1 on bg)
+      cardHeaderBg: "#0d1117"
+      runtime: "#f83aff"        # pb33f hot pink, the signature accent
+      apiLink: "#56b6ff"        # neon azure (operationId / link)
+      startBg: "#0d1117"
+      startBorder: "#f83aff"    # pink neon frame on START
+      startText: "#f83aff"
+      startMuted: "#9da8b8"
+      endBg: "#f83aff"          # inverse: pink-filled END
+      endBorder: "#f83aff"
+      endText: "#0d1117"        # charcoal on pink
+      endMuted: "#3d0b47"       # deep plum (≥5:1 on pink)
+      jsonBg: "#010409"         # pure-black terminal block
+      jsonText: "#c9d1d9"
+      jsonRuntime: "#f83aff"    # pink (≥6:1 on black)
+      successBg: "#0d1117"
+      successBorder: "#56b6ff"
+      successText: "#7cc7ff"    # blue asserts, balances the pink
+      rail: "#f83aff"           # pink rail, visual signature
+      badgeBg: "#0d1117"
+      badgeBorder: "#56b6ff"
+      badgeText: "#9fd0ff"
+      footer: "#8b949e"
