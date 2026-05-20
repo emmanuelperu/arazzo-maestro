@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"arazzo-maestro/internal/parser"
+	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
 )
 
 const tinyOpenAPI = `

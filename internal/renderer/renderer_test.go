@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"arazzo-maestro/internal/parser"
-	"arazzo-maestro/internal/theme"
+	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
+	"github.com/emmanuelperu/arazzo-maestro/internal/theme"
 )
 
 func examplesShopYAML(t *testing.T) string {

@@ -1,4 +1,4 @@
-module arazzo-maestro
+module github.com/emmanuelperu/arazzo-maestro
 
 go 1.25.10
 

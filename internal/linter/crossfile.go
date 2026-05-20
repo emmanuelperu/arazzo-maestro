@@ -20,7 +20,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"arazzo-maestro/internal/model"
+	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 )
 
 // operationIndex maps a source name → the set of operationIds it

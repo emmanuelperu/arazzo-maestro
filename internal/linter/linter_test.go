@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"arazzo-maestro/internal/parser"
+	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
 )
 
 // TestLintFileCleanExample is the end-to-end happy path: shop.arazzo.yaml

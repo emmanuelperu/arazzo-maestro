@@ -16,11 +16,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"arazzo-maestro/internal/linter"
-	"arazzo-maestro/internal/model"
-	"arazzo-maestro/internal/parser"
-	"arazzo-maestro/internal/renderer"
-	"arazzo-maestro/internal/theme"
+	"github.com/emmanuelperu/arazzo-maestro/internal/linter"
+	"github.com/emmanuelperu/arazzo-maestro/internal/model"
+	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
+	"github.com/emmanuelperu/arazzo-maestro/internal/renderer"
+	"github.com/emmanuelperu/arazzo-maestro/internal/theme"
 )
 
 // defaultThemesFile is the auto-discovered themes config at the project

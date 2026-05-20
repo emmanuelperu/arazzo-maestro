@@ -18,8 +18,8 @@ import (
 
 	jsonenc "encoding/json"
 
-	"arazzo-maestro/internal/model"
-	"arazzo-maestro/internal/theme"
+	"github.com/emmanuelperu/arazzo-maestro/internal/model"
+	"github.com/emmanuelperu/arazzo-maestro/internal/theme"
 )
 
 //go:embed templates/*.html

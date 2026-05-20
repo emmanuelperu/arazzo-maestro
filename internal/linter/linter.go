@@ -20,8 +20,8 @@ import (
 	"regexp"
 	"strings"
 
-	"arazzo-maestro/internal/model"
-	"arazzo-maestro/internal/parser"
+	"github.com/emmanuelperu/arazzo-maestro/internal/model"
+	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
 )
 
 // Severity classifies a linter finding.

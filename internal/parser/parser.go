@@ -14,7 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"arazzo-maestro/internal/model"
+	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 )
 
 // ArazzoParseError is returned when the YAML cannot be turned into a
