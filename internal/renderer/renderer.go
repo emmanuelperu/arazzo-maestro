@@ -204,7 +204,7 @@ func RenderWorkflow(wf model.Workflow, th *theme.Theme) (string, error) {
 // WriteWorkflow renders a workflow and writes it to
 // `<outputDir>/<workflowId>.html`, creating the directory if needed.
 func WriteWorkflow(wf model.Workflow, outputDir string, th *theme.Theme) (string, error) {
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return "", err
 	}
 	content, err := RenderWorkflow(wf, th)
@@ -237,7 +237,7 @@ func RenderIndex(doc *model.ArazzoDocument, th *theme.Theme) (string, error) {
 
 // WriteIndex renders and writes the index page to `<outputDir>/index.html`.
 func WriteIndex(doc *model.ArazzoDocument, outputDir string, th *theme.Theme) (string, error) {
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return "", err
 	}
 	content, err := RenderIndex(doc, th)
