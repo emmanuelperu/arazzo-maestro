@@ -1,0 +1,33 @@
+# Keep Go modules and GitHub Actions in lock-step with upstream
+# releases. Dependabot opens a PR whenever an update is available; CI
+# (.github/workflows/ci.yml) gates the merge.
+#
+# This config also unlocks the OpenSSF Scorecard
+# `Dependency-Update-Tool` check.
+
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+      include: scope

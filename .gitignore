@@ -1,0 +1,25 @@
+# Binaries
+/arazzo-maestro
+/bin/
+*.exe
+*.test
+*.out
+
+# Build / release output
+/dist/
+
+# User-local themes file (the example stays tracked)
+/themes.yml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# just .agents
+.claude
+Plan.md
+Review.md

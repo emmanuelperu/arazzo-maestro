@@ -1,0 +1,181 @@
+openapi: "3.1.0"
+
+info:
+  title: Checkout API (branching demo)
+  description: |
+    Minimal OpenAPI contract referenced by `checkout-branching.arazzo.yaml`
+    (Arazzo). It defines just the three operations the branching workflow
+    needs: process a payment, then either confirm or cancel the order.
+
+    Kept intentionally lean, schemas are skeletal because the goal is to
+    demonstrate Arazzo `onSuccess` / `onFailure` control flow, not to be a
+    realistic e-commerce API.
+  version: "1.0.0"
+
+servers:
+  - url: https://shop.example.com/api/v1
+    description: Production server
+
+tags:
+  - name: Payment
+    description: Process payments for orders
+  - name: Order
+    description: Confirm or cancel orders
+
+paths:
+  /orders/{orderId}/payment:
+    post:
+      operationId: processPayment
+      summary: Process a card payment for the given order
+      description: |
+        Submits payment details for the referenced order. The response
+        carries a `status` of either `OK` or `REFUSED` depending on what
+        the bank returned.
+      tags: [Payment]
+      parameters:
+        - name: orderId
+          in: path
+          description: Identifier of the order to pay.
+          required: true
+          schema:
+            type: string
+            example: order-001
+        - name: Accept-Language
+          in: header
+          description: Preferred locale for the payment receipt and error labels.
+          schema:
+            type: string
+            example: fr_FR
+      requestBody:
+        description: Card payment instructions.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CardPayment"
+            example:
+              method: card
+              amount: 49.99
+              cardNumber: "4111111111111111"
+              cardHolder: John Doe
+              expiryDate: "12/26"
+              cvv: "123"
+      responses:
+        "200":
+          description: Payment processed. Inspect `status` to know the outcome.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    description: Outcome of the payment.
+                    enum: [OK, REFUSED]
+                    example: OK
+                  transactionId:
+                    type: string
+                    description: Bank transaction identifier (present on success).
+                    example: tx-9f2c1
+              example:
+                status: OK
+                transactionId: tx-9f2c1
+
+  /orders/{orderId}/confirm:
+    post:
+      operationId: confirmOrder
+      summary: Confirm an order after a successful payment
+      description: |
+        Marks the order as paid and confirmed, then returns a confirmation
+        identifier used for the receipt.
+      tags: [Order]
+      parameters:
+        - name: orderId
+          in: path
+          description: Identifier of the order to confirm.
+          required: true
+          schema:
+            type: string
+            example: order-001
+      responses:
+        "200":
+          description: Order confirmed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [confirmationId]
+                properties:
+                  confirmationId:
+                    type: string
+                    description: Confirmation identifier for the receipt.
+                    example: conf-7b3e2
+              example:
+                confirmationId: conf-7b3e2
+
+  /orders/{orderId}/cancel:
+    post:
+      operationId: cancelOrder
+      summary: Cancel an order after a failed payment
+      description: |
+        Releases the stock reserved for the order and records the reason
+        the order could not be completed.
+      tags: [Order]
+      parameters:
+        - name: orderId
+          in: path
+          description: Identifier of the order to cancel.
+          required: true
+          schema:
+            type: string
+            example: order-001
+      responses:
+        "200":
+          description: Order cancelled and stock released.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reason]
+                properties:
+                  reason:
+                    type: string
+                    description: Why the order was cancelled.
+                    example: payment_refused
+              example:
+                reason: payment_refused
+
+components:
+  schemas:
+    CardPayment:
+      type: object
+      description: Card payment instructions submitted at checkout.
+      required: [method, amount, cardNumber, cardHolder, expiryDate, cvv]
+      properties:
+        method:
+          type: string
+          description: Payment method. Only `card` is supported in this minimal API.
+          enum: [card]
+          example: card
+        amount:
+          type: number
+          format: float
+          description: Total amount to charge.
+          example: 49.99
+        cardNumber:
+          type: string
+          description: PAN of the card (test values only).
+          example: "4111111111111111"
+        cardHolder:
+          type: string
+          description: Full name as printed on the card.
+          example: John Doe
+        expiryDate:
+          type: string
+          description: Card expiry date in MM/YY format.
+          example: "12/26"
+        cvv:
+          type: string
+          description: CVV/CVC code on the back of the card.
+          example: "123"

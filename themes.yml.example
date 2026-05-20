@@ -1,0 +1,51 @@
+# Example user themes file, copy to ./themes.yml at the root of your
+# project to:
+#   - change the default theme without passing --theme each time
+#   - override a built-in theme (re-declare it with the same name:)
+#   - add your own custom themes
+#
+# See .agents/rules/eco-design.md and .agents/rules/accessibility.md
+# for the constraints (system fonts only, WCAG AA contrasts).
+#
+# Visual identity: "Blueprint", flat fills with hairline frames, a
+# vertical rail connecting steps. The colour schema below mirrors that
+# system; do not re-introduce gradient fields.
+
+# Make 'dark' the default for this project, overrides the built-in
+# default of 'light'. Comment out to keep 'light'.
+default: dark
+
+# themes:
+#   - name: corporate
+#     font: serif           # sans | serif | mono (system stacks only)
+#     shape: square         # rounded | square
+#     colors:
+#       bg: "#fafaf7"
+#       bgGrid: "#e7e5e0"
+#       text: "#1a1a1a"
+#       textMuted: "#555555"
+#       heading: "#000000"
+#       cardBg: "#ffffff"
+#       cardBorder: "#d4d4d0"
+#       cardHeaderBg: "#fafaf7"
+#       runtime: "#92400e"
+#       apiLink: "#1d4ed8"
+#       startBg: "#fafaf7"
+#       startBorder: "#1a1a1a"
+#       startText: "#1a1a1a"
+#       startMuted: "#555555"
+#       endBg: "#1a1a1a"
+#       endBorder: "#1a1a1a"
+#       endText: "#fafaf7"
+#       endMuted: "#a8a29e"
+#       jsonBg: "#1c1917"
+#       jsonText: "#fafaf9"
+#       jsonRuntime: "#fcd34d"
+#       successBg: "#fef3c7"
+#       successBorder: "#d97706"
+#       successText: "#78350f"
+#       rail: "#1a1a1a"
+#       badgeBg: "#fafaf7"
+#       badgeBorder: "#1a1a1a"
+#       badgeText: "#1a1a1a"
+#       footer: "#666666"

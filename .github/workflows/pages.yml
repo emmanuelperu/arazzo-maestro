@@ -1,0 +1,92 @@
+# Build the promotional landing page from the *real* `view` output and
+# deploy it to GitHub Pages.
+#
+# The preview in docs/index.html is regenerated here from source on every
+# run (docs/gen-preview.py invokes the real binary via `go run`), so what
+# ships to Pages can never drift from what `arazzo-maestro view` produces.
+#
+# One-time setup: repo Settings → Pages → "Build and deployment" →
+# Source: "GitHub Actions".
+#
+# NOTE (OpenSSF Phase 1, see Plan.md): pin these actions to a commit SHA
+# instead of a tag before claiming the Scorecard "Pinned-Dependencies"
+# criterion. Tags are used here for readability.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "cmd/**"
+      - "internal/**"
+      - "examples/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+# Least privilege by default; the deploy job widens what it needs.
+permissions:
+  contents: read
+
+# Never run two Pages deploys at once; let a newer one supersede.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # python3 is preinstalled on ubuntu-latest runners.
+      - name: Regenerate the landing preview from real `view` output
+        run: python3 docs/gen-preview.py
+
+      - name: Guard, eco-design invariants must hold
+        run: |
+          f=docs/index.html
+          fail=0
+          if grep -q "cdn.tailwindcss.com" "$f"; then echo "::error file=$f::Tailwind CDN reference leaked (eco-design R1: 0 requests)"; fail=1; fi
+          if grep -q "<script" "$f"; then echo "::error file=$f::<script> found, the page must stay JavaScript-free"; fail=1; fi
+          if grep -q "ZgotmplZ" "$f"; then echo "::error file=$f::ZgotmplZ leaked, font workaround in gen-preview.py is broken"; fail=1; fi
+          raw=$(wc -c < "$f"); gz=$(gzip -c "$f" | wc -c)
+          echo "index.html: ${raw} B raw / ${gz} B gzipped"
+          exit $fail
+
+      - name: Stage site
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp docs/index.html _site/index.html
+          # Carry along optional visual assets if they exist.
+          if [ -d docs/screenshots ]; then cp -r docs/screenshots _site/screenshots; fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write          # to deploy to Pages
+      id-token: write       # to verify the deployment origin
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

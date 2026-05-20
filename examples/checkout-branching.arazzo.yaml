@@ -1,0 +1,105 @@
+arazzo: "1.1.0"
+
+info:
+  title: Checkout, success / failure branching
+  summary: Routes to a different step depending on whether the payment succeeds
+  description: |
+    Demonstrates Arazzo control flow. A single payment step decides the
+    path: on success it jumps to a confirmation step (`onSuccess` → goto),
+    on failure it jumps to a cancellation step (`onFailure` → goto). Each
+    branch ends the workflow explicitly (`type: end`), so the success path
+    never falls through into the failure path.
+  version: "1.0.0"
+
+sourceDescriptions:
+  - name: checkout-api
+    url: ./checkout-branching-api.yaml
+    type: openapi
+
+workflows:
+  - workflowId: checkout-with-branching
+    summary: Pay, then confirm on success or cancel on failure
+    description: |
+      Submits a card payment for an existing order. If the bank approves
+      it (HTTP 200 and a body status of OK), the workflow confirms the
+      order; otherwise it cancels the order and releases the reserved
+      stock. Both branches terminate the workflow.
+    inputs:
+      type: object
+      properties:
+        orderId:
+          type: string
+          default: order-001
+        acceptLanguage:
+          type: string
+          default: fr_FR
+
+    steps:
+      # ── Deciding step ───────────────────────────────────────────────
+      - stepId: pay
+        description: Charge the customer's card for the order.
+        operationId: processPayment
+        parameters:
+          - name: orderId
+            in: path
+            value: $inputs.orderId
+          - name: Accept-Language
+            in: header
+            value: $inputs.acceptLanguage
+        requestBody:
+          contentType: application/json
+          payload:
+            method: card
+            amount: 49.99
+            cardNumber: "4111111111111111"
+            cardHolder: John Doe
+            expiryDate: "12/26"
+            cvv: "123"
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "OK"
+        onSuccess:
+          - name: paymentAccepted
+            type: goto
+            stepId: confirm-order
+        onFailure:
+          - name: paymentDeclined
+            type: goto
+            stepId: cancel-order
+        outputs:
+          paymentStatus: $response.body#/status
+
+      # ── Success branch ──────────────────────────────────────────────
+      - stepId: confirm-order
+        description: Payment accepted, confirm the order and capture the receipt id.
+        operationId: confirmOrder
+        parameters:
+          - name: orderId
+            in: path
+            value: $inputs.orderId
+        successCriteria:
+          - condition: $statusCode == 200
+        onSuccess:
+          - name: orderConfirmed
+            type: end
+        outputs:
+          confirmationId: $response.body#/confirmationId
+
+      # ── Failure branch ──────────────────────────────────────────────
+      - stepId: cancel-order
+        description: Payment refused, cancel the order and release reserved stock.
+        operationId: cancelOrder
+        parameters:
+          - name: orderId
+            in: path
+            value: $inputs.orderId
+        successCriteria:
+          - condition: $statusCode == 200
+        onSuccess:
+          - name: orderCancelled
+            type: end
+        outputs:
+          cancellationReason: $response.body#/reason
+
+    outputs:
+      finalPaymentStatus: $steps.pay.outputs.paymentStatus

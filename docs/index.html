@@ -1,0 +1,2265 @@
+<!doctype html>
+<!--
+  arazzo-maestro, promotional landing page.
+  Repo: https://github.com/emmanuelperu/arazzo-maestro
+
+  This page dogfoods the project's own rules (see .agents/rules/):
+    - eco-design: zero network requests, no JavaScript, no web fonts,
+      inline SVG only, hand-written CSS (no Tailwind, no framework).
+    - accessibility: WCAG 2.2 AA contrast, semantic HTML, single <main>,
+      h1->h2->h3 heading order, visible focus, prefers-reduced-motion.
+    - identity: the built-in "Blueprint" theme (grid paper, hairline
+      frames, vertical rail, monospace headers, warm amber accent),
+      light + dark driven by the visitor's OS preference.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>arazzo-maestro, lint &amp; render Arazzo workflows</title>
+  <meta name="description" content="A single Go binary that lints Arazzo workflow specs and renders them to standalone, eco-designed, accessible HTML. No server, no build, no JavaScript.">
+  <style>
+    /* ── Blueprint theme (light) ─────────────────────────────────── */
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f5f0;
+      --bg-grid: #e7e5e0;
+      --text: #1e293b;
+      --text-muted: #475569;
+      --heading: #0f172a;
+      --surface: #f5f5f0;
+      --border: #74819a;          /* hairline, clears 3:1 on cream (UI components) */
+      --rail: #1e293b;
+      --accent: #92400e;          /* amber-800, warm runtime accent */
+      --link: #1e40af;            /* blue-800 */
+      --fill: #1e293b;            /* primary button fill (navy ink) */
+      --fill-text: #f5f5f0;
+      --invert-bg: #1e293b;       /* END / inverted block */
+      --invert-text: #f5f5f0;
+      --invert-muted: #cbd5e1;
+      --code-bg: #1e293b;
+      --code-text: #e2e8f0;
+      --success-bg: #fef3c7;
+      --success-border: #d97706;
+      --success-text: #78350f;
+      --footer: #475569;
+      --radius: 0.25rem;
+      --radius-sm: 0.125rem;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    /* ── Blueprint theme (dark), honours OS preference, no JS ───── */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0a0f;
+        --bg-grid: #1c1917;
+        --text: #e7e5e4;
+        --text-muted: #a8a29e;
+        --heading: #f5f5f4;
+        --surface: #0a0a0f;
+        --border: #6b6660;        /* hairline, clears 3:1 on charcoal (UI components) */
+        --rail: #fbbf24;
+        --accent: #fcd34d;        /* amber-300 */
+        --link: #93c5fd;          /* blue-300 */
+        --fill: #fbbf24;          /* primary button fill (amber) */
+        --fill-text: #0a0a0f;
+        --invert-bg: #fbbf24;
+        --invert-text: #0a0a0f;
+        --invert-muted: #44403c;
+        --code-bg: #000000;
+        --code-text: #e7e5e4;
+        --success-bg: #0a0a0f;
+        --success-border: #fcd34d;
+        --success-text: #fcd34d;
+        --footer: #a8a29e;
+      }
+    }
+
+    /* ── Reset / base ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(var(--bg-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+      background-size: 32px 32px;
+      background-position: -1px -1px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+    .wrap { max-width: 64rem; margin: 0 auto; padding: 0 1.25rem; }
+    a { color: var(--link); }
+    a:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: var(--radius-sm);
+    }
+    code { font-family: var(--mono); }
+    h1, h2, h3 { color: var(--heading); }
+
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 0;
+    }
+    .rt { color: var(--accent); font-family: var(--mono); }
+    .lnk { color: var(--link); font-family: var(--mono); }
+
+    /* ── Top bar ─────────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 0.65rem; }
+    .brand svg { display: block; }
+    .brand-name {
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--heading);
+      letter-spacing: -0.01em;
+    }
+    .topnav {
+      display: flex;
+      gap: 1.25rem;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .topnav a { color: var(--text-muted); text-decoration: none; }
+    .topnav a:hover { color: var(--heading); }
+
+    /* ── Hero ────────────────────────────────────────────────────── */
+    .hero { padding: 3.5rem 0 2.5rem; }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 2.5rem;
+      align-items: center;
+    }
+    .hero h1 {
+      font-family: var(--mono);
+      font-size: clamp(2.1rem, 5vw, 3rem);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin: 0.75rem 0 0;
+    }
+    .hero .tagline {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--heading);
+      margin: 1rem 0 0;
+    }
+    .hero p.lede { color: var(--text-muted); margin: 0.85rem 0 0; }
+    .cta { display: flex; gap: 0.75rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    .btn {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 0.7rem 1.15rem;
+      border-radius: var(--radius);
+      border: 2px solid var(--fill);
+    }
+    .btn-primary { background: var(--fill); color: var(--fill-text); }
+    .btn-ghost { background: transparent; color: var(--text); border-color: var(--text); }
+    @media (prefers-reduced-motion: no-preference) {
+      .btn { transition: transform 0.12s ease, box-shadow 0.12s ease; }
+      .btn:hover { transform: translateY(-1px); }
+    }
+    .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+    /* ── Terminal block ──────────────────────────────────────────── */
+    .terminal {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: var(--radius);
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      line-height: 1.65;
+      padding: 1rem 1.15rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+    .terminal .cmt { color: #94a3b8; }
+    .terminal .pr { color: #fbbf24; }
+    .terminal .ok { color: #4ade80; }
+    .terminal .err { color: #f87171; }
+    .terminal .em { color: #fcd34d; }
+    .terminal:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ── Generic section ─────────────────────────────────────────── */
+    section { padding: 2.75rem 0; border-top: 1px solid var(--border); }
+    .section-head { max-width: 44rem; }
+    .section-head h2 {
+      font-family: var(--mono);
+      font-size: 1.5rem;
+      letter-spacing: -0.01em;
+      margin: 0.4rem 0 0;
+    }
+    .section-head p { color: var(--text-muted); margin: 0.6rem 0 0; }
+
+    /* ── Card grid ───────────────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 1.75rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-top: 1.75rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.35rem;
+    }
+    .card-marker {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--heading);
+      margin: 0 0 0.5rem;
+    }
+    .card-marker .num { color: var(--rail); font-weight: 700; }
+    .card h3 { font-family: var(--mono); font-size: 1rem; margin: 0; }
+    .card p { margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.95rem; }
+    .card .tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 0.1rem 0.5rem;
+      border: 1px solid var(--rail);
+      border-radius: var(--radius-sm);
+      color: var(--rail);
+      margin-bottom: 0.6rem;
+    }
+
+    /* ── Pipeline schematic ──────────────────────────────────────── */
+    .pipe {
+      margin-top: 1.75rem;
+      display: grid;
+      grid-template-columns: auto auto auto;
+      align-items: center;
+      gap: 0.75rem 1rem;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+    }
+    .node {
+      border: 2px solid var(--rail);
+      border-radius: var(--radius);
+      padding: 0.6rem 0.9rem;
+      background: var(--surface);
+      text-align: center;
+      color: var(--heading);
+    }
+    .node .sub { display: block; font-size: 0.68rem; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; }
+    .node-core { border-style: solid; border-width: 2px; background: var(--invert-bg); color: var(--invert-text); border-color: var(--invert-bg); }
+    .node-core .sub { color: var(--invert-muted); }   /* muted text on the inverted fill, keeps >=4.5:1 in both themes */
+    .arrow { color: var(--rail); font-size: 1.2rem; text-align: center; }
+    .stack { display: grid; gap: 0.6rem; }
+
+    /* ── Specimen (the actual `view` output, both themes) ────────── */
+    .specimens { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 1.75rem; }
+    .spec-wrap .spec-label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 0 0 0.5rem;
+    }
+    .preview-frame {
+      width: 100%;
+      height: 30rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+      display: block;
+    }
+
+    /* ── Proof banner ────────────────────────────────────────────── */
+    .proof { border: 2px solid var(--rail); border-radius: var(--radius); padding: 1.5rem 1.5rem; margin-top: 1.75rem; }
+    .proof ul { list-style: none; padding: 0; margin: 1rem 0 0; display: flex; flex-wrap: wrap; gap: 0.6rem 0.75rem; }
+    .proof li {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.35rem 0.65rem;
+      color: var(--heading);
+    }
+    .proof li .chk { color: var(--accent); margin-right: 0.4rem; font-weight: 700; }
+
+    /* ── Metrics table ───────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; font-size: 0.92rem; }
+    caption { text-align: left; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem; }
+    th, td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--border); }
+    th { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+    td.val { font-family: var(--mono); color: var(--heading); white-space: nowrap; }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    footer { border-top: 1px solid var(--border); padding: 2rem 0 3rem; }
+    .foot-row { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: baseline; }
+    .foot-links { display: flex; gap: 1.25rem; flex-wrap: wrap; font-family: var(--mono); font-size: 0.8rem; }
+    .foot-note { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--footer); margin-top: 1.25rem; }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 56rem) {
+      .hero-grid { grid-template-columns: 1fr; gap: 1.75rem; }
+      .grid-2, .grid-3, .specimens { grid-template-columns: 1fr; }
+      .pipe { grid-template-columns: 1fr; }
+      .pipe .arrow { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <svg width="34" height="34" viewBox="0 0 34 34" role="img" aria-label="arazzo-maestro logo">
+          <!-- Blueprint workflow rail: terminus, two nodes, terminus -->
+          <rect x="1" y="1" width="32" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35"/>
+          <line x1="9" y1="6" x2="9" y2="28" stroke="currentColor" stroke-width="2"/>
+          <rect x="6" y="5" width="6" height="6" fill="currentColor"/>
+          <rect x="14" y="6.5" width="13" height="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="14" y="15" width="13" height="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="9" y1="8.5" x2="14" y2="8.5" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="9" y1="17" x2="14" y2="17" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="6" y="23" width="6" height="6" fill="currentColor"/>
+        </svg>
+        <span class="brand-name">arazzo-maestro</span>
+      </div>
+      <nav class="topnav" aria-label="Primary">
+        <a href="#commands">Commands</a>
+        <a href="#preview">Preview</a>
+        <a href="#features">Features</a>
+        <a href="#quick-start">Quick start</a>
+        <a href="https://github.com/emmanuelperu/arazzo-maestro">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── HERO ─────────────────────────────────────────────────── -->
+    <div class="wrap">
+      <div class="hero">
+        <div class="hero-grid">
+          <div>
+            <p class="eyebrow">Arazzo · CLI · Go · Apache-2.0</p>
+            <h1>arazzo-maestro</h1>
+            <p class="tagline">Lint &amp; render Arazzo workflows. One Go binary. Eco-designed, accessible by default.</p>
+            <p class="lede">
+              arazzo-maestro turns <a href="https://spec.openapis.org/arazzo/latest.html">Arazzo</a>
+              workflow specs into two things the rest of your team can actually use:
+              validation that fails your CI when something is wrong, and standalone
+              HTML pages anyone can open in a browser, no server, no build, no JavaScript.
+            </p>
+            <div class="cta">
+              <a class="btn btn-primary" href="https://github.com/emmanuelperu/arazzo-maestro">View on GitHub</a>
+              <a class="btn btn-ghost" href="#quick-start">Quick start</a>
+            </div>
+          </div>
+          <div>
+            <pre class="terminal" tabindex="0" aria-label="Example linter session"><span class="pr">$</span> arazzo-maestro lint workflow.yaml
+<span class="ok">OK</span>: workflow.yaml, no issues found
+
+<span class="pr">$</span> arazzo-maestro lint broken.yaml
+<span class="err">[error]</span> arazzo: value does not match pattern '^1\.[01]\.\d+'
+<span class="err">[error]</span> workflows[checkout].steps[create-order].operationId:
+        operation <span class="em">"createOrder"</span> not found in source "shop-api"
+Error: 2 issue(s) found
+
+<span class="pr">$</span> arazzo-maestro view workflow.yaml -o dist/
+<span class="cmt"># dist/happy-path-checkout.html  (~3 kB gzipped)</span></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TWO COMMANDS ─────────────────────────────────────────── -->
+    <section id="commands">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Two subcommands</p>
+          <h2>One score, two batons</h2>
+          <p>The maestro both inspects the score and conducts it: <code>lint</code> validates, <code>view</code> renders. No other moving parts.</p>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <span class="tag">lint</span>
+            <h3>Validate, then fail CI on demand</h3>
+            <p>
+              Three passes: the official OAI JSON Schema, internal semantic rules
+              (unique IDs, <code class="rt">$steps.x.outputs.y</code> references), and a
+              cross-file check that every step <code>operationId</code> actually exists
+              in the referenced OpenAPI contract. Exit <code>0</code>/<code>1</code> plus
+              parseable findings, offline, deterministic.
+            </p>
+          </div>
+          <div class="card">
+            <span class="tag">view</span>
+            <h3>Render to standalone HTML</h3>
+            <p>
+              One self-contained page per workflow: START → steps → END, runtime
+              expressions highlighted, success criteria, request bodies. ~3 kB gzipped,
+              opens offline in any browser. Commit it, or ship it to GitHub Pages.
+            </p>
+          </div>
+        </div>
+
+        <!-- pipeline schematic -->
+        <div class="pipe" aria-hidden="false">
+          <div class="stack">
+            <div class="node">workflow.yaml<span class="sub">Arazzo</span></div>
+            <div class="node">openapi.yaml<span class="sub">contract</span></div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="node node-core">arazzo-maestro<span class="sub">single binary</span></div>
+        </div>
+        <div class="pipe" style="margin-top:0.75rem">
+          <div class="node node-core">arazzo-maestro</div>
+          <div class="arrow">→</div>
+          <div class="stack">
+            <div class="node">lint<span class="sub">exit 0/1 + findings</span></div>
+            <div class="node">view<span class="sub">dist/*.html</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PREVIEW (the actual output, both themes) ─────────────── -->
+    <section id="preview">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">What <code>view</code> produces</p>
+          <h2>The Blueprint render</h2>
+          <p>Not a mockup: the panels below are the actual HTML <code>view</code> emits, embedded verbatim and regenerated from the tool, so they never drift. Grid paper, hairline frames, a vertical rail wiring steps, monospace headers, one warm amber accent for runtime expressions. Light and dark, both WCAG AA audited.</p>
+        </div>
+        <!-- PREVIEW:BEGIN (generated by docs/gen-preview.py, do not edit by hand) -->
+        <div class="specimens">
+          <div class="spec-wrap">
+            <p class="spec-label">Theme: light, live `view` output</p>
+            <iframe class="preview-frame" title="happy-path-checkout rendered with the light theme" loading="lazy" sandbox srcdoc="<!doctype html>
+<html lang=&quot;en&quot;>
+<head>
+  <meta charset=&quot;utf-8&quot;>
+  <meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;>
+  <title>happy-path-checkout · arazzo-maestro</title>
+  <style>
+    :root {
+      --bg: #f5f5f0;
+      --bg-grid: #e7e5e0;
+      --text: #1e293b;
+      --text-muted: #475569;
+      --heading: #0f172a;
+      --card-bg: #f5f5f0;
+      --card-border: #94a3b8;
+      --card-header-bg: #f5f5f0;
+      --runtime: #92400e;
+      --api-link: #1e40af;
+      --start-bg: #f5f5f0;
+      --start-border: #1e293b;
+      --start-text: #0f172a;
+      --start-muted: #475569;
+      --end-bg: #1e293b;
+      --end-border: #1e293b;
+      --end-text: #f5f5f0;
+      --end-muted: #cbd5e1;
+      --json-bg: #1e293b;
+      --json-text: #e2e8f0;
+      --json-runtime: #fcd34d;
+      --success-bg: #fef3c7;
+      --success-border: #d97706;
+      --success-text: #78350f;
+      --rail: #1e293b;
+      --badge-bg: #f5f5f0;
+      --badge-border: #1e293b;
+      --badge-text: #1e293b;
+      --footer: #64748b;
+      --radius-card: 0.25rem;
+      --radius-block: 0.125rem;
+      --font-primary: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(var(--bg-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+      background-size: 32px 32px;
+      background-position: -1px -1px;
+      color: var(--text);
+      font-family: var(--font-primary);
+    }
+
+     
+    .header-frame {
+      border: 2px solid var(--text);
+      background: var(--bg);
+      padding: 1.25rem 1.75rem;
+      border-radius: var(--radius-block);
+    }
+    .header-meta {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .header-title {
+      font-family: var(--font-mono);
+      font-size: 1.75rem;
+      letter-spacing: -0.01em;
+      color: var(--heading);
+      margin-top: 0.5rem;
+      word-break: break-word;
+    }
+    .header-summary {
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+     
+    .terminus {
+      position: relative;
+      border-radius: var(--radius-card);
+      padding: 1rem 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .terminus-start {
+      background: var(--start-bg);
+      color: var(--start-text);
+      border: 2px solid var(--start-border);
+    }
+    .terminus-end {
+      background: var(--end-bg);
+      color: var(--end-text);
+      border: 2px solid var(--end-border);
+    }
+    .terminus-marker {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+    .terminus-glyph {
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+    .terminus-start .terminus-muted { color: var(--start-muted); }
+    .terminus-end   .terminus-muted { color: var(--end-muted); }
+
+     
+    .steps {
+      position: relative;
+      list-style: none;
+      padding: 0 0 0 3rem;
+      margin: 1.5rem 0;
+    }
+    .steps::before {
+      content: &quot;&quot;;
+      position: absolute;
+      left: 0.5rem;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--rail);
+    }
+    .step {
+      position: relative;
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      border-radius: var(--radius-card);
+      margin-bottom: 1.5rem;
+    }
+    .step::before {
+      content: &quot;&quot;;
+      position: absolute;
+      left: -2.5rem;
+      top: 1.25rem;
+      width: 2rem;
+      height: 2px;
+      background: var(--rail);
+    }
+
+     
+     
+    .step-loop {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: -7rem;
+      width: 6rem;
+      pointer-events: none;
+    }
+    .step-loop-curve {
+      position: absolute;
+      top: 0.75rem;
+      bottom: 0.75rem;
+      left: 0.75rem;
+      width: 1.75rem;
+      border: 2.5px solid var(--runtime);
+      border-left: none;
+      border-radius: 0 0.75rem 0.75rem 0;
+    }
+     
+    .step-loop-curve::before {
+      content: &quot;&quot;;
+      position: absolute;
+      top: -7px;
+      left: -9px;
+      width: 0;
+      height: 0;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-right: 9px solid var(--runtime);
+    }
+     
+    .step-loop-curve::after {
+      content: &quot;&quot;;
+      position: absolute;
+      bottom: -5px;
+      left: -4px;
+      width: 8px;
+      height: 8px;
+      background: var(--runtime);
+      border-radius: 50%;
+    }
+     
+    .step-loop-label {
+      position: absolute;
+      top: 50%;
+      left: 3rem;
+      right: 0;
+      transform: translateY(-50%);
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.03em;
+      color: var(--runtime);
+      text-align: left;
+      white-space: normal;
+      line-height: 1.4;
+    }
+    .step-loop-label .loop-tag {
+      display: block;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.125rem;
+    }
+     
+    @media (max-width: 64rem) {
+      .step-loop {
+        position: static;
+        margin: 0;
+        padding: 0.375rem 1rem;
+        width: auto;
+        height: auto;
+        background: var(--card-header-bg);
+        border-bottom: 1px solid var(--runtime);
+        display: flex;
+        align-items: center;
+      }
+      .step-loop-curve { display: none; }
+      .step-loop-label {
+        position: static;
+        transform: none;
+        left: auto;
+        right: auto;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        color: var(--runtime);
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.05em;
+        text-align: left;
+        line-height: 1.4;
+        white-space: normal;
+      }
+      .step-loop-label .loop-tag {
+        display: inline;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        margin-right: 0.375rem;
+      }
+       
+      .step-loop-label br {
+        display: none;
+      }
+    }
+    .step-marker {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.625rem 1rem;
+      background: var(--card-header-bg);
+      border-bottom: 1px solid var(--card-border);
+      font-family: var(--font-mono);
+      letter-spacing: 0.05em;
+    }
+    .step-number {
+      color: var(--rail);
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .step-id {
+      color: var(--heading);
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .step-tag {
+      margin-left: auto;
+      padding: 0.125rem 0.5rem;
+      border: 1px solid var(--badge-border);
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      border-radius: var(--radius-block);
+    }
+    .step-body {
+      padding: 0.875rem 1rem;
+    }
+
+     
+    .block-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 1rem;
+      margin-bottom: 0.375rem;
+    }
+    .block-label:first-child { margin-top: 0; }
+    .block-label-meta {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0;
+      text-transform: lowercase;
+      color: var(--text-muted);
+      margin-left: 0.5rem;
+    }
+     
+    .block-label-icon {
+      display: inline-block;
+      font-size: 0.95rem;
+      line-height: 1;
+      vertical-align: -0.1em;
+      margin-right: 0.25rem;
+    }
+
+     
+    .kv {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .kv li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 0.125rem 0;
+    }
+    .kv-key { color: var(--text); font-weight: 500; }
+    .kv-in {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .kv-sep { color: var(--text-muted); }
+    .kv-connector { color: var(--text-muted); }
+    .terminus-start .kv-key { color: var(--start-text); }
+    .terminus-end   .kv-key { color: var(--end-text); }
+    .terminus-end   .kv-sep, .terminus-end .kv-connector { color: var(--end-muted); }
+
+     
+    .runtime {
+      color: var(--runtime);
+      font-family: var(--font-mono);
+      font-size: 0.95em;
+    }
+    .api-link {
+      color: var(--api-link);
+      font-family: var(--font-mono);
+      font-size: 0.95em;
+    }
+    .op {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      margin: 0 0 0.625rem 0;
+    }
+    .op-arrow { color: var(--text-muted); margin-right: 0.5rem; }
+
+     
+    .json-block {
+      background: var(--json-bg);
+      color: var(--json-text);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      line-height: 1.5;
+      padding: 0.75rem 1rem;
+      overflow-x: auto;
+      border-radius: var(--radius-block);
+      margin: 0;
+    }
+     
+    .json-block .runtime { color: var(--json-runtime); }
+     
+    .terminus-end .runtime { color: var(--end-text); }
+
+     
+    .success-block {
+      list-style: none;
+      padding: 0.5rem 0.75rem;
+      margin: 0;
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
+      color: var(--success-text);
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      border-radius: var(--radius-block);
+    }
+    .success-block li {
+      padding: 0.125rem 0;
+    }
+    .success-block .check {
+      color: var(--success-border);
+      margin-right: 0.375rem;
+      font-weight: 700;
+    }
+
+     
+    .actions {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .action {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 0.25rem 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+    .action-tag {
+      padding: 0.125rem 0.5rem;
+      border: 1px solid var(--badge-border);
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      border-radius: var(--radius-block);
+      font-weight: 600;
+    }
+    .action-target {
+      color: var(--api-link);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      text-decoration-thickness: 1px;
+    }
+    .action-target:hover { text-decoration-thickness: 2px; }
+    .action-meta { color: var(--text-muted); font-size: 0.8rem; }
+    .action-arrow { color: var(--text-muted); }
+    .action-criteria {
+      list-style: none;
+      padding: 0 0 0 1.5rem;
+      margin: 0.125rem 0 0 0;
+      flex-basis: 100%;
+    }
+    .action-criteria li {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      padding: 0.0625rem 0;
+    }
+    .action-criteria .when {
+      font-style: italic;
+      margin-right: 0.25rem;
+    }
+
+     
+    .step-description {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin: 0 0 0.5rem 0;
+      white-space: pre-line;
+    }
+
+     
+    .footer {
+      color: var(--footer);
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 3rem;
+    }
+
+     
+    a:focus-visible {
+      outline: 2px solid var(--runtime);
+      outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+  
+    /* preview embedding patch (gen-preview.py) */
+    body { margin: 0; min-height: 0; }
+    main { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.5rem; }
+  </style>
+</head>
+<body class=&quot;min-h-screen&quot;>
+
+  <main class=&quot;max-w-3xl mx-auto px-6 py-12&quot;>
+
+    <header class=&quot;header-frame&quot;>
+      <p class=&quot;header-meta&quot;>Arazzo · workflow</p>
+      <h1 class=&quot;header-title&quot;>happy-path-checkout</h1>
+      
+        <p class=&quot;header-summary&quot;>Browse, add to cart and pay successfully</p>
+      
+    </header>
+
+    
+    <section class=&quot;terminus terminus-start&quot; aria-labelledby=&quot;start-heading&quot;>
+      <div class=&quot;terminus-marker&quot;>
+        <span class=&quot;terminus-glyph&quot; aria-hidden=&quot;true&quot;>▣</span>
+        <h2 id=&quot;start-heading&quot;>Start</h2>
+      </div>
+      
+        <p class=&quot;step-description terminus-muted&quot; style=&quot;margin-top:0.75rem&quot;>Lists the product catalog, adds a product to the cart, and pays the
+resulting order with a valid card. Assertions check each HTTP code and
+the final payment status.</p>
+      
+      
+        <p class=&quot;block-label terminus-muted&quot;>Inputs</p>
+        <ul class=&quot;kv&quot;>
+          
+            <li>
+              <code class=&quot;kv-key&quot;>productId</code>
+              <span class=&quot;kv-in&quot;>string</span>
+              
+                <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                <code>prod-001</code>
+              
+            </li>
+          
+            <li>
+              <code class=&quot;kv-key&quot;>orderId</code>
+              <span class=&quot;kv-in&quot;>string</span>
+              
+                <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                <code>order-001</code>
+              
+            </li>
+          
+            <li>
+              <code class=&quot;kv-key&quot;>acceptLanguage</code>
+              <span class=&quot;kv-in&quot;>string</span>
+              
+                <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                <code>fr_FR</code>
+              
+            </li>
+          
+        </ul>
+      
+    </section>
+
+    
+    <ol class=&quot;steps&quot;>
+      
+        <li class=&quot;step&quot; id=&quot;step-list-catalog&quot;>
+          
+          
+          <header class=&quot;step-marker&quot;>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>01</span>
+            <h3 class=&quot;step-id&quot;>list-catalog</h3>
+            <span class=&quot;step-tag&quot;>API</span>
+          </header>
+
+          <div class=&quot;step-body&quot;>
+            
+              <p class=&quot;op&quot;>
+                <span class=&quot;op-arrow&quot; aria-hidden=&quot;true&quot;>→</span>
+                <span class=&quot;api-link&quot;>listProducts</span>
+              </p>
+            
+
+            
+              <p class=&quot;step-description&quot;>Browse the product catalog</p>
+            
+
+            
+              <p class=&quot;block-label&quot;>Parameters</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>Accept-Language</code>
+                    <span class=&quot;kv-in&quot;>header</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                  </li>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>page</code>
+                    <span class=&quot;kv-in&quot;>query</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;font-mono text-primary&quot;>0</code>
+                  </li>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>size</code>
+                    <span class=&quot;kv-in&quot;>query</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;font-mono text-primary&quot;>10</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+              <p class=&quot;block-label&quot;>Success Criteria</p>
+              <ul class=&quot;success-block&quot;>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>Outputs</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+                    <code class=&quot;kv-key&quot;>firstProductId</code>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$response.body#/items/0/id</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+          </div>
+        </li>
+      
+        <li class=&quot;step&quot; id=&quot;step-add-to-cart&quot;>
+          
+          
+          <header class=&quot;step-marker&quot;>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>02</span>
+            <h3 class=&quot;step-id&quot;>add-to-cart</h3>
+            <span class=&quot;step-tag&quot;>API</span>
+          </header>
+
+          <div class=&quot;step-body&quot;>
+            
+              <p class=&quot;op&quot;>
+                <span class=&quot;op-arrow&quot; aria-hidden=&quot;true&quot;>→</span>
+                <span class=&quot;api-link&quot;>addToCart</span>
+              </p>
+            
+
+            
+              <p class=&quot;step-description&quot;>Add the product to the shopping cart</p>
+            
+
+            
+              <p class=&quot;block-label&quot;>Parameters</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>Accept-Language</code>
+                    <span class=&quot;kv-in&quot;>header</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>
+                Request Body<span class=&quot;block-label-meta&quot;>application/json</span>
+              </p>
+              <pre class=&quot;json-block&quot;>{
+  &amp;#34;productId&amp;#34;: &amp;#34;<span class=&quot;runtime&quot;>$inputs.productId</span>&amp;#34;,
+  &amp;#34;quantity&amp;#34;: 2
+}</pre>
+            
+
+            
+              <p class=&quot;block-label&quot;>Success Criteria</p>
+              <ul class=&quot;success-block&quot;>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 201</li>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/totalPrice &amp;gt; 0</li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>Outputs</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+                    <code class=&quot;kv-key&quot;>cartTotal</code>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$response.body#/totalPrice</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+          </div>
+        </li>
+      
+        <li class=&quot;step&quot; id=&quot;step-pay&quot;>
+          
+          
+          <header class=&quot;step-marker&quot;>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>03</span>
+            <h3 class=&quot;step-id&quot;>pay</h3>
+            <span class=&quot;step-tag&quot;>API</span>
+          </header>
+
+          <div class=&quot;step-body&quot;>
+            
+              <p class=&quot;op&quot;>
+                <span class=&quot;op-arrow&quot; aria-hidden=&quot;true&quot;>→</span>
+                <span class=&quot;api-link&quot;>processPayment</span>
+              </p>
+            
+
+            
+              <p class=&quot;step-description&quot;>Pay the order with a valid card</p>
+            
+
+            
+              <p class=&quot;block-label&quot;>Parameters</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>orderId</code>
+                    <span class=&quot;kv-in&quot;>path</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.orderId</code>
+                  </li>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>Accept-Language</code>
+                    <span class=&quot;kv-in&quot;>header</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>
+                Request Body<span class=&quot;block-label-meta&quot;>application/json</span>
+              </p>
+              <pre class=&quot;json-block&quot;>{
+  &amp;#34;amount&amp;#34;: 49.99,
+  &amp;#34;cardHolder&amp;#34;: &amp;#34;John Doe&amp;#34;,
+  &amp;#34;cardNumber&amp;#34;: &amp;#34;4111111111111111&amp;#34;,
+  &amp;#34;cvv&amp;#34;: &amp;#34;123&amp;#34;,
+  &amp;#34;expiryDate&amp;#34;: &amp;#34;12/26&amp;#34;,
+  &amp;#34;method&amp;#34;: &amp;#34;card&amp;#34;
+}</pre>
+            
+
+            
+              <p class=&quot;block-label&quot;>Success Criteria</p>
+              <ul class=&quot;success-block&quot;>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/status == &amp;#34;OK&amp;#34;</li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>Outputs</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+                    <code class=&quot;kv-key&quot;>transactionId</code>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$response.body#/transactionId</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+          </div>
+        </li>
+      
+    </ol>
+
+    
+    <section class=&quot;terminus terminus-end&quot; aria-labelledby=&quot;end-heading&quot;>
+      <div class=&quot;terminus-marker&quot;>
+        <span class=&quot;terminus-glyph&quot; aria-hidden=&quot;true&quot;>▣</span>
+        <h2 id=&quot;end-heading&quot;>End</h2>
+      </div>
+      
+        <p class=&quot;block-label terminus-muted&quot;>Outputs</p>
+        <ul class=&quot;kv&quot;>
+          
+            <li>
+              <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+              <code class=&quot;kv-key&quot;>totalSpent</code>
+              <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+              <code class=&quot;runtime&quot;>$steps.add-to-cart.outputs.cartTotal</code>
+            </li>
+          
+            <li>
+              <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+              <code class=&quot;kv-key&quot;>transactionId</code>
+              <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+              <code class=&quot;runtime&quot;>$steps.pay.outputs.transactionId</code>
+            </li>
+          
+        </ul>
+      
+    </section>
+
+    <footer class=&quot;footer&quot;>Generated by arazzo-maestro</footer>
+
+  </main>
+</body>
+</html>"></iframe>
+          </div>
+          <div class="spec-wrap">
+            <p class="spec-label">Theme: dark, live `view` output</p>
+            <iframe class="preview-frame" title="happy-path-checkout rendered with the dark theme" loading="lazy" sandbox srcdoc="<!doctype html>
+<html lang=&quot;en&quot;>
+<head>
+  <meta charset=&quot;utf-8&quot;>
+  <meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;>
+  <title>happy-path-checkout · arazzo-maestro</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --bg-grid: #1c1917;
+      --text: #e7e5e4;
+      --text-muted: #a8a29e;
+      --heading: #f5f5f4;
+      --card-bg: #0a0a0f;
+      --card-border: #44403c;
+      --card-header-bg: #0a0a0f;
+      --runtime: #fcd34d;
+      --api-link: #93c5fd;
+      --start-bg: #0a0a0f;
+      --start-border: #fbbf24;
+      --start-text: #fbbf24;
+      --start-muted: #e7e5e4;
+      --end-bg: #fbbf24;
+      --end-border: #fbbf24;
+      --end-text: #0a0a0f;
+      --end-muted: #44403c;
+      --json-bg: #000000;
+      --json-text: #e7e5e4;
+      --json-runtime: #fcd34d;
+      --success-bg: #0a0a0f;
+      --success-border: #fcd34d;
+      --success-text: #fcd34d;
+      --rail: #fbbf24;
+      --badge-bg: #0a0a0f;
+      --badge-border: #e7e5e4;
+      --badge-text: #e7e5e4;
+      --footer: #a8a29e;
+      --radius-card: 0.25rem;
+      --radius-block: 0.125rem;
+      --font-primary: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(var(--bg-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+      background-size: 32px 32px;
+      background-position: -1px -1px;
+      color: var(--text);
+      font-family: var(--font-primary);
+    }
+
+     
+    .header-frame {
+      border: 2px solid var(--text);
+      background: var(--bg);
+      padding: 1.25rem 1.75rem;
+      border-radius: var(--radius-block);
+    }
+    .header-meta {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .header-title {
+      font-family: var(--font-mono);
+      font-size: 1.75rem;
+      letter-spacing: -0.01em;
+      color: var(--heading);
+      margin-top: 0.5rem;
+      word-break: break-word;
+    }
+    .header-summary {
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+     
+    .terminus {
+      position: relative;
+      border-radius: var(--radius-card);
+      padding: 1rem 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .terminus-start {
+      background: var(--start-bg);
+      color: var(--start-text);
+      border: 2px solid var(--start-border);
+    }
+    .terminus-end {
+      background: var(--end-bg);
+      color: var(--end-text);
+      border: 2px solid var(--end-border);
+    }
+    .terminus-marker {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+    .terminus-glyph {
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+    .terminus-start .terminus-muted { color: var(--start-muted); }
+    .terminus-end   .terminus-muted { color: var(--end-muted); }
+
+     
+    .steps {
+      position: relative;
+      list-style: none;
+      padding: 0 0 0 3rem;
+      margin: 1.5rem 0;
+    }
+    .steps::before {
+      content: &quot;&quot;;
+      position: absolute;
+      left: 0.5rem;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--rail);
+    }
+    .step {
+      position: relative;
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      border-radius: var(--radius-card);
+      margin-bottom: 1.5rem;
+    }
+    .step::before {
+      content: &quot;&quot;;
+      position: absolute;
+      left: -2.5rem;
+      top: 1.25rem;
+      width: 2rem;
+      height: 2px;
+      background: var(--rail);
+    }
+
+     
+     
+    .step-loop {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: -7rem;
+      width: 6rem;
+      pointer-events: none;
+    }
+    .step-loop-curve {
+      position: absolute;
+      top: 0.75rem;
+      bottom: 0.75rem;
+      left: 0.75rem;
+      width: 1.75rem;
+      border: 2.5px solid var(--runtime);
+      border-left: none;
+      border-radius: 0 0.75rem 0.75rem 0;
+    }
+     
+    .step-loop-curve::before {
+      content: &quot;&quot;;
+      position: absolute;
+      top: -7px;
+      left: -9px;
+      width: 0;
+      height: 0;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-right: 9px solid var(--runtime);
+    }
+     
+    .step-loop-curve::after {
+      content: &quot;&quot;;
+      position: absolute;
+      bottom: -5px;
+      left: -4px;
+      width: 8px;
+      height: 8px;
+      background: var(--runtime);
+      border-radius: 50%;
+    }
+     
+    .step-loop-label {
+      position: absolute;
+      top: 50%;
+      left: 3rem;
+      right: 0;
+      transform: translateY(-50%);
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.03em;
+      color: var(--runtime);
+      text-align: left;
+      white-space: normal;
+      line-height: 1.4;
+    }
+    .step-loop-label .loop-tag {
+      display: block;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.125rem;
+    }
+     
+    @media (max-width: 64rem) {
+      .step-loop {
+        position: static;
+        margin: 0;
+        padding: 0.375rem 1rem;
+        width: auto;
+        height: auto;
+        background: var(--card-header-bg);
+        border-bottom: 1px solid var(--runtime);
+        display: flex;
+        align-items: center;
+      }
+      .step-loop-curve { display: none; }
+      .step-loop-label {
+        position: static;
+        transform: none;
+        left: auto;
+        right: auto;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        color: var(--runtime);
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.05em;
+        text-align: left;
+        line-height: 1.4;
+        white-space: normal;
+      }
+      .step-loop-label .loop-tag {
+        display: inline;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        margin-right: 0.375rem;
+      }
+       
+      .step-loop-label br {
+        display: none;
+      }
+    }
+    .step-marker {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.625rem 1rem;
+      background: var(--card-header-bg);
+      border-bottom: 1px solid var(--card-border);
+      font-family: var(--font-mono);
+      letter-spacing: 0.05em;
+    }
+    .step-number {
+      color: var(--rail);
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .step-id {
+      color: var(--heading);
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .step-tag {
+      margin-left: auto;
+      padding: 0.125rem 0.5rem;
+      border: 1px solid var(--badge-border);
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      border-radius: var(--radius-block);
+    }
+    .step-body {
+      padding: 0.875rem 1rem;
+    }
+
+     
+    .block-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 1rem;
+      margin-bottom: 0.375rem;
+    }
+    .block-label:first-child { margin-top: 0; }
+    .block-label-meta {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0;
+      text-transform: lowercase;
+      color: var(--text-muted);
+      margin-left: 0.5rem;
+    }
+     
+    .block-label-icon {
+      display: inline-block;
+      font-size: 0.95rem;
+      line-height: 1;
+      vertical-align: -0.1em;
+      margin-right: 0.25rem;
+    }
+
+     
+    .kv {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .kv li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 0.125rem 0;
+    }
+    .kv-key { color: var(--text); font-weight: 500; }
+    .kv-in {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .kv-sep { color: var(--text-muted); }
+    .kv-connector { color: var(--text-muted); }
+    .terminus-start .kv-key { color: var(--start-text); }
+    .terminus-end   .kv-key { color: var(--end-text); }
+    .terminus-end   .kv-sep, .terminus-end .kv-connector { color: var(--end-muted); }
+
+     
+    .runtime {
+      color: var(--runtime);
+      font-family: var(--font-mono);
+      font-size: 0.95em;
+    }
+    .api-link {
+      color: var(--api-link);
+      font-family: var(--font-mono);
+      font-size: 0.95em;
+    }
+    .op {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      margin: 0 0 0.625rem 0;
+    }
+    .op-arrow { color: var(--text-muted); margin-right: 0.5rem; }
+
+     
+    .json-block {
+      background: var(--json-bg);
+      color: var(--json-text);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      line-height: 1.5;
+      padding: 0.75rem 1rem;
+      overflow-x: auto;
+      border-radius: var(--radius-block);
+      margin: 0;
+    }
+     
+    .json-block .runtime { color: var(--json-runtime); }
+     
+    .terminus-end .runtime { color: var(--end-text); }
+
+     
+    .success-block {
+      list-style: none;
+      padding: 0.5rem 0.75rem;
+      margin: 0;
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
+      color: var(--success-text);
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      border-radius: var(--radius-block);
+    }
+    .success-block li {
+      padding: 0.125rem 0;
+    }
+    .success-block .check {
+      color: var(--success-border);
+      margin-right: 0.375rem;
+      font-weight: 700;
+    }
+
+     
+    .actions {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .action {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 0.25rem 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+    .action-tag {
+      padding: 0.125rem 0.5rem;
+      border: 1px solid var(--badge-border);
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      border-radius: var(--radius-block);
+      font-weight: 600;
+    }
+    .action-target {
+      color: var(--api-link);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      text-decoration-thickness: 1px;
+    }
+    .action-target:hover { text-decoration-thickness: 2px; }
+    .action-meta { color: var(--text-muted); font-size: 0.8rem; }
+    .action-arrow { color: var(--text-muted); }
+    .action-criteria {
+      list-style: none;
+      padding: 0 0 0 1.5rem;
+      margin: 0.125rem 0 0 0;
+      flex-basis: 100%;
+    }
+    .action-criteria li {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      padding: 0.0625rem 0;
+    }
+    .action-criteria .when {
+      font-style: italic;
+      margin-right: 0.25rem;
+    }
+
+     
+    .step-description {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin: 0 0 0.5rem 0;
+      white-space: pre-line;
+    }
+
+     
+    .footer {
+      color: var(--footer);
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 3rem;
+    }
+
+     
+    a:focus-visible {
+      outline: 2px solid var(--runtime);
+      outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+  
+    /* preview embedding patch (gen-preview.py) */
+    body { margin: 0; min-height: 0; }
+    main { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.5rem; }
+  </style>
+</head>
+<body class=&quot;min-h-screen&quot;>
+
+  <main class=&quot;max-w-3xl mx-auto px-6 py-12&quot;>
+
+    <header class=&quot;header-frame&quot;>
+      <p class=&quot;header-meta&quot;>Arazzo · workflow</p>
+      <h1 class=&quot;header-title&quot;>happy-path-checkout</h1>
+      
+        <p class=&quot;header-summary&quot;>Browse, add to cart and pay successfully</p>
+      
+    </header>
+
+    
+    <section class=&quot;terminus terminus-start&quot; aria-labelledby=&quot;start-heading&quot;>
+      <div class=&quot;terminus-marker&quot;>
+        <span class=&quot;terminus-glyph&quot; aria-hidden=&quot;true&quot;>▣</span>
+        <h2 id=&quot;start-heading&quot;>Start</h2>
+      </div>
+      
+        <p class=&quot;step-description terminus-muted&quot; style=&quot;margin-top:0.75rem&quot;>Lists the product catalog, adds a product to the cart, and pays the
+resulting order with a valid card. Assertions check each HTTP code and
+the final payment status.</p>
+      
+      
+        <p class=&quot;block-label terminus-muted&quot;>Inputs</p>
+        <ul class=&quot;kv&quot;>
+          
+            <li>
+              <code class=&quot;kv-key&quot;>productId</code>
+              <span class=&quot;kv-in&quot;>string</span>
+              
+                <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                <code>prod-001</code>
+              
+            </li>
+          
+            <li>
+              <code class=&quot;kv-key&quot;>orderId</code>
+              <span class=&quot;kv-in&quot;>string</span>
+              
+                <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                <code>order-001</code>
+              
+            </li>
+          
+            <li>
+              <code class=&quot;kv-key&quot;>acceptLanguage</code>
+              <span class=&quot;kv-in&quot;>string</span>
+              
+                <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                <code>fr_FR</code>
+              
+            </li>
+          
+        </ul>
+      
+    </section>
+
+    
+    <ol class=&quot;steps&quot;>
+      
+        <li class=&quot;step&quot; id=&quot;step-list-catalog&quot;>
+          
+          
+          <header class=&quot;step-marker&quot;>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>01</span>
+            <h3 class=&quot;step-id&quot;>list-catalog</h3>
+            <span class=&quot;step-tag&quot;>API</span>
+          </header>
+
+          <div class=&quot;step-body&quot;>
+            
+              <p class=&quot;op&quot;>
+                <span class=&quot;op-arrow&quot; aria-hidden=&quot;true&quot;>→</span>
+                <span class=&quot;api-link&quot;>listProducts</span>
+              </p>
+            
+
+            
+              <p class=&quot;step-description&quot;>Browse the product catalog</p>
+            
+
+            
+              <p class=&quot;block-label&quot;>Parameters</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>Accept-Language</code>
+                    <span class=&quot;kv-in&quot;>header</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                  </li>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>page</code>
+                    <span class=&quot;kv-in&quot;>query</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;font-mono text-primary&quot;>0</code>
+                  </li>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>size</code>
+                    <span class=&quot;kv-in&quot;>query</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;font-mono text-primary&quot;>10</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+              <p class=&quot;block-label&quot;>Success Criteria</p>
+              <ul class=&quot;success-block&quot;>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>Outputs</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+                    <code class=&quot;kv-key&quot;>firstProductId</code>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$response.body#/items/0/id</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+          </div>
+        </li>
+      
+        <li class=&quot;step&quot; id=&quot;step-add-to-cart&quot;>
+          
+          
+          <header class=&quot;step-marker&quot;>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>02</span>
+            <h3 class=&quot;step-id&quot;>add-to-cart</h3>
+            <span class=&quot;step-tag&quot;>API</span>
+          </header>
+
+          <div class=&quot;step-body&quot;>
+            
+              <p class=&quot;op&quot;>
+                <span class=&quot;op-arrow&quot; aria-hidden=&quot;true&quot;>→</span>
+                <span class=&quot;api-link&quot;>addToCart</span>
+              </p>
+            
+
+            
+              <p class=&quot;step-description&quot;>Add the product to the shopping cart</p>
+            
+
+            
+              <p class=&quot;block-label&quot;>Parameters</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>Accept-Language</code>
+                    <span class=&quot;kv-in&quot;>header</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>
+                Request Body<span class=&quot;block-label-meta&quot;>application/json</span>
+              </p>
+              <pre class=&quot;json-block&quot;>{
+  &amp;#34;productId&amp;#34;: &amp;#34;<span class=&quot;runtime&quot;>$inputs.productId</span>&amp;#34;,
+  &amp;#34;quantity&amp;#34;: 2
+}</pre>
+            
+
+            
+              <p class=&quot;block-label&quot;>Success Criteria</p>
+              <ul class=&quot;success-block&quot;>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 201</li>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/totalPrice &amp;gt; 0</li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>Outputs</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+                    <code class=&quot;kv-key&quot;>cartTotal</code>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$response.body#/totalPrice</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+          </div>
+        </li>
+      
+        <li class=&quot;step&quot; id=&quot;step-pay&quot;>
+          
+          
+          <header class=&quot;step-marker&quot;>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>03</span>
+            <h3 class=&quot;step-id&quot;>pay</h3>
+            <span class=&quot;step-tag&quot;>API</span>
+          </header>
+
+          <div class=&quot;step-body&quot;>
+            
+              <p class=&quot;op&quot;>
+                <span class=&quot;op-arrow&quot; aria-hidden=&quot;true&quot;>→</span>
+                <span class=&quot;api-link&quot;>processPayment</span>
+              </p>
+            
+
+            
+              <p class=&quot;step-description&quot;>Pay the order with a valid card</p>
+            
+
+            
+              <p class=&quot;block-label&quot;>Parameters</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>orderId</code>
+                    <span class=&quot;kv-in&quot;>path</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.orderId</code>
+                  </li>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>Accept-Language</code>
+                    <span class=&quot;kv-in&quot;>header</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>
+                Request Body<span class=&quot;block-label-meta&quot;>application/json</span>
+              </p>
+              <pre class=&quot;json-block&quot;>{
+  &amp;#34;amount&amp;#34;: 49.99,
+  &amp;#34;cardHolder&amp;#34;: &amp;#34;John Doe&amp;#34;,
+  &amp;#34;cardNumber&amp;#34;: &amp;#34;4111111111111111&amp;#34;,
+  &amp;#34;cvv&amp;#34;: &amp;#34;123&amp;#34;,
+  &amp;#34;expiryDate&amp;#34;: &amp;#34;12/26&amp;#34;,
+  &amp;#34;method&amp;#34;: &amp;#34;card&amp;#34;
+}</pre>
+            
+
+            
+              <p class=&quot;block-label&quot;>Success Criteria</p>
+              <ul class=&quot;success-block&quot;>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/status == &amp;#34;OK&amp;#34;</li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>Outputs</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+                    <code class=&quot;kv-key&quot;>transactionId</code>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$response.body#/transactionId</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+          </div>
+        </li>
+      
+    </ol>
+
+    
+    <section class=&quot;terminus terminus-end&quot; aria-labelledby=&quot;end-heading&quot;>
+      <div class=&quot;terminus-marker&quot;>
+        <span class=&quot;terminus-glyph&quot; aria-hidden=&quot;true&quot;>▣</span>
+        <h2 id=&quot;end-heading&quot;>End</h2>
+      </div>
+      
+        <p class=&quot;block-label terminus-muted&quot;>Outputs</p>
+        <ul class=&quot;kv&quot;>
+          
+            <li>
+              <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+              <code class=&quot;kv-key&quot;>totalSpent</code>
+              <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+              <code class=&quot;runtime&quot;>$steps.add-to-cart.outputs.cartTotal</code>
+            </li>
+          
+            <li>
+              <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+              <code class=&quot;kv-key&quot;>transactionId</code>
+              <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+              <code class=&quot;runtime&quot;>$steps.pay.outputs.transactionId</code>
+            </li>
+          
+        </ul>
+      
+    </section>
+
+    <footer class=&quot;footer&quot;>Generated by arazzo-maestro</footer>
+
+  </main>
+</body>
+</html>"></iframe>
+          </div>
+        </div>
+        <!-- PREVIEW:END -->
+      </div>
+    </section>
+
+    <!-- ── FEATURES ─────────────────────────────────────────────── -->
+    <section id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Built for after authoring</p>
+          <h2>Editor plugins help you write Arazzo. We handle everything after.</h2>
+          <p>Validation in CI, an artifact you can commit and deploy, zero runtime dependency. Complementary to your IDE plugin, the same person can run both.</p>
+        </div>
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-marker"><span class="num">01</span></div>
+            <h3>Three-pass linter</h3>
+            <p>Official JSON Schema, semantic rules, and cross-file <code>operationId</code> resolution against your OpenAPI contracts.</p>
+          </div>
+          <div class="card">
+            <div class="card-marker"><span class="num">02</span></div>
+            <h3>Standalone HTML</h3>
+            <p>No server, no client-side rendering, no JavaScript. One file, ~18 kB raw / ~3 kB gzipped, viewable offline.</p>
+          </div>
+          <div class="card">
+            <div class="card-marker"><span class="num">03</span></div>
+            <h3>Eco-designed by rule</h3>
+            <p>System fonts only, inline SVG, minimal requests, a single static binary on a <code>FROM scratch</code> image. Sobriety is enforced, not aspirational.</p>
+          </div>
+          <div class="card">
+            <div class="card-marker"><span class="num">04</span></div>
+            <h3>Accessible by default</h3>
+            <p>WCAG 2.2 AA contrasts, semantic HTML, visible focus, no info by colour alone, <code>prefers-reduced-motion</code> honoured.</p>
+          </div>
+          <div class="card">
+            <div class="card-marker"><span class="num">05</span></div>
+            <h3>Themeable</h3>
+            <p>Light and dark built in; drop a <code>themes.yml</code> to set a default or add your own. Custom themes are contrast-audited at load time.</p>
+          </div>
+          <div class="card">
+            <div class="card-marker"><span class="num">06</span></div>
+            <h3>One binary, no runtime</h3>
+            <p>No Python, no Node, no cgo. Trivial cross-compilation, instant startup, a tiny Docker image. Install in one command.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PROOF (self-referential) ─────────────────────────────── -->
+    <section id="proof">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Practice what we render</p>
+          <h2>This page eats its own dog food</h2>
+          <p>It is built with the very rules the tool enforces. View source, there is nothing to hide, and nothing phoning home.</p>
+        </div>
+        <div class="proof">
+          <ul>
+            <li><span class="chk" aria-hidden="true">✓</span>0 network requests</li>
+            <li><span class="chk" aria-hidden="true">✓</span>0 bytes of JavaScript</li>
+            <li><span class="chk" aria-hidden="true">✓</span>System fonts only</li>
+            <li><span class="chk" aria-hidden="true">✓</span>Inline SVG, no raster images</li>
+            <li><span class="chk" aria-hidden="true">✓</span>WCAG 2.2 AA contrast</li>
+            <li><span class="chk" aria-hidden="true">✓</span>Light &amp; dark via your OS preference</li>
+            <li><span class="chk" aria-hidden="true">✓</span>Single self-contained file</li>
+          </ul>
+        </div>
+
+        <table>
+          <caption>arazzo-maestro at a glance</caption>
+          <tbody>
+            <tr><th scope="row">Generated workflow HTML</th><td class="val">~18 kB raw · ~3 kB gzipped</td></tr>
+            <tr><th scope="row">Requests at page load</th><td class="val">1 (output) · 0 (this page)</td></tr>
+            <tr><th scope="row">Direct Go dependencies</th><td class="val">3</td></tr>
+            <tr><th scope="row">Binary size</th><td class="val">~7.6 MB, static, no cgo</td></tr>
+            <tr><th scope="row">Built-in themes passing WCAG AA</th><td class="val">10 / 10 critical pairs</td></tr>
+            <tr><th scope="row">Arazzo versions</th><td class="val">1.0 &amp; 1.1</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── QUICK START ──────────────────────────────────────────── -->
+    <section id="quick-start">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Get going</p>
+          <h2>Quick start</h2>
+          <p>Go 1.23+ for a source install, or run it straight from Docker, nothing else to set up.</p>
+        </div>
+        <div class="grid-2">
+          <pre class="terminal" tabindex="0" aria-label="Install and use with Go"><span class="cmt"># Install (Go 1.23+)</span>
+<span class="pr">$</span> go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
+
+<span class="cmt"># Validate</span>
+<span class="pr">$</span> arazzo-maestro lint workflow.yaml
+
+<span class="cmt"># Render (light + dark)</span>
+<span class="pr">$</span> arazzo-maestro view workflow.yaml -o dist/light
+<span class="pr">$</span> arazzo-maestro view workflow.yaml -o dist/dark --theme dark
+<span class="pr">$</span> open dist/light/index.html</pre>
+          <pre class="terminal" tabindex="0" aria-label="Run with Docker"><span class="cmt"># Or via Docker, FROM scratch image</span>
+<span class="pr">$</span> docker run --rm -v "$PWD":/work \
+    ghcr.io/emmanuelperu/arazzo-maestro:latest \
+    view /work/workflow.yaml -o /work/dist
+
+<span class="cmt"># List available themes</span>
+<span class="pr">$</span> arazzo-maestro view --list-themes
+<span class="em">dark</span>
+<span class="em">light</span> (default)</pre>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── FOOTER ─────────────────────────────────────────────────── -->
+  <footer>
+    <div class="wrap">
+      <div class="foot-row">
+        <div class="brand">
+          <span class="brand-name">arazzo-maestro</span>
+        </div>
+        <div class="foot-links">
+          <a href="https://github.com/emmanuelperu/arazzo-maestro">GitHub</a>
+          <a href="https://github.com/emmanuelperu/arazzo-maestro/releases">Releases</a>
+          <a href="https://spec.openapis.org/arazzo/latest.html">Arazzo spec</a>
+          <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/LICENSE">Apache 2.0</a>
+        </div>
+      </div>
+      <p class="foot-note">Built on the same rules it enforces, eco-design · accessibility</p>
+    </div>
+  </footer>
+
+</body>
+</html>
