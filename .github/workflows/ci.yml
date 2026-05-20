@@ -83,7 +83,11 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          # v2.x is required because (a) our .golangci.yml uses the v2
+          # config format (version: "2"), and (b) the action's
+          # default-pinned binary is v1.64.8 built with Go 1.24, which
+          # refuses to lint a project targeting Go 1.25 (our go.mod).
+          version: v2.12.2
 
   govulncheck:
     name: govulncheck
