@@ -43,13 +43,15 @@ lint: $(BIN) ## Lint every examples/*.arazzo.yaml.
 	done; \
 	exit $$status
 
-dist: $(BIN) ## Render every examples/*.arazzo.yaml in light + dark themes under dist/<workflow>/{light,dark}/.
+dist: $(BIN) ## Render every examples/*.arazzo.yaml in every built-in + user theme under dist/<workflow>/<theme>/.
 	@rm -rf dist
-	@for f in $(ARAZZO_FILES); do \
+	@themes=$$($(BIN) view --list-themes | awk '{print $$1}'); \
+	for f in $(ARAZZO_FILES); do \
 		name=$$(basename $$f .arazzo.yaml); \
-		echo "→ view $$f → dist/$$name/{light,dark}/"; \
-		$(BIN) view $$f -o dist/$$name/light --theme light; \
-		$(BIN) view $$f -o dist/$$name/dark  --theme dark; \
+		echo "→ $$f → dist/$$name/{$$(echo $$themes | tr ' ' ',')}/"; \
+		for theme in $$themes; do \
+			$(BIN) view $$f -o dist/$$name/$$theme --theme $$theme; \
+		done; \
 	done
 
 clean: ## Remove dist/ and bin/.
