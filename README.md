@@ -105,6 +105,12 @@ The repo ships with two demo Arazzo files in [`examples/`](./examples):
 - [`shop.arazzo.yaml`](./examples/shop.arazzo.yaml), happy-path checkout + a retry-on-failure path (showcases `onFailure: retry`). References [`shop-openapi.yaml`](./examples/shop-openapi.yaml) (scored 100/100 by [Vacuum](https://quobix.com/vacuum/)).
 - [`checkout-branching.arazzo.yaml`](./examples/checkout-branching.arazzo.yaml), single payment step that branches via `onSuccess: goto` / `onFailure: goto` to a confirm or cancel step. References [`checkout-branching-api.yaml`](./examples/checkout-branching-api.yaml).
 
+The `happy-path-checkout` workflow rendered by `view`, in the two built-in themes (click to enlarge):
+
+| Light | Dark |
+|---|---|
+| [![happy-path-checkout workflow rendered by arazzo-maestro, light theme](./docs/screenshots/happy-light.webp)](./docs/screenshots/happy-light.webp) | [![happy-path-checkout workflow rendered by arazzo-maestro, dark theme](./docs/screenshots/happy-dark.webp)](./docs/screenshots/happy-dark.webp) |
+
 ```bash
 # Render every examples/*.arazzo.yaml into dist/<workflow>/{light,dark}/
 make dist
