@@ -83,7 +83,7 @@ jobs:
       - name: golangci-lint
         # @v7 is required to pin a v2.x golangci-lint binary. @v6 only
         # supports v1.x and rejects v2 with "you must update to v7".
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           # v2.x is required because (a) our .golangci.yml uses the v2
           # config format (version: "2"), and (b) the v1.64.8 default
