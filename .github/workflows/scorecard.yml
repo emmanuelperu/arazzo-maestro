@@ -1,0 +1,57 @@
+# Run the OpenSSF Scorecard analyser and publish the results to:
+#   - the Security tab via SARIF (for in-repo triage)
+#   - https://scorecard.dev (public score tracked by the README badge)
+#
+# One-time setup:
+#   1. Enable the action on the default branch.
+#   2. Repo Settings → Code security → Enable "Scorecard" if listed,
+#      or simply let this workflow create its own SARIF reports.
+#
+# NOTE (OpenSSF Phase 1, see Plan.md): same pinning rationale as in
+# ci.yml and pages.yml — tags now, SHAs once Dependabot is configured.
+
+name: scorecard
+
+on:
+  branch_protection_rule:
+  schedule:
+    # Weekly, every Monday at 06:17 UTC. Off-peak slot to avoid CI rushes.
+    - cron: "17 6 * * 1"
+  push:
+    branches: [main]
+
+# Least privilege at the workflow level.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # Needed to upload the SARIF to the Security tab.
+      security-events: write
+      # Needed for the publish_results step to attest the run.
+      id-token: write
+      # Read repo metadata (branch protection, code review, etc.).
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # publish_results=true sends the score to scorecard.dev so the
+          # README badge resolves. Safe: no secrets leaked, only the
+          # public results.
+          publish_results: true
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif

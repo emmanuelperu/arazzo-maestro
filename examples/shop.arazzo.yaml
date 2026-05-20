@@ -1,0 +1,176 @@
+arazzo: "1.1.0"
+
+info:
+  title: Shop workflows
+  summary: Business workflows orchestrating openapi-contract-blank operations
+  description: |
+    Describes end-to-end customer journeys (browse, add-to-cart, pay) on top of
+    the OpenAPI contract. Each step references an `operationId` from
+    `shop-openapi.yaml` and chains values via runtime expressions.
+  version: "1.0.0"
+
+sourceDescriptions:
+  - name: shop-api
+    url: ./shop-openapi.yaml
+    type: openapi
+
+workflows:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # 1) Happy path : browse → add to cart → successful card payment
+  # ─────────────────────────────────────────────────────────────────────────
+  - workflowId: happy-path-checkout
+    summary: Browse, add to cart and pay successfully
+    description: |
+      Lists the product catalog, adds a product to the cart, and pays the
+      resulting order with a valid card. Assertions check each HTTP code and
+      the final payment status.
+    inputs:
+      type: object
+      properties:
+        productId:
+          type: string
+          default: prod-001
+        orderId:
+          type: string
+          default: order-001
+        acceptLanguage:
+          type: string
+          default: fr_FR
+
+    steps:
+      - stepId: list-catalog
+        description: Browse the product catalog
+        operationId: listProducts
+        parameters:
+          - name: Accept-Language
+            in: header
+            value: $inputs.acceptLanguage
+          - name: page
+            in: query
+            value: 0
+          - name: size
+            in: query
+            value: 10
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          firstProductId: $response.body#/items/0/id
+
+      - stepId: add-to-cart
+        description: Add the product to the shopping cart
+        operationId: addToCart
+        parameters:
+          - name: Accept-Language
+            in: header
+            value: $inputs.acceptLanguage
+        requestBody:
+          contentType: application/json
+          payload:
+            productId: $inputs.productId
+            quantity: 2
+        successCriteria:
+          - condition: $statusCode == 201
+          - condition: $response.body#/totalPrice > 0
+        outputs:
+          cartTotal: $response.body#/totalPrice
+
+      - stepId: pay
+        description: Pay the order with a valid card
+        operationId: processPayment
+        parameters:
+          - name: orderId
+            in: path
+            value: $inputs.orderId
+          - name: Accept-Language
+            in: header
+            value: $inputs.acceptLanguage
+        requestBody:
+          contentType: application/json
+          payload:
+            method: card
+            amount: 49.99
+            cardNumber: "4111111111111111"
+            cardHolder: John Doe
+            expiryDate: "12/26"
+            cvv: "123"
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "OK"
+        outputs:
+          transactionId: $response.body#/transactionId
+
+    outputs:
+      totalSpent: $steps.add-to-cart.outputs.cartTotal
+      transactionId: $steps.pay.outputs.transactionId
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # 2) Negative path : add to cart then payment is refused by the bank
+  # ─────────────────────────────────────────────────────────────────────────
+  - workflowId: payment-refused-path
+    summary: Add to cart then receive a refused card payment
+    description: |
+      Uses a card number that the mock dispatcher routes to the `pay_refused`
+      example. Verifies that the API returns a 200 with a REFUSED status.
+    inputs:
+      type: object
+      properties:
+        orderId:
+          type: string
+          default: order-001
+        acceptLanguage:
+          type: string
+          default: fr_FR
+
+    steps:
+
+      - stepId: add-to-cart
+        description: Add a product to the cart
+        operationId: addToCart
+        parameters:
+          - name: Accept-Language
+            in: header
+            value: $inputs.acceptLanguage
+        requestBody:
+          contentType: application/json
+          payload:
+            productId: prod-002
+            quantity: 1
+        successCriteria:
+          - condition: $statusCode == 201
+
+      - stepId: pay-refused
+        description: |
+          Pay with a card that triggers a bank refusal. The bank may
+          also respond 5xx on transient errors, in that case we retry
+          up to twice with 2 s back-off before accepting the failure.
+        operationId: processPayment
+        parameters:
+          - name: orderId
+            in: path
+            value: $inputs.orderId
+          - name: Accept-Language
+            in: header
+            value: $inputs.acceptLanguage
+        requestBody:
+          contentType: application/json
+          payload:
+            method: card
+            amount: 49.99
+            cardNumber: "4111111111110002"
+            cardHolder: Jane Doe
+            expiryDate: "06/25"
+            cvv: "456"
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "REFUSED"
+        onFailure:
+          - name: retry-on-transient-failure
+            type: retry
+            stepId: pay-refused
+            retryAfter: 2000
+            retryLimit: 2
+            criteria:
+              - condition: $statusCode >= 500
+          - name: stop-after-final-attempt
+            type: end

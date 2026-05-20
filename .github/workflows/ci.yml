@@ -1,0 +1,105 @@
+# Run on every push to main and on every pull request.
+#
+# Mirrors what `make test vet lint dist` does locally — anything green
+# in CI must also be green when a contributor runs `make` on their
+# machine, and vice-versa.
+#
+# NOTE (OpenSSF Phase 1, see Plan.md): pin these actions to a commit
+# SHA instead of a tag before claiming the Scorecard
+# "Pinned-Dependencies" criterion. Tags are used here for readability;
+# Dependabot (`.github/dependabot.yml`) keeps them in step with the
+# upstream versions and can be reconfigured to bump SHAs.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege by default.
+permissions:
+  contents: read
+
+# Cancel in-flight runs when a new commit lands on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race -cover ./...
+
+      - name: go build
+        run: go build -o /tmp/arazzo-maestro ./cmd/arazzo-maestro
+
+      - name: Lint the demo Arazzo files
+        run: |
+          for f in examples/*.arazzo.yaml; do
+            echo "→ lint $f"
+            /tmp/arazzo-maestro lint "$f"
+          done
+
+      - name: Render the demo files (eco-design guard)
+        run: |
+          /tmp/arazzo-maestro view examples/shop.arazzo.yaml -o /tmp/dist/shop --theme light
+          for f in /tmp/dist/shop/*.html; do
+            if grep -q "ZgotmplZ" "$f"; then echo "::error file=$f::ZgotmplZ leaked"; exit 1; fi
+          done
+
+  golangci-lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: govulncheck ./...
+        run: govulncheck ./...

@@ -1,0 +1,254 @@
+openapi: "3.1.0"
+
+info:
+  title: Shop API
+  description: |
+    Minimal OpenAPI contract referenced by `shop.arazzo.yaml` (Arazzo). Defines
+    the three operations used by the workflows: listing the catalog,
+    adding a product to a cart, and processing a payment.
+
+    Kept intentionally lean, schemas are skeletal because the goal is
+    to demonstrate the Arazzo ↔ OpenAPI relationship, not to be a
+    realistic e-commerce API.
+  version: "1.0.0"
+
+servers:
+  - url: https://shop.example.com/api/v1
+    description: Production server
+
+tags:
+  - name: Catalog
+    description: Browse the product catalog
+  - name: Cart
+    description: Manage the shopping cart
+  - name: Payment
+    description: Process payments for orders
+
+paths:
+  /products:
+    get:
+      operationId: listProducts
+      summary: List products in the catalog
+      description: Returns a paginated list of products available in the catalog.
+      tags: [Catalog]
+      parameters:
+        - name: Accept-Language
+          in: header
+          description: Preferred locale for product names and descriptions.
+          schema:
+            type: string
+            example: fr_FR
+        - name: page
+          in: query
+          description: Zero-based page index.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            example: 0
+        - name: size
+          in: query
+          description: Page size (1–100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+      responses:
+        "200":
+          description: Paginated catalog page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    description: One product per entry.
+                    items:
+                      $ref: "#/components/schemas/Product"
+                    example:
+                      - id: prod-001
+                        name: Espresso machine
+                        price: 249.90
+              example:
+                items:
+                  - id: prod-001
+                    name: Espresso machine
+                    price: 249.90
+
+  /cart/items:
+    post:
+      operationId: addToCart
+      summary: Add a product to the current cart
+      description: Adds the given product/quantity pair to the active cart and returns the updated total.
+      tags: [Cart]
+      parameters:
+        - name: Accept-Language
+          in: header
+          description: Preferred locale for response messages.
+          schema:
+            type: string
+            example: fr_FR
+      requestBody:
+        description: Product reference and desired quantity.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, quantity]
+              properties:
+                productId:
+                  type: string
+                  description: Identifier of the product to add.
+                  example: prod-001
+                quantity:
+                  type: integer
+                  description: Quantity to add (≥1).
+                  minimum: 1
+                  example: 2
+            example:
+              productId: prod-001
+              quantity: 2
+      responses:
+        "201":
+          description: Cart updated. Returns the new total.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [totalPrice]
+                properties:
+                  totalPrice:
+                    type: number
+                    format: float
+                    description: New total amount of the cart.
+                    example: 499.80
+              example:
+                totalPrice: 499.80
+
+  /orders/{orderId}/payment:
+    post:
+      operationId: processPayment
+      summary: Process a card payment for the given order
+      description: |
+        Submits payment details for the referenced order. The response
+        carries a `status` of either `OK` or `REFUSED` depending on what
+        the bank returned.
+      tags: [Payment]
+      parameters:
+        - name: orderId
+          in: path
+          description: Identifier of the order to pay.
+          required: true
+          schema:
+            type: string
+            example: order-001
+        - name: Accept-Language
+          in: header
+          description: Preferred locale for the payment receipt and error labels.
+          schema:
+            type: string
+            example: fr_FR
+      requestBody:
+        description: Card payment instructions.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CardPayment"
+            example:
+              method: card
+              amount: 49.99
+              cardNumber: "4111111111111111"
+              cardHolder: John Doe
+              expiryDate: "12/26"
+              cvv: "123"
+      responses:
+        "200":
+          description: Payment processed. Inspect `status` to know the outcome.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    description: Outcome of the payment.
+                    enum: [OK, REFUSED]
+                    example: OK
+                  transactionId:
+                    type: string
+                    description: Bank transaction identifier (present on success).
+                    example: tx-9f2c1
+              example:
+                status: OK
+                transactionId: tx-9f2c1
+
+components:
+  schemas:
+    Product:
+      type: object
+      description: A single product entry in the catalog.
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Stable product identifier.
+          example: prod-001
+        name:
+          type: string
+          description: Display name of the product.
+          example: Espresso machine
+        price:
+          type: number
+          format: float
+          description: Unit price, in the catalog's reference currency.
+          example: 249.90
+      example:
+        id: prod-001
+        name: Espresso machine
+        price: 249.90
+
+    CardPayment:
+      type: object
+      description: Card payment instructions submitted at checkout.
+      required: [method, amount, cardNumber, cardHolder, expiryDate, cvv]
+      properties:
+        method:
+          type: string
+          description: Payment method. Only `card` is supported in this minimal API.
+          enum: [card]
+          example: card
+        amount:
+          type: number
+          format: float
+          description: Total amount to charge.
+          example: 49.99
+        cardNumber:
+          type: string
+          description: PAN of the card (test values only).
+          example: "4111111111111111"
+        cardHolder:
+          type: string
+          description: Full name as printed on the card.
+          example: John Doe
+        expiryDate:
+          type: string
+          description: Card expiry date in MM/YY format.
+          example: "12/26"
+        cvv:
+          type: string
+          description: CVV/CVC code on the back of the card.
+          example: "123"
+      example:
+        method: card
+        amount: 49.99
+        cardNumber: "4111111111111111"
+        cardHolder: John Doe
+        expiryDate: "12/26"
+        cvv: "123"

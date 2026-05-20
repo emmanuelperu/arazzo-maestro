@@ -1,0 +1,77 @@
+# Built-in themes embedded in the binary via //go:embed.
+# Users can override or extend these by dropping a themes.yml at their
+# project root (see Plan.md > Feature themes).
+#
+# Visual identity: "Blueprint", flat fills with hairline frames, a
+# vertical rail connecting steps, monospace step headers, single warm
+# accent (amber). Deliberately distinct from the dotted-background /
+# emerald-gradient look common to other Arazzo editors.
+
+themes:
+  - name: light
+    font: sans
+    shape: rounded
+    colors:
+      bg: "#f5f5f0"             # warm cream, page paper
+      bgGrid: "#e7e5e0"         # very faint stone, schematic grid lines
+      text: "#1e293b"           # slate-800 (navy ink)
+      textMuted: "#475569"      # slate-600 (≥4.5:1 on cream)
+      heading: "#0f172a"        # slate-900
+      cardBg: "#f5f5f0"         # same as bg, flat schematic feel
+      cardBorder: "#94a3b8"     # slate-400, visible hairline
+      cardHeaderBg: "#f5f5f0"
+      runtime: "#92400e"        # amber-800 (warm accent, ≥6:1 on cream)
+      apiLink: "#1e40af"        # blue-800 (operationId / link)
+      startBg: "#f5f5f0"        # flat fill, no gradient
+      startBorder: "#1e293b"    # navy thick frame
+      startText: "#0f172a"      # darker than text for contrast
+      startMuted: "#475569"
+      endBg: "#1e293b"          # inverse: dark fill for END
+      endBorder: "#1e293b"
+      endText: "#f5f5f0"        # cream on navy
+      endMuted: "#cbd5e1"       # slate-300
+      jsonBg: "#1e293b"         # navy block (consistent with END)
+      jsonText: "#e2e8f0"       # slate-200 (≥7:1 on navy)
+      jsonRuntime: "#fcd34d"    # amber-300 (≥8:1 on navy) — bright on dark
+      successBg: "#fef3c7"      # amber-100, gentle warm accent
+      successBorder: "#d97706"  # amber-600
+      successText: "#78350f"    # amber-900 (≥10:1 on amber-100)
+      rail: "#1e293b"           # vertical line connecting steps
+      badgeBg: "#f5f5f0"
+      badgeBorder: "#1e293b"
+      badgeText: "#1e293b"
+      footer: "#64748b"         # slate-500
+
+  - name: dark
+    font: sans
+    shape: rounded
+    colors:
+      bg: "#0a0a0f"             # deep charcoal, schematic on dark paper
+      bgGrid: "#1c1917"         # stone-900 (very faint grid)
+      text: "#e7e5e4"           # stone-200 (≥17:1 on bg)
+      textMuted: "#a8a29e"      # stone-400 (≥6:1 on bg)
+      heading: "#f5f5f4"        # stone-100
+      cardBg: "#0a0a0f"
+      cardBorder: "#44403c"     # stone-700, visible on dark
+      cardHeaderBg: "#0a0a0f"
+      runtime: "#fcd34d"        # amber-300 (≥11:1 on dark)
+      apiLink: "#93c5fd"        # blue-300 (≥8:1 on dark)
+      startBg: "#0a0a0f"
+      startBorder: "#fbbf24"    # amber-400, pops on dark
+      startText: "#fbbf24"
+      startMuted: "#e7e5e4"
+      endBg: "#fbbf24"          # inverse: amber-filled END
+      endBorder: "#fbbf24"
+      endText: "#0a0a0f"        # charcoal on amber
+      endMuted: "#44403c"
+      jsonBg: "#000000"         # pure black for JSON block
+      jsonText: "#e7e5e4"
+      jsonRuntime: "#fcd34d"    # amber-300 (≥15:1 on black)
+      successBg: "#0a0a0f"
+      successBorder: "#fcd34d"
+      successText: "#fcd34d"
+      rail: "#fbbf24"           # amber rail, visual signature in dark
+      badgeBg: "#0a0a0f"
+      badgeBorder: "#e7e5e4"
+      badgeText: "#e7e5e4"
+      footer: "#a8a29e"
