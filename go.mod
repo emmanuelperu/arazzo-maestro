@@ -1,6 +1,6 @@
 module arazzo-maestro
 
-go 1.23.4
+go 1.25.10
 
 require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1

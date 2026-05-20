@@ -1,19 +1,21 @@
 # Sensible defaults for arazzo-maestro. Aimed at catching real bugs,
 # not bikeshedding style. The CI workflow runs `golangci-lint run`
 # against this config.
+#
+# golangci-lint v2 config format. See:
+#   https://golangci-lint.run/usage/configuration/
+
+version: "2"
 
 run:
   timeout: 5m
-  # Skip the embedded JSON Schema fixture — it's vendored upstream
-  # and has its own validation pipeline.
   modules-download-mode: readonly
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck      # ignored error returns
     - errorlint     # %w wrapping consistency
-    - gofmt         # canonical formatting
     - gosec         # security smells
     - govet         # built-in static analyser
     - ineffassign   # dead assignments
@@ -23,54 +25,60 @@ linters:
     - unconvert     # redundant type conversions
     - unused        # unused symbols (exported + unexported)
 
-linters-settings:
-  errcheck:
-    # We deliberately discard the return of these helpers in print-only
-    # CLI paths. Adding `_ = ...` everywhere would be noise.
-    exclude-functions:
-      - fmt.Fprintln
-      - fmt.Fprintf
-      - (*bytes.Buffer).WriteString
-      - (*strings.Builder).WriteString
+  settings:
+    errcheck:
+      # We deliberately discard the return of these helpers in print-only
+      # CLI paths. Adding `_ = ...` everywhere would be noise.
+      exclude-functions:
+        - fmt.Fprintln
+        - fmt.Fprintf
+        - (*bytes.Buffer).WriteString
+        - (*strings.Builder).WriteString
 
-  gosec:
-    excludes:
-      # G304: variable file path is the entire point of our CLI tool
-      # (the user passes the file to lint/view).
-      - G304
-      # G306: 0644 is the right mode for a generated HTML output.
-      - G306
-      # G203: every call to `template.HTML(...)` / `template.CSS(...)`
-      # in internal/renderer/renderer.go is preceded by an explicit
-      # `html.EscapeString(...)` on the user-controlled portion, or
-      # wraps a hardcoded string (FontStack). Manual review > gosec
-      # here.
-      - G203
+    gosec:
+      excludes:
+        # G304: variable file path is the entire point of our CLI tool
+        # (the user passes the file to lint/view).
+        - G304
+        # G306: 0644 is the right mode for a generated HTML output.
+        - G306
+        # G203: every call to `template.HTML(...)` / `template.CSS(...)`
+        # in internal/renderer/renderer.go is preceded by an explicit
+        # `html.EscapeString(...)` on the user-controlled portion, or
+        # wraps a hardcoded string (FontStack). Manual review > gosec
+        # here.
+        - G203
 
-  misspell:
-    # No `locale:` so the linter only flags real typos, not regional
+    # No locale set, the linter only flags real typos, not regional
     # variants (the codebase is a mix of British and American English).
+    misspell: {}
 
-  revive:
-    severity: warning
+    revive:
+      severity: warning
+      rules:
+        - name: var-naming
+        - name: indent-error-flow
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: increment-decrement
+        - name: redefines-builtin-id
+        - name: superfluous-else
+
+  exclusions:
     rules:
-      - name: var-naming
-      - name: indent-error-flow
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: increment-decrement
-      - name: range-val-in-closure
-      - name: redefines-builtin-id
-      - name: superfluous-else
+      # Test files often need shorter, more flexible patterns.
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+
+# Gofmt moved from linters to formatters in v2.
+formatters:
+  enable:
+    - gofmt
 
 issues:
   # Don't gate the first PR on legacy noise; opt-in stricter later.
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    # Test files often need shorter, more flexible patterns.
-    - path: _test\.go
-      linters:
-        - gosec
-        - errcheck
