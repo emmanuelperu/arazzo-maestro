@@ -4,11 +4,10 @@
 # in CI must also be green when a contributor runs `make` on their
 # machine, and vice-versa.
 #
-# NOTE (OpenSSF Phase 1, see Plan.md): pin these actions to a commit
-# SHA instead of a tag before claiming the Scorecard
-# "Pinned-Dependencies" criterion. Tags are used here for readability;
-# Dependabot (`.github/dependabot.yml`) keeps them in step with the
-# upstream versions and can be reconfigured to bump SHAs.
+# Third-party actions are pinned to a full commit SHA (with the
+# human-readable version in a trailing comment) to satisfy Scorecard
+# `Pinned-Dependencies`. Dependabot (`.github/dependabot.yml`) bumps
+# both the SHA and the comment when upstream cuts a new release.
 
 name: ci
 
@@ -36,10 +35,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
           cache: true
@@ -72,10 +71,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
           cache: true
@@ -85,7 +84,7 @@ jobs:
         # action @v9 supports golangci-lint v2.x (which our
         # .golangci.yml requires — `version: "2"` header). Earlier
         # action majors (@v6 and below) only accept v1.x binaries.
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
           # v2.x is required because our .golangci.yml uses the v2
           # format and our go.mod targets Go 1.25 — the v1.64.x line
@@ -97,10 +96,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
           cache: true

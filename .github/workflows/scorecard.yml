@@ -7,8 +7,10 @@
 #   2. Repo Settings → Code security → Enable "Scorecard" if listed,
 #      or simply let this workflow create its own SARIF reports.
 #
-# NOTE (OpenSSF Phase 1, see Plan.md): same pinning rationale as in
-# ci.yml and pages.yml — tags now, SHAs once Dependabot is configured.
+# Third-party actions are pinned to a full commit SHA (with the
+# human-readable version in a trailing comment) to satisfy Scorecard
+# `Pinned-Dependencies`. Dependabot bumps both fields on upstream
+# releases.
 
 name: scorecard
 
@@ -32,17 +34,17 @@ jobs:
       security-events: write
       # Needed for the publish_results step to attest the run.
       id-token: write
-      # Read repo metadata (branch protection, code review, etc.).
+      # Read repo metadata (code review, etc.).
       contents: read
       actions: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Run Scorecard analysis
-        uses: ossf/scorecard-action@v2.4.3
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
         with:
           results_file: results.sarif
           results_format: sarif
@@ -50,8 +52,20 @@ jobs:
           # README badge resolves. Safe: no secrets leaked, only the
           # public results.
           publish_results: true
+          # The default GITHUB_TOKEN cannot read branch-protection rules
+          # (that scope is not available at job-level `permissions`), so
+          # the Branch-Protection check returns -1 unless a fine-grained
+          # PAT is provided via the SCORECARD_TOKEN repo secret.
+          #
+          # To unlock the check (~+1 point on the overall score):
+          #   1. Create a fine-grained PAT, scope: this repo only,
+          #      "Repository permissions" → "Administration: Read".
+          #   2. Save it as the SCORECARD_TOKEN repo secret.
+          # Without the secret, this falls back to GITHUB_TOKEN and the
+          # check stays at -1 — no breakage.
+          repo_token: ${{ secrets.SCORECARD_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
         with:
           sarif_file: results.sarif

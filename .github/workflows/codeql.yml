@@ -1,0 +1,74 @@
+# Static Application Security Testing (SAST) via GitHub CodeQL.
+# Unlocks the Scorecard `SAST` check and surfaces CWE-class issues
+# (e.g. taint flow, unsafe deserialisation) in the Security tab on
+# every push to main and every PR targeting main.
+#
+# Third-party actions are pinned to a full commit SHA (with the
+# human-readable version in a trailing comment) to satisfy Scorecard
+# `Pinned-Dependencies`. Dependabot bumps both fields on upstream
+# releases.
+
+name: codeql
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, every Monday at 12:31 UTC. Off-peak from ci.yml and
+    # scorecard.yml so the runner queue does not pile up.
+    - cron: "31 12 * * 1"
+
+# Least privilege at workflow level.
+permissions:
+  contents: read
+
+# Cancel in-flight analyses when a new commit lands on the same ref.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to upload SARIF results to the Security tab.
+      security-events: write
+      # Required to fetch internal actions for private repos (no-op here
+      # since the repo is public, but kept for parity with the template).
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [go]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality runs the full pack (CWE + maintainability
+          # queries). default would skip lower-severity findings.
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
+        with:
+          category: "/language:${{ matrix.language }}"
