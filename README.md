@@ -1,11 +1,6 @@
 <!--
   Repo: https://github.com/emmanuelperu/arazzo-maestro
 
-  REMAINING PLACEHOLDER: the OpenSSF Best Practices badge below still uses
-  `projects/OWNER`: replace OWNER with the numeric project ID assigned
-  when you register the project at https://www.bestpractices.dev (it is an
-  ID, not a GitHub username).
-
   Some badges may resolve only after one-time setup:
   - Codecov / Go Report Card: need a one-time sign-in on those services.
   - Docker image: published at `ghcr.io/emmanuelperu/arazzo-maestro:0.0.1` since the v0.0.1 release; can also be built locally via `docker build --build-arg VERSION=0.0.1 -t arazzo-maestro:0.0.1 .` (see Docker section below).
@@ -36,7 +31,7 @@
   <a href="https://spec.openapis.org/arazzo/latest.html"><img alt="Arazzo" src="https://img.shields.io/badge/arazzo-1.0%20%7C%201.1-7e22ce"></a>
   <a href="./.agents/rules/accessibility.md"><img alt="WCAG 2.2 AA" src="https://img.shields.io/badge/WCAG-2.2%20AA-047857"></a>
   <a href="./.agents/rules/eco-design.md"><img alt="Eco-design" src="https://img.shields.io/badge/eco--design-by%20rule-2d5016"></a>
-  <a href="https://www.bestpractices.dev/projects/OWNER"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/OWNER/badge"></a>
+  <a href="https://www.bestpractices.dev/projects/12929"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/12929/badge"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/emmanuelperu/arazzo-maestro"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/emmanuelperu/arazzo-maestro/badge"></a>
 </p>
 
@@ -336,8 +331,8 @@ manager. The binary is the entire userland.
 - [x] OpenSSF Phase 1: CI (test + vet + golangci-lint + govulncheck), Scorecard, Dependabot, `SECURITY.md`, `CONTRIBUTING.md`
 - [x] `Dockerfile` (`FROM scratch`, ~5 MB) with `VERSION` build-arg
 - [x] OpenSSF Phase 2: `goreleaser` (multi-OS binaries + Docker image), cosign-signed releases, first tag `v0.0.1`
-- [x] OpenSSF Phase 3: actions pinned to commit SHAs, CodeQL SAST workflow, `FuzzParseBytes` for the parser, `administration:read` so Scorecard's Branch-Protection check resolves
-- [ ] Register on [bestpractices.dev](https://www.bestpractices.dev) (replaces the `OWNER` placeholder in the badge)
+- [x] OpenSSF Phase 3: actions pinned to commit SHAs, CodeQL SAST workflow, `FuzzParseBytes` for the parser, `repo_token` plumbed for a `SCORECARD_TOKEN` PAT (unlocks Branch-Protection check once the secret is set)
+- [ ] Reach OpenSSF Best Practices `passing` badge ([project 12929](https://www.bestpractices.dev/projects/12929) — currently `in_progress`)
 - [ ] Nested workflows (`step.workflowId`)
 - [ ] `step.dependsOn` parallel branches
 - [ ] `components.{parameters,successActions,failureActions}` `$ref` reuse
