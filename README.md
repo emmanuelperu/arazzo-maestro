@@ -6,11 +6,9 @@
   when you register the project at https://www.bestpractices.dev (it is an
   ID, not a GitHub username).
 
-  Some badges resolve only after one-time setup:
-  - CI badge: lights up after the first push to `main` (workflow already wired).
+  Some badges may resolve only after one-time setup:
   - Codecov / Go Report Card: need a one-time sign-in on those services.
-  - Latest release / GHCR image: 404 until the first tag is pushed and goreleaser publishes (OpenSSF Phase 2).
-  - Docker image is buildable locally today via `docker build --build-arg VERSION=0.0.1 -t arazzo-maestro:0.0.1 .` (see Docker section below).
+  - Docker image: published at `ghcr.io/emmanuelperu/arazzo-maestro:0.0.1` since the v0.0.1 release; can also be built locally via `docker build --build-arg VERSION=0.0.1 -t arazzo-maestro:0.0.1 .` (see Docker section below).
 -->
 
 <p align="center">
@@ -87,8 +85,10 @@ go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
 
 # Or build the Docker image locally (~5 MB FROM scratch)
 docker build --build-arg VERSION=0.0.1 -t arazzo-maestro:0.0.1 .
-docker run --rm -v "$PWD":/work arazzo-maestro:0.0.1 \
-  view /work/examples/shop.arazzo.yaml -o /work/dist
+# Mount cwd into /work AND set it as workdir, so relative paths
+# (e.g. examples/shop.arazzo.yaml, dist/) resolve against your host cwd.
+docker run --rm -v "$PWD":/work -w /work arazzo-maestro:0.0.1 \
+  view examples/shop.arazzo.yaml
 
 # Lint
 arazzo-maestro lint examples/shop.arazzo.yaml
@@ -301,10 +301,23 @@ locally from the in-repo [`Dockerfile`](./Dockerfile):
 docker build --build-arg VERSION=0.0.1 \
   -t ghcr.io/emmanuelperu/arazzo-maestro:0.0.1 .
 
-# Use against any Arazzo file
-docker run --rm -v "$PWD":/work ghcr.io/emmanuelperu/arazzo-maestro:0.0.1 \
-  lint /work/workflows/checkout.yaml
+# Lint a file from the current directory
+docker run --rm -v "$PWD":/work -w /work \
+  ghcr.io/emmanuelperu/arazzo-maestro:0.0.1 \
+  lint workflows/checkout.yaml
+
+# Render to ./dist/ on the host
+docker run --rm -v "$PWD":/work -w /work \
+  ghcr.io/emmanuelperu/arazzo-maestro:0.0.1 \
+  view workflows/checkout.yaml
 ```
+
+`-v "$PWD":/work` exposes your current directory inside the container,
+and `-w /work` makes it the working directory — so relative paths
+(input file, `-o dist/` default) resolve where you expect on the host.
+Without `-w`, the container's cwd is `/` and `view`'s default output
+(`./dist/`) is written to `/dist/` inside the container, then discarded
+by `--rm`.
 
 The image is `FROM scratch` (~5 MB) — no shell, no libc, no package
 manager. The binary is the entire userland.
@@ -322,7 +335,8 @@ manager. The binary is the entire userland.
 - [x] Second worked example: `checkout-branching.arazzo.yaml` with `goto` branching
 - [x] OpenSSF Phase 1: CI (test + vet + golangci-lint + govulncheck), Scorecard, Dependabot, `SECURITY.md`, `CONTRIBUTING.md`
 - [x] `Dockerfile` (`FROM scratch`, ~5 MB) with `VERSION` build-arg
-- [ ] OpenSSF Phase 2: `goreleaser` (multi-OS binaries + Docker image), cosign-signed releases, first tag `v0.0.1`
+- [x] OpenSSF Phase 2: `goreleaser` (multi-OS binaries + Docker image), cosign-signed releases, first tag `v0.0.1`
+- [x] OpenSSF Phase 3: actions pinned to commit SHAs, CodeQL SAST workflow, `FuzzParseBytes` for the parser, `administration:read` so Scorecard's Branch-Protection check resolves
 - [ ] Register on [bestpractices.dev](https://www.bestpractices.dev) (replaces the `OWNER` placeholder in the badge)
 - [ ] Nested workflows (`step.workflowId`)
 - [ ] `step.dependsOn` parallel branches
@@ -357,6 +371,13 @@ manager. The binary is the entire userland.
 | Lines of Go (excl. tests) | ~1,300 |
 | Test coverage | parser 82 %, linter 83 %, theme 86 %, renderer 81 %, cmd 81 % |
 | Built-in themes WCAG AA conformance | 100 % on critical pairs (11/11, incl. `jsonRuntime` on `jsonBg`) |
+
+## Feedback
+
+Found a bug, or have an idea to improve the tool? Your feedback is welcome:
+
+- **Bug reports and feature requests**: [open an issue](https://github.com/emmanuelperu/arazzo-maestro/issues). Please describe what you expected, what happened, and the `arazzo-maestro` version where relevant.
+- **Security vulnerabilities**: do not open a public issue. Follow the private disclosure process in [`SECURITY.md`](./SECURITY.md).
 
 ## Contributing
 
