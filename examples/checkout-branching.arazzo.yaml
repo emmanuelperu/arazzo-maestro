@@ -32,7 +32,7 @@ workflows:
           default: order-001
         acceptLanguage:
           type: string
-          default: fr_FR
+          default: fr-FR
 
     steps:
       # ── Deciding step ───────────────────────────────────────────────

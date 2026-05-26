@@ -37,7 +37,7 @@ paths:
           description: Preferred locale for product names and descriptions.
           schema:
             type: string
-            example: fr_FR
+            example: fr-FR
         - name: page
           in: query
           description: Zero-based page index.
@@ -91,7 +91,7 @@ paths:
           description: Preferred locale for response messages.
           schema:
             type: string
-            example: fr_FR
+            example: fr-FR
       requestBody:
         description: Product reference and desired quantity.
         required: true
@@ -152,7 +152,7 @@ paths:
           description: Preferred locale for the payment receipt and error labels.
           schema:
             type: string
-            example: fr_FR
+            example: fr-FR
       requestBody:
         description: Card payment instructions.
         required: true
