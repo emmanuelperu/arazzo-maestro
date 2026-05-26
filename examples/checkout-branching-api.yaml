@@ -45,7 +45,7 @@ paths:
           description: Preferred locale for the payment receipt and error labels.
           schema:
             type: string
-            example: fr_FR
+            example: fr-FR
       requestBody:
         description: Card payment instructions.
         required: true
