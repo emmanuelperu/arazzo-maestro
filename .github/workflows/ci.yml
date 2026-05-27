@@ -84,7 +84,7 @@ jobs:
         # action @v9 supports golangci-lint v2.x (which our
         # .golangci.yml requires — `version: "2"` header). Earlier
         # action majors (@v6 and below) only accept v1.x binaries.
-        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
+        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
         with:
           # v2.x is required because our .golangci.yml uses the v2
           # format and our go.mod targets Go 1.25 — the v1.64.x line
