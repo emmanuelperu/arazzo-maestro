@@ -68,10 +68,8 @@ func LintFile(path string) ([]Issue, error) {
 	return issues, nil
 }
 
-// Lint runs all available passes. `raw` enables the JSON Schema pass;
-// `basePath` enables cross-file validation. Either can be empty when
-// the caller already has a fully-parsed document or doesn't need a
-// particular pass.
+// Lint runs all passes. An empty raw skips the schema pass; an empty
+// basePath skips cross-file validation.
 func Lint(raw []byte, doc *model.ArazzoDocument, basePath string) []Issue {
 	var issues []Issue
 	issues = append(issues, lintSchema(raw)...)
@@ -80,8 +78,6 @@ func Lint(raw []byte, doc *model.ArazzoDocument, basePath string) []Issue {
 	return issues
 }
 
-// lintSemantic runs the cross-cutting semantic rules that don't fit
-// into JSON Schema (uniqueness, $steps refs).
 func lintSemantic(doc *model.ArazzoDocument) []Issue {
 	var issues []Issue
 	if doc == nil {
@@ -133,7 +129,6 @@ func lintWorkflow(wf *model.Workflow) []Issue {
 	var issues []Issue
 	path := "workflows[" + wf.WorkflowID + "]"
 
-	// Step IDs unique within the workflow.
 	seenSteps := make(map[string]int, len(wf.Steps))
 	for _, step := range wf.Steps {
 		if step.StepID == "" {
@@ -220,8 +215,6 @@ func checkStepsRef(expr string, wf *model.Workflow, path string, stepIndex int) 
 	return issues
 }
 
-// checkStepsRefInValue walks an arbitrary YAML-decoded value and runs
-// checkStepsRef on every string it contains.
 func checkStepsRefInValue(v any, wf *model.Workflow, path string, stepIndex int) []Issue {
 	switch t := v.(type) {
 	case string:

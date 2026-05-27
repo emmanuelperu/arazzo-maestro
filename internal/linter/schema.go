@@ -81,8 +81,6 @@ func patchSchemaVersionPattern(raw []byte) ([]byte, error) {
 	return json.Marshal(doc)
 }
 
-// lintSchema validates the raw YAML document against the Arazzo JSON
-// Schema and returns the findings as Issues.
 func lintSchema(raw []byte) []Issue {
 	if len(raw) == 0 {
 		return nil
@@ -121,9 +119,6 @@ func yamlToJSONValue(raw []byte) (any, error) {
 	return v, nil
 }
 
-// collectSchemaIssues walks the *jsonschema.ValidationError tree and
-// turns each leaf (the most specific failures) into an Issue with a
-// human-friendly path and message.
 func collectSchemaIssues(err error) []Issue {
 	var root *jsonschema.ValidationError
 	if !errors.As(err, &root) {
@@ -203,9 +198,7 @@ func isAllDigits(s string) bool {
 	return true
 }
 
-// humanMessage rewrites the most useful jsonschema messages into
-// Arazzo-aware wording. Falls back to the raw message for cases we
-// haven't customised.
+// humanMessage rewrites a few jsonschema messages into friendlier wording.
 func humanMessage(e *jsonschema.ValidationError) string {
 	msg := e.Message
 	switch {

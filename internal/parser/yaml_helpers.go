@@ -41,11 +41,8 @@ func scalarString(n *yaml.Node) string {
 	return n.Value
 }
 
-// nodeToAny converts a yaml.Node into a plain Go value, mirroring what
-// yaml.Unmarshal into `any` would produce, but preserving map ordering
-// via []map[string]any-style structures is not needed here: payloads are
-// re-serialised through encoding/json which already iterates keys, and
-// runtime expressions are matched textually.
+// nodeToAny converts a yaml.Node into the plain Go value that yaml.Unmarshal
+// into `any` would produce.
 func nodeToAny(n *yaml.Node) any {
 	if n == nil {
 		return nil
