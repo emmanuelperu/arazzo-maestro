@@ -2,6 +2,11 @@
 # releases. Dependabot opens a PR whenever an update is available; CI
 # (.github/workflows/ci.yml) gates the merge.
 #
+# Low-risk updates (minor + patch) are grouped into one PR per ecosystem
+# to cut review noise; major bumps are excluded from the groups so they
+# land as individual PRs. Every PR is merged manually after review — no
+# auto-merge.
+#
 # This config also unlocks the OpenSSF Scorecard
 # `Dependency-Update-Tool` check.
 
@@ -19,6 +24,9 @@ updates:
     commit-message:
       prefix: deps
       include: scope
+    groups:
+      gomod-minor-patch:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -31,3 +39,6 @@ updates:
     commit-message:
       prefix: ci
       include: scope
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]
