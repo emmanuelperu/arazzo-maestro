@@ -38,11 +38,10 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "arazzo-maestro",
-		Short:         "Inspect and render Arazzo workflow specifications",
-		SilenceUsage:  true,
-		SilenceErrors: false,
-		Version:       version,
+		Use:          "arazzo-maestro",
+		Short:        "Inspect and render Arazzo workflow specifications",
+		SilenceUsage: true,
+		Version:      version,
 	}
 	root.AddCommand(newLintCmd(), newViewCmd())
 	return root

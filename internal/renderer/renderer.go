@@ -8,6 +8,7 @@ package renderer
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html"
 	"html/template"
@@ -15,8 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	jsonenc "encoding/json"
+	"sync"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/theme"
@@ -52,7 +52,7 @@ func renderValue(v any) template.HTML {
 	case int, int64, int32, float32, float64:
 		return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">%v</code>`, formatNumber(t)))
 	default:
-		raw, err := jsonenc.Marshal(v)
+		raw, err := json.Marshal(v)
 		if err != nil {
 			return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">%s</code>`, html.EscapeString(fmt.Sprint(v))))
 		}
@@ -82,7 +82,7 @@ func renderPayload(v any) template.HTML {
 	if v == nil {
 		return `<span class="text-muted italic">empty</span>`
 	}
-	raw, err := jsonenc.MarshalIndent(v, "", "  ")
+	raw, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return template.HTML(html.EscapeString(fmt.Sprint(v)))
 	}
@@ -166,6 +166,10 @@ func buildTemplate() (*template.Template, error) {
 	return template.New("").Funcs(funcs).ParseFS(templatesFS, "templates/*.html")
 }
 
+// parsedTemplates parses the embedded templates once; html/template is safe
+// for concurrent execution once parsed.
+var parsedTemplates = sync.OnceValues(buildTemplate)
+
 // fallbackTheme is used when a caller passes a nil theme. It mirrors
 // the built-in light theme so tests and ad-hoc rendering keep working.
 func fallbackTheme() (*theme.Theme, error) {
@@ -190,7 +194,7 @@ func RenderWorkflow(wf model.Workflow, th *theme.Theme) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	tpl, err := buildTemplate()
+	tpl, err := parsedTemplates()
 	if err != nil {
 		return "", err
 	}
@@ -224,7 +228,7 @@ func RenderIndex(doc *model.ArazzoDocument, th *theme.Theme) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	tpl, err := buildTemplate()
+	tpl, err := parsedTemplates()
 	if err != nil {
 		return "", err
 	}
