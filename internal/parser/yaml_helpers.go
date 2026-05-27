@@ -78,7 +78,11 @@ func scalarToAny(n *yaml.Node) any {
 	case "!!null":
 		return nil
 	case "!!bool":
-		return n.Value == "true"
+		var b bool
+		if err := n.Decode(&b); err == nil {
+			return b
+		}
+		return n.Value
 	case "!!int":
 		if v, err := strconv.ParseInt(n.Value, 10, 64); err == nil {
 			return v
