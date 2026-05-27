@@ -57,6 +57,21 @@ workflows:
         outputs:
           firstProductId: $response.body#/items/0/id
 
+      - stepId: get-product
+        description: Fetch the selected product's full details
+        operationId: getProduct
+        parameters:
+          - name: productId
+            in: path
+            value: $steps.list-catalog.outputs.firstProductId
+          - name: Accept-Language
+            in: header
+            value: $inputs.acceptLanguage
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          productName: $response.body#/name
+
       - stepId: add-to-cart
         description: Add the product to the shopping cart
         operationId: addToCart

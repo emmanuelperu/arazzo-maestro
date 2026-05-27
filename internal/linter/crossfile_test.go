@@ -53,6 +53,52 @@ func setupArazzoProject(t *testing.T, arazzo, openapi string) (arazzoPath, baseP
 	return arazzoPath, dir
 }
 
+// Regression: an OpenAPI 3.0 Path Item may declare shared `parameters`
+// (and summary/description/servers) alongside its operations. The linter
+// must still extract the operationIds, not choke on the non-operation
+// fields (an earlier version aborted the whole parse on the `parameters`
+// sequence).
+const openAPIWithPathLevelParams = `
+openapi: "3.0.3"
+info: { title: Tiny, version: "1.0.0" }
+paths:
+  /products/{productId}:
+    summary: A single product
+    description: Operations on one product.
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^p-[a-zA-Z0-9]+$' }
+    get:
+      operationId: getProduct
+      responses: { "200": { description: ok } }
+`
+
+func TestCrossFileAcceptsPathLevelSharedParameters(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+sourceDescriptions:
+  - name: api
+    url: ./openapi.yaml
+    type: openapi
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationId: getProduct
+        successCriteria:
+          - condition: $statusCode == 200
+`
+	_, base := setupArazzoProject(t, src, openAPIWithPathLevelParams)
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintCrossFile(doc, base)
+	for _, issue := range issues {
+		t.Errorf("unexpected finding (path-level parameters must be tolerated): %s", issue)
+	}
+}
+
 func TestCrossFileAcceptsValidReference(t *testing.T) {
 	_, base := setupArazzoProject(t, arazzoSingleSource, tinyOpenAPI)
 	doc, _ := parser.ParseBytes([]byte(arazzoSingleSource))

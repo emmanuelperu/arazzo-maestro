@@ -1090,11 +1090,86 @@ the final payment status.</p>
           </div>
         </li>
       
-        <li class=&quot;step&quot; id=&quot;step-add-to-cart&quot;>
+        <li class=&quot;step&quot; id=&quot;step-get-product&quot;>
           
           
           <header class=&quot;step-marker&quot;>
             <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>02</span>
+            <h3 class=&quot;step-id&quot;>get-product</h3>
+            <span class=&quot;step-tag&quot;>API</span>
+          </header>
+
+          <div class=&quot;step-body&quot;>
+            
+              <p class=&quot;op&quot;>
+                <span class=&quot;op-arrow&quot; aria-hidden=&quot;true&quot;>→</span>
+                <span class=&quot;api-link&quot;>getProduct</span>
+              </p>
+            
+
+            
+              <p class=&quot;step-description&quot;>Fetch the selected product&amp;#39;s full details</p>
+            
+
+            
+              <p class=&quot;block-label&quot;>Parameters</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>productId</code>
+                    <span class=&quot;kv-in&quot;>path</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$steps.list-catalog.outputs.firstProductId</code>
+                  </li>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>Accept-Language</code>
+                    <span class=&quot;kv-in&quot;>header</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+              <p class=&quot;block-label&quot;>Success Criteria</p>
+              <ul class=&quot;success-block&quot;>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>Outputs</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+                    <code class=&quot;kv-key&quot;>productName</code>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$response.body#/name</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+          </div>
+        </li>
+      
+        <li class=&quot;step&quot; id=&quot;step-add-to-cart&quot;>
+          
+          
+          <header class=&quot;step-marker&quot;>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>03</span>
             <h3 class=&quot;step-id&quot;>add-to-cart</h3>
             <span class=&quot;step-tag&quot;>API</span>
           </header>
@@ -1171,7 +1246,7 @@ the final payment status.</p>
           
           
           <header class=&quot;step-marker&quot;>
-            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>03</span>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>04</span>
             <h3 class=&quot;step-id&quot;>pay</h3>
             <span class=&quot;step-tag&quot;>API</span>
           </header>
@@ -1925,11 +2000,86 @@ the final payment status.</p>
           </div>
         </li>
       
-        <li class=&quot;step&quot; id=&quot;step-add-to-cart&quot;>
+        <li class=&quot;step&quot; id=&quot;step-get-product&quot;>
           
           
           <header class=&quot;step-marker&quot;>
             <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>02</span>
+            <h3 class=&quot;step-id&quot;>get-product</h3>
+            <span class=&quot;step-tag&quot;>API</span>
+          </header>
+
+          <div class=&quot;step-body&quot;>
+            
+              <p class=&quot;op&quot;>
+                <span class=&quot;op-arrow&quot; aria-hidden=&quot;true&quot;>→</span>
+                <span class=&quot;api-link&quot;>getProduct</span>
+              </p>
+            
+
+            
+              <p class=&quot;step-description&quot;>Fetch the selected product&amp;#39;s full details</p>
+            
+
+            
+              <p class=&quot;block-label&quot;>Parameters</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>productId</code>
+                    <span class=&quot;kv-in&quot;>path</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$steps.list-catalog.outputs.firstProductId</code>
+                  </li>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
+                    <code class=&quot;kv-key&quot;>Accept-Language</code>
+                    <span class=&quot;kv-in&quot;>header</span>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+              <p class=&quot;block-label&quot;>Success Criteria</p>
+              <ul class=&quot;success-block&quot;>
+                
+                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                
+              </ul>
+            
+
+            
+              <p class=&quot;block-label&quot;>Outputs</p>
+              <ul class=&quot;kv&quot;>
+                
+                  <li>
+                    <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>→</span>
+                    <code class=&quot;kv-key&quot;>productName</code>
+                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                    <code class=&quot;runtime&quot;>$response.body#/name</code>
+                  </li>
+                
+              </ul>
+            
+
+            
+
+            
+          </div>
+        </li>
+      
+        <li class=&quot;step&quot; id=&quot;step-add-to-cart&quot;>
+          
+          
+          <header class=&quot;step-marker&quot;>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>03</span>
             <h3 class=&quot;step-id&quot;>add-to-cart</h3>
             <span class=&quot;step-tag&quot;>API</span>
           </header>
@@ -2006,7 +2156,7 @@ the final payment status.</p>
           
           
           <header class=&quot;step-marker&quot;>
-            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>03</span>
+            <span class=&quot;step-number&quot; aria-hidden=&quot;true&quot;>04</span>
             <h3 class=&quot;step-id&quot;>pay</h3>
             <span class=&quot;step-tag&quot;>API</span>
           </header>
