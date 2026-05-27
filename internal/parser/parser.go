@@ -51,8 +51,6 @@ func ParseBytes(raw []byte) (*model.ArazzoDocument, error) {
 	return parseDocument(top)
 }
 
-// unwrapDocument returns the root mapping node of a document, peeling off
-// the surrounding DocumentNode if present.
 func unwrapDocument(n *yaml.Node) *yaml.Node {
 	if n == nil {
 		return nil

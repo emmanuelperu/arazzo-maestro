@@ -1,15 +1,6 @@
-// Package theme loads, validates and merges visual themes for the
-// HTML renderer. Themes are named, indivisible units (palette + font +
-// shape).
-//
-// At startup the binary loads its built-in themes (embedded via
-// //go:embed). An optional user `themes.yml` file at the project root
-// can add new themes or override built-ins by name, and override the
-// default theme via a top-level `default:` field.
-//
-// See .agents/rules/eco-design.md and .agents/rules/accessibility.md
-// for the constraints that shape the validation rules (system fonts
-// only, WCAG AA contrast).
+// Package theme loads, validates and merges the visual themes used by the
+// HTML renderer. Built-in themes are embedded; an optional user themes.yml
+// can add or override themes and set the default.
 package theme
 
 import (
@@ -24,24 +15,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// BuiltinDefault is the hard-coded fallback theme name. The built-in
-// YAML must define a theme with this name.
+// BuiltinDefault is the fallback theme name; the embedded YAML must define it.
 const BuiltinDefault = "light"
 
-// validFonts and validShapes are the only accepted values for those
-// fields. Custom fonts (Google Fonts, @font-face) are intentionally
-// excluded; see .agents/rules/eco-design.md.
+// Custom fonts (Google Fonts, @font-face) are intentionally excluded; see
+// .agents/rules/eco-design.md.
 var (
 	validFonts  = map[string]bool{"sans": true, "serif": true, "mono": true}
 	validShapes = map[string]bool{"rounded": true, "square": true}
 )
 
-// requiredColors lists the keys every theme must define. Keeping it
-// explicit lets us catch typos in user themes early instead of silently
-// rendering with missing colors.
-//
-// The schema matches the "Blueprint" visual identity: flat fills with
-// hairline frames instead of gradients, see Plan.md > Visual direction.
+// Explicit so a typo in a user theme fails fast instead of rendering blank.
 var requiredColors = []string{
 	"bg", "bgGrid",
 	"text", "textMuted", "heading",
@@ -62,13 +46,12 @@ var hexColorRe = regexp.MustCompile(`^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f
 // Theme is a fully-resolved theme ready to be passed to the renderer.
 type Theme struct {
 	Name   string
-	Font   string // "sans" | "serif" | "mono"
-	Shape  string // "rounded" | "square"
+	Font   string
+	Shape  string
 	Colors map[string]string
 }
 
-// Registry holds the merged set of built-in and user themes and the
-// resolved default theme name.
+// Registry holds the merged built-in and user themes plus the resolved default.
 type Registry struct {
 	themes  map[string]Theme
 	Default string
@@ -77,7 +60,6 @@ type Registry struct {
 //go:embed themes/builtin.yml
 var builtinYAML []byte
 
-// rawFile mirrors the YAML structure on disk.
 type rawFile struct {
 	Default string     `yaml:"default"`
 	Themes  []rawTheme `yaml:"themes"`
@@ -90,8 +72,7 @@ type rawTheme struct {
 	Colors map[string]string `yaml:"colors"`
 }
 
-// LoadBuiltin returns a Registry populated with the embedded built-in
-// themes. Its Default field is set to BuiltinDefault.
+// LoadBuiltin returns a Registry populated with the embedded built-in themes.
 func LoadBuiltin() (*Registry, error) {
 	themes, _, err := parseBytes(builtinYAML, "builtin.yml")
 	if err != nil {
@@ -107,10 +88,8 @@ func LoadBuiltin() (*Registry, error) {
 	return r, nil
 }
 
-// MergeFile loads a user themes file and merges it into the registry:
-// themes with a matching name replace built-ins, others are added. If
-// the file declares a `default:` field, it overrides the registry's
-// current default (which must resolve to a known theme).
+// MergeFile merges a user themes file into the registry: matching names
+// replace built-ins, others are added, and a declared default overrides.
 func (r *Registry) MergeFile(path string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -132,8 +111,7 @@ func (r *Registry) MergeFile(path string) error {
 	return nil
 }
 
-// Resolve returns the theme to render with. An empty explicit name
-// falls back to the registry's resolved default.
+// Resolve returns the named theme, or the registry default when name is empty.
 func (r *Registry) Resolve(explicit string) (*Theme, error) {
 	name := explicit
 	if name == "" {
@@ -156,9 +134,8 @@ func (r *Registry) List() []string {
 	return names
 }
 
-// ContrastWarning describes one color pair below the WCAG AA threshold
-// for normal text (4.5:1). It is informational, not a load error,
-// so users keep full control over their themes.
+// ContrastWarning flags one color pair below the WCAG AA 4.5:1 threshold.
+// It is informational, not a load error.
 type ContrastWarning struct {
 	Theme      string
 	Foreground string
@@ -171,9 +148,7 @@ func (w ContrastWarning) String() string {
 		w.Theme, w.Foreground, w.Background, w.Ratio)
 }
 
-// criticalPairs lists the foreground/background color pairs that must
-// reach WCAG AA contrast for the rendered page to remain readable.
-// Keys reference theme.Colors[…] entries.
+// Pairs that must reach WCAG AA contrast for the page to stay readable.
 var criticalPairs = []struct {
 	fg, bg string
 }{
@@ -216,8 +191,6 @@ func (r *Registry) Audit() []ContrastWarning {
 	return warnings
 }
 
-// parseBytes parses a themes YAML payload and returns the validated
-// themes plus the (possibly empty) declared default name.
 func parseBytes(data []byte, source string) ([]Theme, string, error) {
 	var raw rawFile
 	if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -309,10 +282,7 @@ func FontStack(name string) string {
 	}
 }
 
-// ---- WCAG contrast helpers ----
-
-// contrastRatio returns the WCAG 2.x contrast ratio between two hex
-// colors (any of #RGB, #RRGGBB, #RRGGBBAA, alpha is ignored).
+// contrastRatio is the WCAG 2.x contrast ratio between two hex colors.
 func contrastRatio(a, b string) float64 {
 	la := relativeLuminance(a)
 	lb := relativeLuminance(b)
