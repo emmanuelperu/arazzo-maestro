@@ -79,6 +79,34 @@ paths:
                     name: Espresso machine
                     price: 249.90
 
+  /products/{productId}:
+    # Shared parameter declared once at the Path Item level: it applies to
+    # every operation under this path (here, just GET). This is the
+    # OpenAPI "shared parameters" pattern.
+    parameters:
+      - $ref: "#/components/parameters/ProductId"
+    get:
+      operationId: getProduct
+      summary: Get a single product by id
+      description: Returns the full details of one product from the catalog.
+      tags: [Catalog]
+      parameters:
+        - name: Accept-Language
+          in: header
+          description: Preferred locale for product names and descriptions.
+          schema:
+            type: string
+            example: fr-FR
+      responses:
+        "200":
+          description: The requested product.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: No product matches the given id.
+
   /cart/items:
     post:
       operationId: addToCart
@@ -190,6 +218,25 @@ paths:
                 transactionId: tx-9f2c1
 
 components:
+  parameters:
+    # Reusable path parameter, referenced from the /products/{productId}
+    # Path Item so the constraint lives in one place.
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      description: Product identifier.
+      schema:
+        type: string
+        pattern: '^p-[a-zA-Z0-9]+$'
+      examples:
+        success:
+          value: p-001
+        not_found:
+          value: p-999
+        server_error:
+          value: error
+
   schemas:
     Product:
       type: object

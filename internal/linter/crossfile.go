@@ -134,8 +134,15 @@ func resolveSourceURL(rawURL, basePath string) (string, error) {
 // openAPIDoc is a minimal projection of an OpenAPI document, focused
 // on extracting operationIds. Anything else is irrelevant for the
 // linter.
+//
+// A Path Item Object keys its operations by HTTP method, but it may also
+// carry non-operation fields: a shared `parameters` array, `summary` and
+// `description` strings, a `servers` array, or a `$ref`. Each field is
+// therefore captured as a raw node; decoding the whole item straight into
+// map[string]openAPIOperation would fail on those non-operation fields
+// (e.g. the `parameters` sequence) and abort the entire parse.
 type openAPIDoc struct {
-	Paths map[string]map[string]openAPIOperation `yaml:"paths"`
+	Paths map[string]map[string]yaml.Node `yaml:"paths"`
 }
 
 type openAPIOperation struct {
@@ -150,9 +157,18 @@ func extractOpenAPIOperationIDs(raw []byte) (map[string]bool, error) {
 		return nil, err
 	}
 	out := make(map[string]bool)
-	for _, methods := range doc.Paths {
-		for method, op := range methods {
-			if !isHTTPMethod(method) {
+	for _, item := range doc.Paths {
+		for field, node := range item {
+			// Skip non-operation Path Item fields (parameters, summary,
+			// description, servers, $ref, ...); only HTTP-method entries
+			// describe an operation that can carry an operationId.
+			if !isHTTPMethod(field) {
+				continue
+			}
+			var op openAPIOperation
+			if err := node.Decode(&op); err != nil {
+				// A malformed operation node shouldn't abort the whole
+				// scan; just skip it.
 				continue
 			}
 			if op.OperationID != "" {

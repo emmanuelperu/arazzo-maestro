@@ -85,7 +85,7 @@ func TestParseExampleShopYAML(t *testing.T) {
 		t.Errorf("missing inputs: %v", wantInputs)
 	}
 
-	wantStepIDs := []string{"list-catalog", "add-to-cart", "pay"}
+	wantStepIDs := []string{"list-catalog", "get-product", "add-to-cart", "pay"}
 	gotStepIDs := make([]string, 0, len(happy.Steps))
 	for _, s := range happy.Steps {
 		gotStepIDs = append(gotStepIDs, s.StepID)
@@ -105,7 +105,15 @@ func TestParseExampleShopYAML(t *testing.T) {
 		t.Errorf("Outputs = %+v, want firstProductId -> $response.body#/items/0/id", listCatalog.Outputs)
 	}
 
-	addToCart := happy.Steps[1]
+	getProduct := happy.Steps[1]
+	if getProduct.OperationID != "getProduct" {
+		t.Errorf("OperationID = %q, want %q", getProduct.OperationID, "getProduct")
+	}
+	if len(getProduct.Parameters) != 2 || getProduct.Parameters[0].Name != "productId" || getProduct.Parameters[0].In != "path" {
+		t.Errorf("Parameters = %+v, want productId in path + Accept-Language", getProduct.Parameters)
+	}
+
+	addToCart := happy.Steps[2]
 	if addToCart.RequestBody == nil {
 		t.Fatal("RequestBody is nil")
 	}
