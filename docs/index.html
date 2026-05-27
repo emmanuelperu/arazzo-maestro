@@ -134,7 +134,8 @@
     }
     .topnav {
       display: flex;
-      gap: 1.25rem;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.25rem;
       align-items: center;
       font-family: var(--mono);
       font-size: 0.8rem;
@@ -294,6 +295,13 @@
       display: block;
     }
 
+    /* Grid children default to min-width:auto, which refuses to shrink below
+       their content. A wide child (the terminal <pre>, the metrics table)
+       then blows out its track and forces horizontal page scroll on phones.
+       min-width:0 lets the track shrink so the child's own overflow-x:auto
+       (or wrapping) takes over instead. */
+    .hero-grid > *, .grid-2 > *, .grid-3 > *, .specimens > * { min-width: 0; }
+
     /* ── Proof banner ────────────────────────────────────────────── */
     .proof { border: 2px solid var(--rail); border-radius: var(--radius); padding: 1.5rem 1.5rem; margin-top: 1.75rem; }
     .proof ul { list-style: none; padding: 0; margin: 1rem 0 0; display: flex; flex-wrap: wrap; gap: 0.6rem 0.75rem; }
@@ -327,6 +335,7 @@
       .grid-2, .grid-3, .specimens { grid-template-columns: 1fr; }
       .pipe { grid-template-columns: 1fr; }
       .pipe .arrow { transform: rotate(90deg); }
+      td.val { white-space: normal; }   /* let metric values wrap instead of widening the table */
     }
   </style>
 </head>
