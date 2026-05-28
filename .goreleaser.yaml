@@ -107,7 +107,7 @@ signs:
     args:
       - sign-blob
       - "--yes"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
     artifacts: all
     signature: "${artifact}.sig"
