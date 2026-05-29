@@ -9,6 +9,7 @@ package oasresolver
 import (
 	"fmt"
 	"os"
+
 	"github.com/pb33f/libopenapi"
 	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 )
