@@ -2,8 +2,8 @@
 // operationIds to their HTTP method, path template, and effective base
 // server URL.
 //
-// Backed by github.com/pb33f/libopenapi. Only local files are loaded —
-// rejection of HTTP/HTTPS sources is left to the caller.
+// Backed by github.com/pb33f/libopenapi. Only local files are loaded.
+// Rejection of HTTP/HTTPS sources is left to the caller.
 package oasresolver
 
 import (
