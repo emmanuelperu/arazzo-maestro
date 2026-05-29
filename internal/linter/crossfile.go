@@ -1,7 +1,7 @@
 // Cross-file validation pass, resolves the `sourceDescriptions[].url`
-// references, loads each OpenAPI document from disk, and checks that
-// every step's `operationId` points at an operation that actually
-// exists in the right source.
+// references, loads each OpenAPI document from disk via the
+// oasresolver package, and checks that every step's `operationId`
+// points at an operation that actually exists in the right source.
 //
 // HTTP/HTTPS URLs are intentionally rejected (eco-design rule: lint
 // must stay offline and deterministic). HTTPS support would require
@@ -14,18 +14,15 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
+	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 )
 
-// operationIndex maps a source name → the set of operationIds it
-// declares.
-type operationIndex map[string]map[string]bool
+// operationIndex maps a source name → its loaded OpenAPI source.
+type operationIndex map[string]*oasresolver.Source
 
 func lintCrossFile(doc *model.ArazzoDocument, basePath string) []Issue {
 	if doc == nil || basePath == "" {
@@ -70,7 +67,7 @@ func buildOperationIndex(doc *model.ArazzoDocument, basePath string) (operationI
 			})
 			continue
 		}
-		raw, err := os.ReadFile(path)
+		loaded, err := oasresolver.Load(path)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				issues = append(issues, Issue{
@@ -85,21 +82,12 @@ func buildOperationIndex(doc *model.ArazzoDocument, basePath string) (operationI
 				issues = append(issues, Issue{
 					Severity: SeverityError,
 					Path:     "sourceDescriptions[" + src.Name + "]",
-					Message:  fmt.Sprintf("cannot read %s: %s", path, err),
+					Message:  fmt.Sprintf("cannot load %s: %s", path, err),
 				})
 			}
 			continue
 		}
-		ops, parseErr := extractOpenAPIOperationIDs(raw)
-		if parseErr != nil {
-			issues = append(issues, Issue{
-				Severity: SeverityError,
-				Path:     "sourceDescriptions[" + src.Name + "]",
-				Message:  fmt.Sprintf("cannot parse %s: %s", path, parseErr),
-			})
-			continue
-		}
-		index[src.Name] = ops
+		index[src.Name] = loaded
 	}
 	return index, issues
 }
@@ -131,62 +119,6 @@ func resolveSourceURL(rawURL, basePath string) (string, error) {
 	return "", fmt.Errorf("unsupported url scheme %q", u.Scheme)
 }
 
-// openAPIDoc is a minimal projection of an OpenAPI document, focused
-// on extracting operationIds. Anything else is irrelevant for the
-// linter.
-//
-// A Path Item Object keys its operations by HTTP method, but it may also
-// carry non-operation fields: a shared `parameters` array, `summary` and
-// `description` strings, a `servers` array, or a `$ref`. Each field is
-// therefore captured as a raw node; decoding the whole item straight into
-// map[string]openAPIOperation would fail on those non-operation fields
-// (e.g. the `parameters` sequence) and abort the entire parse.
-type openAPIDoc struct {
-	Paths map[string]map[string]yaml.Node `yaml:"paths"`
-}
-
-type openAPIOperation struct {
-	OperationID string `yaml:"operationId"`
-}
-
-// extractOpenAPIOperationIDs returns the set of operationIds declared
-// under `paths.<path>.<method>.operationId`.
-func extractOpenAPIOperationIDs(raw []byte) (map[string]bool, error) {
-	var doc openAPIDoc
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return nil, err
-	}
-	out := make(map[string]bool)
-	for _, item := range doc.Paths {
-		for field, node := range item {
-			// Skip non-operation Path Item fields (parameters, summary,
-			// description, servers, $ref, ...); only HTTP-method entries
-			// describe an operation that can carry an operationId.
-			if !isHTTPMethod(field) {
-				continue
-			}
-			var op openAPIOperation
-			if err := node.Decode(&op); err != nil {
-				// A malformed operation node shouldn't abort the whole
-				// scan; just skip it.
-				continue
-			}
-			if op.OperationID != "" {
-				out[op.OperationID] = true
-			}
-		}
-	}
-	return out, nil
-}
-
-func isHTTPMethod(s string) bool {
-	switch strings.ToLower(s) {
-	case "get", "post", "put", "delete", "patch", "options", "head", "trace":
-		return true
-	}
-	return false
-}
-
 // checkStepOperation validates a single step's `operationId` against
 // the operation index. `implicitSource` is the source name a short-form
 // (unqualified) operationId resolves to, empty when no single source
@@ -216,7 +148,7 @@ func checkStepOperation(step model.Step, wf *model.Workflow, index operationInde
 		// reported sourceDescriptions as missing/empty.
 		return nil
 	}
-	ops, ok := index[sourceName]
+	src, ok := index[sourceName]
 	if !ok {
 		// The source is declared but couldn't be loaded, the
 		// source-loading error was already reported by
@@ -224,7 +156,7 @@ func checkStepOperation(step model.Step, wf *model.Workflow, index operationInde
 		// secondary message.
 		return nil
 	}
-	if !ops[opID] {
+	if !src.HasOperationID(opID) {
 		return []Issue{{
 			Severity: SeverityError,
 			Path:     path,
