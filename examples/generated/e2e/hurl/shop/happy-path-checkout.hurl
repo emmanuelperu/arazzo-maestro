@@ -18,7 +18,7 @@ HTTP *
 [Asserts]
 # $statusCode == 200
 [Captures]
-list-catalog_firstProductId: jsonpath "$.items.0.id"
+list-catalog_firstProductId: jsonpath "$.items[0].id"
 
 # Step: get-product
 # Fetch the selected product's full details

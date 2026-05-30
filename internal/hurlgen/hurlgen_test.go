@@ -348,9 +348,32 @@ func TestGenerateEmitsOutputsAsCaptures(t *testing.T) {
 	assertContains(t, out, "[Captures]")
 	// Capture names are namespaced by step id so the chain
 	// $steps.list.outputs.first → {{list_first}} resolves.
-	assertContains(t, out, `list_first: jsonpath "$.items.0.id"`)
+	// Numeric JSON Pointer segments must be emitted as array
+	// indexers [0] (not .0) to be valid JSONPath.
+	assertContains(t, out, `list_first: jsonpath "$.items[0].id"`)
 	assertContains(t, out, "list_code: status")
 	assertContains(t, out, "list_weird: # unsupported: $unknown.thing")
+}
+
+func TestGenerateHandlesEmptyJSONPointerSegment(t *testing.T) {
+	// Double-slash in the pointer produces an empty segment; it must
+	// be treated as a named (dotted) segment, not as a numeric index.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Outputs: []model.OutputEntry{
+					{Name: "weird", Expression: "$response.body#/items//id"},
+				},
+			},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{
+		"shop": loadSource(t, shopSpec),
+	})
+	assertContains(t, out, `list_weird: jsonpath "$.items..id"`)
 }
 
 func TestGenerateChainsStepCaptureToLaterStepReference(t *testing.T) {

@@ -262,11 +262,40 @@ func translateInlineExpr(expr string) string {
 func translateCaptureExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	if strings.HasPrefix(e, "$response.body#/") {
-		ptr := strings.TrimPrefix(e, "$response.body#/")
-		return `jsonpath "$.` + strings.ReplaceAll(ptr, "/", ".") + `"`
+		return `jsonpath "` + jsonPointerToJSONPath(strings.TrimPrefix(e, "$response.body#/")) + `"`
 	}
 	if e == "$statusCode" {
 		return "status"
 	}
 	return "# unsupported: " + expr
+}
+
+// jsonPointerToJSONPath converts the body of a JSON Pointer (the part
+// after '#/') to a JSONPath expression rooted at $. Numeric segments
+// are emitted as array indexers ([0]) so the result is a valid
+// JSONPath; named segments are dotted (.name).
+func jsonPointerToJSONPath(ptr string) string {
+	var b strings.Builder
+	b.WriteString("$")
+	for _, seg := range strings.Split(ptr, "/") {
+		if isUint(seg) {
+			fmt.Fprintf(&b, "[%s]", seg)
+		} else {
+			b.WriteString(".")
+			b.WriteString(seg)
+		}
+	}
+	return b.String()
+}
+
+func isUint(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
