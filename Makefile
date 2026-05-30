@@ -19,7 +19,7 @@ EMBED_ASSETS := $(shell find cmd internal -name '*.html' -o -name '*.yml' -o -na
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build test vet lint dist hurl clean
+.PHONY: help build test vet lint dist hurl hurl-report clean
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -60,6 +60,11 @@ hurl: $(BIN) ## Generate Hurl e2e tests for every examples/*.arazzo.yaml under e
 		echo "→ $$f"; \
 		$(BIN) test gen e2e $$f -o examples/generated; \
 	done
+
+hurl-report: $(BIN) ## Generate the shop Hurl tests, run them against an in-memory mock, write dist/hurl-report/index.html.
+	@command -v hurl >/dev/null 2>&1 || { echo "hurl not installed; brew install hurl"; exit 1; }
+	@rm -rf dist/hurl-report
+	@go run ./scripts/hurl-demo examples/shop-openapi.yaml examples/shop.arazzo.yaml
 
 clean: ## Remove dist/, bin/, and examples/generated/.
 	rm -rf dist bin examples/generated
