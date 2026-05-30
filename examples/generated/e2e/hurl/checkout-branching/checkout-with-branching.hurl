@@ -26,7 +26,7 @@ HTTP *
 # $statusCode == 200
 # $response.body#/status == "OK"
 [Captures]
-paymentStatus: jsonpath "$.status"
+pay_paymentStatus: jsonpath "$.status"
 
 # Step: confirm-order
 # Payment accepted, confirm the order and capture the receipt id.
@@ -36,7 +36,7 @@ HTTP *
 [Asserts]
 # $statusCode == 200
 [Captures]
-confirmationId: jsonpath "$.confirmationId"
+confirm-order_confirmationId: jsonpath "$.confirmationId"
 
 # Step: cancel-order
 # Payment refused, cancel the order and release reserved stock.
@@ -46,4 +46,4 @@ HTTP *
 [Asserts]
 # $statusCode == 200
 [Captures]
-cancellationReason: jsonpath "$.reason"
+cancel-order_cancellationReason: jsonpath "$.reason"

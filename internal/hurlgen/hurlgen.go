@@ -89,7 +89,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 
 	b.WriteString("\nHTTP *\n")
 	writeAsserts(b, s.SuccessCriteria)
-	writeCaptures(b, s.Outputs)
+	writeCaptures(b, s.StepID, s.Outputs)
 }
 
 func writeHeaders(b *strings.Builder, params []model.Parameter) {
@@ -149,13 +149,17 @@ func writeAsserts(b *strings.Builder, crits []model.SuccessCriterion) {
 	}
 }
 
-func writeCaptures(b *strings.Builder, outs []model.OutputEntry) {
+// writeCaptures emits the step's outputs as a Hurl [Captures] block.
+// Capture variables are namespaced by step id (<stepId>_<outputName>)
+// so later steps can resolve them with the same translation that
+// $steps.<stepId>.outputs.<outputName> uses inline.
+func writeCaptures(b *strings.Builder, stepID string, outs []model.OutputEntry) {
 	if len(outs) == 0 {
 		return
 	}
 	b.WriteString("[Captures]\n")
 	for _, o := range outs {
-		fmt.Fprintf(b, "%s: %s\n", o.Name, translateCaptureExpr(o.Expression))
+		fmt.Fprintf(b, "%s_%s: %s\n", stepID, o.Name, translateCaptureExpr(o.Expression))
 	}
 }
 

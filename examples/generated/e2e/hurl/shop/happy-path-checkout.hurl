@@ -18,7 +18,7 @@ HTTP *
 [Asserts]
 # $statusCode == 200
 [Captures]
-firstProductId: jsonpath "$.items.0.id"
+list-catalog_firstProductId: jsonpath "$.items.0.id"
 
 # Step: get-product
 # Fetch the selected product's full details
@@ -29,7 +29,7 @@ HTTP *
 [Asserts]
 # $statusCode == 200
 [Captures]
-productName: jsonpath "$.name"
+get-product_productName: jsonpath "$.name"
 
 # Step: add-to-cart
 # Add the product to the shopping cart
@@ -48,7 +48,7 @@ HTTP *
 # $statusCode == 201
 # $response.body#/totalPrice > 0
 [Captures]
-cartTotal: jsonpath "$.totalPrice"
+add-to-cart_cartTotal: jsonpath "$.totalPrice"
 
 # Step: pay
 # Pay the order with a valid card
@@ -71,4 +71,4 @@ HTTP *
 # $statusCode == 200
 # $response.body#/status == "OK"
 [Captures]
-transactionId: jsonpath "$.transactionId"
+pay_transactionId: jsonpath "$.transactionId"

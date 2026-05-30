@@ -346,9 +346,43 @@ func TestGenerateEmitsOutputsAsCaptures(t *testing.T) {
 		"shop": loadSource(t, shopSpec),
 	})
 	assertContains(t, out, "[Captures]")
-	assertContains(t, out, `first: jsonpath "$.items.0.id"`)
-	assertContains(t, out, "code: status")
-	assertContains(t, out, "weird: # unsupported: $unknown.thing")
+	// Capture names are namespaced by step id so the chain
+	// $steps.list.outputs.first → {{list_first}} resolves.
+	assertContains(t, out, `list_first: jsonpath "$.items.0.id"`)
+	assertContains(t, out, "list_code: status")
+	assertContains(t, out, "list_weird: # unsupported: $unknown.thing")
+}
+
+func TestGenerateChainsStepCaptureToLaterStepReference(t *testing.T) {
+	// The whole point of generating Hurl rather than a bag of
+	// unrelated requests: a capture defined in step A must produce a
+	// Hurl variable whose name matches what step B's reference
+	// translation expects, otherwise hurl --test fails at runtime
+	// with 'undefined variable'.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{
+				StepID:      "auth",
+				OperationID: "listProducts",
+				Outputs: []model.OutputEntry{
+					{Name: "token", Expression: "$response.body#/token"},
+				},
+			},
+			{
+				StepID:      "use",
+				OperationID: "createOrder",
+				Parameters: []model.Parameter{
+					{Name: "Authorization", In: "header", Value: "$steps.auth.outputs.token"},
+				},
+			},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{
+		"shop": loadSource(t, shopSpec),
+	})
+	assertContains(t, out, `auth_token: jsonpath "$.token"`)
+	assertContains(t, out, "Authorization: {{auth_token}}")
 }
 
 func TestGenerateEmitsSuccessCriteriaAsAssertComments(t *testing.T) {
