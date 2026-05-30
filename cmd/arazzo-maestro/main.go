@@ -43,7 +43,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage: true,
 		Version:      version,
 	}
-	root.AddCommand(newLintCmd(), newViewCmd())
+	root.AddCommand(newLintCmd(), newViewCmd(), newTestCmd())
 	return root
 }
 

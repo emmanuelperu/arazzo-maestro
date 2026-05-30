@@ -1,0 +1,74 @@
+# Workflow: happy-path-checkout
+# Browse, add to cart and pay successfully
+#
+# Inputs (pass via `hurl --variable name=value`):
+#   - productId (string)
+#   - orderId (string)
+#   - acceptLanguage (string)
+
+# Step: list-catalog
+# Browse the product catalog
+GET https://shop.example.com/api/v1/products
+Accept-Language: {{acceptLanguage}}
+[QueryStringParams]
+page: 0
+size: 10
+
+HTTP *
+[Asserts]
+# $statusCode == 200
+[Captures]
+firstProductId: jsonpath "$.items.0.id"
+
+# Step: get-product
+# Fetch the selected product's full details
+GET https://shop.example.com/api/v1/products/{{list-catalog_firstProductId}}
+Accept-Language: {{acceptLanguage}}
+
+HTTP *
+[Asserts]
+# $statusCode == 200
+[Captures]
+productName: jsonpath "$.name"
+
+# Step: add-to-cart
+# Add the product to the shopping cart
+POST https://shop.example.com/api/v1/cart/items
+Accept-Language: {{acceptLanguage}}
+# requestBody content-type: application/json
+```
+{
+  "productId": "$inputs.productId",
+  "quantity": 2
+}
+```
+
+HTTP *
+[Asserts]
+# $statusCode == 201
+# $response.body#/totalPrice > 0
+[Captures]
+cartTotal: jsonpath "$.totalPrice"
+
+# Step: pay
+# Pay the order with a valid card
+POST https://shop.example.com/api/v1/orders/{{orderId}}/payment
+Accept-Language: {{acceptLanguage}}
+# requestBody content-type: application/json
+```
+{
+  "amount": 49.99,
+  "cardHolder": "John Doe",
+  "cardNumber": "4111111111111111",
+  "cvv": "123",
+  "expiryDate": "12/26",
+  "method": "card"
+}
+```
+
+HTTP *
+[Asserts]
+# $statusCode == 200
+# $response.body#/status == "OK"
+[Captures]
+transactionId: jsonpath "$.transactionId"

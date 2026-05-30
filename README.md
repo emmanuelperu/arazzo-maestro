@@ -187,6 +187,55 @@ JSON Schema; the table below tracks the visual rendering.
 | `Criterion.type` (`simple`/`regex`/`jsonpath`/`xpath`) + `Criterion.context` | ⚠️ | Read by the linter, not yet surfaced in the render |
 | AsyncAPI sources | ❌ | Out of scope |
 
+### 🧪 Test generation
+
+Turn an Arazzo workflow into a runnable test artifact. The subcommand grammar reflects what kind of test you want, and only then the target technology:
+
+```text
+arazzo-maestro test gen e2e  <file> [flags]      End-to-end functional tests
+arazzo-maestro test gen perf <file> [flags]      Load / performance tests (planned, #22)
+```
+
+The kind (`e2e` / `perf`) is a subcommand so each one declares its own flags: e2e doesn't pretend to know about virtual users, perf doesn't pretend to know about response assertions. The target technology is picked through `--format`, with a sensible default per kind. Cobra validates the combination, so `--format=drill` on `e2e` is rejected at parse time; no manual validation code.
+
+**Available today: `e2e --format=hurl`** (default). Each workflow produces one `.hurl` file under the output directory, organised by kind / format / Arazzo source:
+
+```bash
+arazzo-maestro test gen e2e examples/shop.arazzo.yaml -o dist/
+# → wrote dist/e2e/hurl/shop/happy-path-checkout.hurl
+# → wrote dist/e2e/hurl/shop/payment-refused-path.hurl
+
+hurl --test dist/e2e/hurl/shop/happy-path-checkout.hurl
+```
+
+The `e2e/<format>/<arazzo-name>/` prefix is added by the CLI so a single output directory can hold artifacts for several Arazzo files and several kinds (e2e, perf, ...) without collisions, and so the on-disk layout mirrors the subcommand grammar.
+
+The generator delegates `operationId` resolution to the OpenAPI sources declared under `sourceDescriptions` (loaded as local files only; HTTP/HTTPS URLs are rejected, same eco-design rule as the linter). Resolved steps emit real `METHOD https://…/path` request lines with path parameters substituted; unresolvable steps emit a Hurl comment and a placeholder so the file stays valid for the target tool.
+
+Arazzo step features translated:
+
+| Arazzo                     | Hurl                                          |
+|----------------------------|-----------------------------------------------|
+| `parameters` in=header     | header lines on the request                   |
+| `parameters` in=query      | `[QueryStringParams]` block                   |
+| `parameters` in=path       | substituted into the URL template             |
+| `step.outputs`             | `[Captures]` with `jsonpath` / `status`       |
+| `step.successCriteria`     | comments inside `[Asserts]`                   |
+| `$inputs.foo`              | `{{foo}}` (Hurl variable)                     |
+| `$steps.s.outputs.o`       | `{{s_o}}` (capture-chained)                   |
+| `$response.body#/x/y`      | `jsonpath "$.x.y"`                            |
+| `$statusCode`              | `status`                                      |
+
+**Planned: `perf --format=k6|drill`** (issue #22). The intended shape is:
+
+```bash
+arazzo-maestro test gen perf shop.arazzo.yaml -o dist/ \
+  --format=k6 --vus=10 --duration=30s --threshold='http_req_duration{p(95)}<500'
+# → wrote dist/perf/k6/shop/happy-path-checkout.k6.js
+```
+
+The perf-only flags (`--vus`, `--duration`, `--threshold`) live on `test gen perf` so `test gen perf --help` documents exactly what makes sense for load testing; `test gen e2e --help` stays focused on functional concerns. Both subcommands share the same underlying workflow IR, so adding a new format is a per-template change, not a CLI redesign.
+
 ### 🌱 Eco-design and accessibility
 
 These are **engineering constraints**, not afterthoughts. The rules are formalised in [`.agents/rules/`](./.agents/rules/) and enforced by reviews and tests:
@@ -197,9 +246,11 @@ These are **engineering constraints**, not afterthoughts. The rules are formalis
 ### 🧰 Built-in CLI
 
 ```text
-arazzo-maestro --version                    Print version and exit
-arazzo-maestro lint <file>                  Validate against schema + rules + cross-file
-arazzo-maestro view <file> [flags]          Render to HTML
+arazzo-maestro --version                         Print version and exit
+arazzo-maestro lint <file>                       Validate against schema + rules + cross-file
+arazzo-maestro view <file> [flags]               Render to HTML
+arazzo-maestro test gen e2e  <file> [flags]      Generate e2e tests (hurl)
+arazzo-maestro test gen perf <file> [flags]      Generate perf tests (planned, #22)
 
 view flags:
   -o, --output <dir>          Output directory (default: dist)
@@ -208,24 +259,38 @@ view flags:
       --theme <name>          Theme (default: light, or themes.yml's default:)
       --themes <path>         Path to a themes YAML (bypasses ./themes.yml)
       --list-themes           List available themes and exit
+
+test gen e2e flags:
+  -o, --output <dir>          Output directory (default: dist)
+      --workflow <id>         Only generate this workflow
+      --format <name>         Output format (default: hurl)
+
+test gen perf flags (planned, #22):
+      --format <k6|drill>     Output format (default: k6)
+      --vus <n>               Concurrent virtual users
+      --duration <d>          Test duration (e.g. 30s, 5m)
+      --threshold <expr>      Performance threshold (e.g. p(95)<500)
 ```
 
 ## Architecture
 
 ```
 internal/
-├── model/      Pure data types (no behaviour)
-├── parser/     YAML → model.ArazzoDocument
-├── linter/     Validates a document, three passes:
-│               schema.go (official JSON Schema, via santhosh-tekuri/jsonschema)
-│               linter.go (uniqueness, $steps.X.outputs.Y references)
-│               crossfile.go (resolves sourceDescriptions[].url, checks operationIds)
-├── theme/      Loads built-in + user themes, validates, audits WCAG contrast
-└── renderer/   model + theme → standalone HTML (html/template + embedded assets)
+├── model/         Pure data types (no behaviour)
+├── parser/        YAML → model.ArazzoDocument
+├── oasresolver/   Loads a local OpenAPI 3.x doc (via pb33f/libopenapi)
+│                  and resolves operationIds → (Method, Path, BaseURL, Spec)
+├── linter/        Validates a document, three passes:
+│                  schema.go (official JSON Schema, via santhosh-tekuri/jsonschema)
+│                  linter.go (uniqueness, $steps.X.outputs.Y references)
+│                  crossfile.go (sourceDescriptions[].url → oasresolver, opId checks)
+├── hurlgen/       model.Workflow + oasresolver → Hurl (.hurl) e2e test text
+├── theme/         Loads built-in + user themes, validates, audits WCAG contrast
+└── renderer/      model + theme → standalone HTML (html/template + embedded assets)
 cmd/arazzo-maestro/   Cobra CLI entry point
 ```
 
-Dependency graph: `model` → ∅, `parser` → `model`, `linter` → `parser` + `model`, `theme` → ∅, `renderer` → `model` + `theme`, `cmd` → all. No cycles.
+Dependency graph: `model` → ∅, `parser` → `model`, `oasresolver` → ∅ (external: `pb33f/libopenapi`), `linter` → `parser` + `model` + `oasresolver`, `hurlgen` → `model` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `cmd` → all. No cycles.
 
 ## What makes us different
 
