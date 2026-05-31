@@ -24,6 +24,12 @@
 // Arazzo runtime expressions are translated: $inputs.foo becomes
 // {{foo}}, $steps.s.outputs.o becomes {{s_o}}, $response.body#/x/y
 // becomes `jsonpath "$.x.y"`. Unknown forms pass through unchanged.
+//
+// The request host is never hard-coded: every request line is prefixed
+// with the {{baseUrl}} Hurl variable, so the same .hurl file can run
+// against any environment by passing `hurl --variable baseUrl=<endpoint>`.
+// The OpenAPI `servers:` URL, when present, is surfaced in the header as
+// the documented default rather than baked into the requests.
 package hurlgen
 
 import (
@@ -43,7 +49,7 @@ import (
 // unresolved placeholder.
 func Generate(wf model.Workflow, sources map[string]*oasresolver.Source) (string, error) {
 	var b strings.Builder
-	writeHeader(&b, wf)
+	writeHeader(&b, wf, defaultBaseURL(wf, sources))
 	for i, step := range wf.Steps {
 		if i > 0 {
 			b.WriteString("\n")
@@ -53,10 +59,14 @@ func Generate(wf model.Workflow, sources map[string]*oasresolver.Source) (string
 	return b.String(), nil
 }
 
-func writeHeader(b *strings.Builder, wf model.Workflow) {
+func writeHeader(b *strings.Builder, wf model.Workflow, defaultBase string) {
 	fmt.Fprintf(b, "# Workflow: %s\n", wf.WorkflowID)
 	if wf.Summary != "" {
 		fmt.Fprintf(b, "# %s\n", wf.Summary)
+	}
+	b.WriteString("#\n# Base URL (required): pass via `hurl --variable baseUrl=<endpoint>`\n")
+	if defaultBase != "" {
+		fmt.Fprintf(b, "#   default (OpenAPI servers): %s\n", defaultBase)
 	}
 	if len(wf.Inputs) > 0 {
 		b.WriteString("#\n# Inputs (pass via `hurl --variable name=value`):\n")
@@ -65,6 +75,32 @@ func writeHeader(b *strings.Builder, wf model.Workflow) {
 		}
 	}
 	b.WriteString("\n")
+}
+
+// defaultBaseURL returns the OpenAPI `servers:` URL backing the
+// workflow's first resolvable step, or "" when no step resolves or none
+// of the sources declares a server. It is documentation only: requests
+// always use the {{baseUrl}} variable so the value can be overridden per
+// environment at run time.
+func defaultBaseURL(wf model.Workflow, sources map[string]*oasresolver.Source) string {
+	for _, s := range wf.Steps {
+		srcName, opID := parseOpRef(s.OperationID, sources)
+		if srcName == "" {
+			continue
+		}
+		src, ok := sources[srcName]
+		if !ok {
+			continue
+		}
+		op, err := src.Resolve(opID)
+		if err != nil {
+			continue
+		}
+		if op.BaseURL != "" {
+			return op.BaseURL
+		}
+	}
+	return ""
 }
 
 func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source) {
@@ -179,12 +215,12 @@ func resolveRequestLine(operationID string, params []model.Parameter, sources ma
 	if err != nil {
 		return "", "", false
 	}
+	// The host is always the {{baseUrl}} variable, never op.BaseURL:
+	// the OpenAPI servers URL is documented in the header as the
+	// default, but the request line stays environment-agnostic so the
+	// caller picks the target with `hurl --variable baseUrl=<endpoint>`.
 	path := substitutePathParams(op.Path, params)
-	base := op.BaseURL
-	if base == "" {
-		base = "{{baseUrl}}"
-	}
-	return op.Method, base + path, true
+	return op.Method, "{{baseUrl}}" + path, true
 }
 
 // parseOpRef recognises the two accepted forms of operationId:

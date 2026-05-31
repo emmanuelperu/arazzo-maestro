@@ -1,6 +1,9 @@
 # Workflow: happy-path-checkout
 # Browse, add to cart and pay successfully
 #
+# Base URL (required): pass via `hurl --variable baseUrl=<endpoint>`
+#   default (OpenAPI servers): https://shop.example.com/api/v1
+#
 # Inputs (pass via `hurl --variable name=value`):
 #   - productId (string)
 #   - orderId (string)
@@ -8,7 +11,7 @@
 
 # Step: list-catalog
 # Browse the product catalog
-GET https://shop.example.com/api/v1/products
+GET {{baseUrl}}/products
 Accept-Language: {{acceptLanguage}}
 [QueryStringParams]
 page: 0
@@ -22,7 +25,7 @@ list-catalog_firstProductId: jsonpath "$.items[0].id"
 
 # Step: get-product
 # Fetch the selected product's full details
-GET https://shop.example.com/api/v1/products/{{list-catalog_firstProductId}}
+GET {{baseUrl}}/products/{{list-catalog_firstProductId}}
 Accept-Language: {{acceptLanguage}}
 
 HTTP *
@@ -33,7 +36,7 @@ get-product_productName: jsonpath "$.name"
 
 # Step: add-to-cart
 # Add the product to the shopping cart
-POST https://shop.example.com/api/v1/cart/items
+POST {{baseUrl}}/cart/items
 Accept-Language: {{acceptLanguage}}
 # requestBody content-type: application/json
 ```
@@ -52,7 +55,7 @@ add-to-cart_cartTotal: jsonpath "$.totalPrice"
 
 # Step: pay
 # Pay the order with a valid card
-POST https://shop.example.com/api/v1/orders/{{orderId}}/payment
+POST {{baseUrl}}/orders/{{orderId}}/payment
 Accept-Language: {{acceptLanguage}}
 # requestBody content-type: application/json
 ```

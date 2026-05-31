@@ -92,6 +92,27 @@ func TestGenerateHeaderIncludesSummaryAndInputs(t *testing.T) {
 	assertContains(t, out, "# Inputs")
 	assertContains(t, out, "- productId (string)")
 	assertContains(t, out, "- qty (integer)")
+	// The baseUrl variable is always advertised, even with no resolvable
+	// source to supply a default.
+	assertContains(t, out, "# Base URL (required)")
+}
+
+func TestGenerateDocumentsDefaultBaseURLFromServers(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "list", OperationID: "listProducts"},
+		},
+	}
+	sources := map[string]*oasresolver.Source{
+		"shop": loadSource(t, shopSpec),
+	}
+	out, _ := Generate(wf, sources)
+	// The request line stays environment-agnostic...
+	assertContains(t, out, "GET {{baseUrl}}/products")
+	assertNotContains(t, out, "https://api.shop.test/products")
+	// ...while the OpenAPI servers URL is surfaced as the documented default.
+	assertContains(t, out, "default (OpenAPI servers): https://api.shop.test")
 }
 
 func TestGenerateResolvesShortFormOperationIDAgainstSingleSource(t *testing.T) {
@@ -105,7 +126,7 @@ func TestGenerateResolvesShortFormOperationIDAgainstSingleSource(t *testing.T) {
 		"shop": loadSource(t, shopSpec),
 	}
 	out, _ := Generate(wf, sources)
-	assertContains(t, out, "GET https://api.shop.test/products")
+	assertContains(t, out, "GET {{baseUrl}}/products")
 	assertNotContains(t, out, "__unresolved__")
 }
 
@@ -121,7 +142,7 @@ func TestGenerateResolvesQualifiedOperationID(t *testing.T) {
 		"other": loadSource(t, noServerSpec),
 	}
 	out, _ := Generate(wf, sources)
-	assertContains(t, out, "GET https://api.shop.test/products")
+	assertContains(t, out, "GET {{baseUrl}}/products")
 	assertNotContains(t, out, "__unresolved__")
 }
 
@@ -212,7 +233,7 @@ func TestGenerateSubstitutesPathParameters(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{
 		"shop": loadSource(t, shopSpec),
 	})
-	assertContains(t, out, "GET https://api.shop.test/products/p-001")
+	assertContains(t, out, "GET {{baseUrl}}/products/p-001")
 	assertNotContains(t, out, "{id}")
 }
 
@@ -232,7 +253,7 @@ func TestGenerateSubstitutesPathParameterFromRuntimeExpression(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{
 		"shop": loadSource(t, shopSpec),
 	})
-	assertContains(t, out, "GET https://api.shop.test/products/{{productId}}")
+	assertContains(t, out, "GET {{baseUrl}}/products/{{productId}}")
 }
 
 func TestGenerateEmitsQueryAndHeaderParameters(t *testing.T) {
@@ -276,7 +297,7 @@ func TestGenerateEmitsRequestBody(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{
 		"shop": loadSource(t, shopSpec),
 	})
-	assertContains(t, out, "POST https://api.shop.test/orders")
+	assertContains(t, out, "POST {{baseUrl}}/orders")
 	assertContains(t, out, "# requestBody content-type: application/json")
 	assertContains(t, out, "...payload...")
 }
