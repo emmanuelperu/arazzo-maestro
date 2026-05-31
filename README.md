@@ -189,10 +189,11 @@ JSON Schema; the table below tracks the visual rendering.
 
 ### 🧪 Test generation
 
-Turn an Arazzo workflow into a runnable test artifact. The subcommand grammar reflects what kind of test you want, and only then the target technology:
+Turn an Arazzo workflow into a runnable test artifact, then run it against any environment. The subcommand grammar reflects what kind of test you want, and only then the target technology:
 
 ```text
-arazzo-maestro test gen e2e  <file> [flags]      End-to-end functional tests
+arazzo-maestro test gen e2e  <file> [flags]      Write end-to-end functional tests to disk
+arazzo-maestro test run e2e  <file> [flags]      Generate + run them against an endpoint
 arazzo-maestro test gen perf <file> [flags]      Load / performance tests (planned, #22)
 ```
 
@@ -204,18 +205,19 @@ The kind (`e2e` / `perf`) is a subcommand so each one declares its own flags: e2
 arazzo-maestro test gen e2e examples/shop.arazzo.yaml -o dist/
 # → wrote dist/e2e/hurl/shop/happy-path-checkout.hurl
 # → wrote dist/e2e/hurl/shop/payment-refused-path.hurl
-
-hurl --test dist/e2e/hurl/shop/happy-path-checkout.hurl
 ```
 
 The `e2e/<format>/<arazzo-name>/` prefix is added by the CLI so a single output directory can hold artifacts for several Arazzo files and several kinds (e2e, perf, ...) without collisions, and so the on-disk layout mirrors the subcommand grammar.
 
-The generator delegates `operationId` resolution to the OpenAPI sources declared under `sourceDescriptions` (loaded as local files only; HTTP/HTTPS URLs are rejected, same eco-design rule as the linter). Resolved steps emit real `METHOD https://…/path` request lines with path parameters substituted; unresolvable steps emit a Hurl comment and a placeholder so the file stays valid for the target tool.
+The generator delegates `operationId` resolution to the OpenAPI sources declared under `sourceDescriptions` (loaded as local files only; HTTP/HTTPS URLs are rejected, same eco-design rule as the linter). Resolved steps emit real `METHOD {{baseUrl}}/path` request lines with path parameters substituted; unresolvable steps emit a Hurl comment and a placeholder so the file stays valid for the target tool.
+
+The request host is never hard-coded. Every request line is prefixed with the `{{baseUrl}}` Hurl variable, so the **same** `.hurl` file runs unchanged against staging, pre-production or a local mock by passing the endpoint at run time. The OpenAPI `servers:` URL, when present, is surfaced in the file header as the documented default.
 
 Arazzo step features translated:
 
 | Arazzo                     | Hurl                                          |
 |----------------------------|-----------------------------------------------|
+| request host               | `{{baseUrl}}` variable (set per environment)  |
 | `parameters` in=header     | header lines on the request                   |
 | `parameters` in=query      | `[QueryStringParams]` block                   |
 | `parameters` in=path       | substituted into the URL template             |
@@ -225,6 +227,24 @@ Arazzo step features translated:
 | `$steps.s.outputs.o`       | `{{s_o}}` (capture-chained)                   |
 | `$response.body#/x/y`      | `jsonpath "$.x.y"`                            |
 | `$statusCode`              | `status`                                      |
+
+**Run against your environment with `test run e2e`.** It generates the tests on the fly and executes them with [Hurl](https://hurl.dev) against the endpoint you pass, optionally writing Hurl's HTML report. You choose the target at run time, so the same workflow validates staging, then pre-prod, then prod:
+
+```bash
+# Run against a pre-production endpoint
+arazzo-maestro test run e2e examples/shop.arazzo.yaml \
+  --base-url https://staging.shop.example.com/api/v1 \
+  --variable productId=p-001 --variable orderId=ord-1 --variable acceptLanguage=en
+
+# Same thing, plus an HTML report (Hurl's native format)
+arazzo-maestro test run e2e examples/shop.arazzo.yaml \
+  --base-url https://staging.shop.example.com/api/v1 \
+  --report-html dist/hurl-report \
+  --variable productId=p-001 --variable orderId=ord-1 --variable acceptLanguage=en
+# → open dist/hurl-report/index.html
+```
+
+`--base-url` sets the `{{baseUrl}}` variable; `--variable name=value` (repeatable) supplies the workflow inputs listed in each generated file's header. The process exit status mirrors Hurl (non-zero on any failure), and with `--report-html` the report is written even when tests fail, so CI can publish it as an artifact. Hurl must be on `PATH` ([install](https://hurl.dev/docs/installation.html), e.g. `brew install hurl`); prefer `test gen e2e` when you only want the files.
 
 **Planned: `perf --format=k6|drill`** (issue #22). The intended shape is:
 
@@ -250,6 +270,7 @@ arazzo-maestro --version                         Print version and exit
 arazzo-maestro lint <file>                       Validate against schema + rules + cross-file
 arazzo-maestro view <file> [flags]               Render to HTML
 arazzo-maestro test gen e2e  <file> [flags]      Generate e2e tests (hurl)
+arazzo-maestro test run e2e  <file> [flags]      Generate + run e2e tests, optional HTML report
 arazzo-maestro test gen perf <file> [flags]      Generate perf tests (planned, #22)
 
 view flags:
@@ -263,6 +284,13 @@ view flags:
 test gen e2e flags:
   -o, --output <dir>          Output directory (default: dist)
       --workflow <id>         Only generate this workflow
+      --format <name>         Output format (default: hurl)
+
+test run e2e flags:
+      --base-url <url>        Target endpoint, e.g. https://staging.example.com/api/v1 (required)
+      --report-html <dir>     Also write a Hurl HTML report to this directory
+      --variable <name=value> Hurl variable for a workflow input (repeatable)
+      --workflow <id>         Only run this workflow
       --format <name>         Output format (default: hurl)
 
 test gen perf flags (planned, #22):
