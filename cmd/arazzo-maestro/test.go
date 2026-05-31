@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -31,9 +32,13 @@ Two kinds of generation are planned:
 Each kind is a subcommand of 'test gen'; the output technology is
 picked through '--format'. Kind-specific options (e.g. virtual users
 and duration for perf) live under the relevant subcommand so the
-help text stays scoped to what is actually useful for that kind.`,
+help text stays scoped to what is actually useful for that kind.
+
+'test gen' writes the test files to disk; 'test run' generates them on
+the fly and executes them against a live endpoint, optionally emitting
+an HTML report.`,
 	}
-	cmd.AddCommand(newTestGenCmd())
+	cmd.AddCommand(newTestGenCmd(), newTestRunCmd())
 	return cmd
 }
 
@@ -99,52 +104,227 @@ Examples:
 	return cmd
 }
 
-func runTestGenE2E(cmd *cobra.Command, path string, opts *testGenE2EOptions) error {
+func newTestRunCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "run",
+		Short: "Generate tests and run them against a live endpoint",
+	}
+	cmd.AddCommand(newTestRunE2ECmd())
+	return cmd
+}
+
+type testRunE2EOptions struct {
+	baseURL    string
+	reportHTML string
+	workflowID string
+	format     string
+	variables  []string
+}
+
+func newTestRunE2ECmd() *cobra.Command {
+	opts := &testRunE2EOptions{}
+	cmd := &cobra.Command{
+		Use:   "e2e <file>",
+		Short: "Generate and execute end-to-end API tests against an endpoint",
+		Long: `Generate end-to-end tests from an Arazzo workflow and run them
+immediately against a live endpoint.
+
+The tests are generated to a temporary directory and executed with the
+'hurl' binary (which must be on PATH). The target environment is chosen
+at run time with --base-url, so the same workflow runs unchanged against
+staging, pre-production or a local mock:
+
+  arazzo-maestro test run e2e shop.arazzo.yaml --base-url https://staging.example.com/api/v1
+
+Pass --report-html to also write Hurl's HTML report:
+
+  arazzo-maestro test run e2e shop.arazzo.yaml \
+    --base-url https://staging.example.com/api/v1 \
+    --report-html dist/hurl-report
+
+Workflow inputs are supplied as Hurl variables with --variable (the flag
+is repeatable); the generated file header lists the inputs each workflow
+expects:
+
+  arazzo-maestro test run e2e shop.arazzo.yaml \
+    --base-url http://localhost:8080 \
+    --variable productId=p-001 --variable orderId=ord-1
+
+The process exit status mirrors hurl: non-zero when any test fails. When
+--report-html is set the report is written even on failure.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runTestRunE2E(cmd, args[0], opts)
+		},
+	}
+	cmd.Flags().StringVar(&opts.baseURL, "base-url", "", "Target endpoint, e.g. https://staging.example.com/api/v1 (required)")
+	cmd.Flags().StringVar(&opts.reportHTML, "report-html", "", "Also write a Hurl HTML report to this directory")
+	cmd.Flags().StringVar(&opts.workflowID, "workflow", "", "Only run this workflow (default: all)")
+	cmd.Flags().StringVar(&opts.format, "format", "hurl", "Test format (currently only 'hurl')")
+	cmd.Flags().StringArrayVar(&opts.variables, "variable", nil, "Extra Hurl variable as name=value for workflow inputs (repeatable)")
+	_ = cmd.MarkFlagRequired("base-url")
+	return cmd
+}
+
+func runTestRunE2E(cmd *cobra.Command, path string, opts *testRunE2EOptions) error {
 	if opts.format != "hurl" {
 		return fmt.Errorf("unsupported format %q (supported: hurl)", opts.format)
 	}
-	doc, err := parser.ParseFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to parse %s: %w", path, err)
+	if err := validateBaseURL(opts.baseURL); err != nil {
+		return err
 	}
-	sources, err := loadArazzoSources(doc, filepath.Dir(path))
+	if _, err := exec.LookPath("hurl"); err != nil {
+		return fmt.Errorf("the 'hurl' binary is required to run tests but was not found in PATH; install it from https://hurl.dev (e.g. `brew install hurl`)")
+	}
+
+	// The generated .hurl files are an execution detail here, not an
+	// artifact the caller asked to keep, so they go to a temp dir that
+	// is removed once hurl has run.
+	tmp, err := os.MkdirTemp("", "arazzo-e2e-*")
 	if err != nil {
 		return err
 	}
+	defer os.RemoveAll(tmp)
 
-	workflows := doc.Workflows
-	if opts.workflowID != "" {
-		filtered := workflows[:0:0]
-		for _, w := range workflows {
-			if w.WorkflowID == opts.workflowID {
-				filtered = append(filtered, w)
-			}
-		}
-		if len(filtered) == 0 {
-			return fmt.Errorf("workflow %q not found. Available: %s", opts.workflowID, availableWorkflows(doc))
-		}
-		workflows = filtered
+	files, err := generateE2EFiles(e2eGenSpec{
+		output:     tmp,
+		workflowID: opts.workflowID,
+		format:     opts.format,
+	}, path)
+	if err != nil {
+		return err
 	}
-	if len(workflows) == 0 {
+	if len(files) == 0 {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: no workflows found in %s\n", path)
 		return nil
 	}
-	outDir := filepath.Join(opts.output, "e2e", opts.format, arazzoBaseName(path))
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create %s: %w", outDir, err)
+
+	hurlArgs := []string{"--test", "--variable", "baseUrl=" + opts.baseURL}
+	for _, v := range opts.variables {
+		hurlArgs = append(hurlArgs, "--variable", v)
 	}
+	if opts.reportHTML != "" {
+		hurlArgs = append(hurlArgs, "--report-html", opts.reportHTML)
+	}
+	hurlArgs = append(hurlArgs, files...)
+
+	hurl := exec.Command("hurl", hurlArgs...)
+	hurl.Stdout = cmd.OutOrStdout()
+	hurl.Stderr = cmd.ErrOrStderr()
+	runErr := hurl.Run()
+	if opts.reportHTML != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "\nHTML report: %s\n", filepath.Join(opts.reportHTML, "index.html"))
+	}
+	if runErr != nil {
+		return fmt.Errorf("hurl reported test failures: %w", runErr)
+	}
+	return nil
+}
+
+// validateBaseURL rejects an endpoint that is not an absolute http(s)
+// URL before we hand it to hurl, so the failure is a clear CLI error
+// rather than a wall of hurl connection noise.
+func validateBaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid --base-url %q: %w", raw, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("--base-url must be an http(s) URL, got %q", raw)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("--base-url must include a host, got %q", raw)
+	}
+	return nil
+}
+
+func runTestGenE2E(cmd *cobra.Command, path string, opts *testGenE2EOptions) error {
+	files, err := generateE2EFiles(e2eGenSpec{
+		output:     opts.output,
+		workflowID: opts.workflowID,
+		format:     opts.format,
+	}, path)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: no workflows found in %s\n", path)
+		return nil
+	}
+	for _, f := range files {
+		fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", f)
+	}
+	return nil
+}
+
+// e2eGenSpec is the shared input for generating e2e test files; both the
+// 'gen' and 'run' subcommands resolve sources and render workflows the
+// same way, differing only in where the output lands and what happens
+// next.
+type e2eGenSpec struct {
+	output     string
+	workflowID string
+	format     string
+}
+
+// generateE2EFiles parses the Arazzo file, resolves its OpenAPI sources,
+// and writes one test file per selected workflow under
+// <output>/e2e/<format>/<arazzo-name>/. It returns the paths written, or
+// an empty slice when the file declares no (matching) workflow.
+func generateE2EFiles(spec e2eGenSpec, path string) ([]string, error) {
+	if spec.format != "hurl" {
+		return nil, fmt.Errorf("unsupported format %q (supported: hurl)", spec.format)
+	}
+	doc, err := parser.ParseFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
+	}
+	sources, err := loadArazzoSources(doc, filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	workflows, err := selectWorkflows(doc, spec.workflowID)
+	if err != nil {
+		return nil, err
+	}
+	if len(workflows) == 0 {
+		return nil, nil
+	}
+	outDir := filepath.Join(spec.output, "e2e", spec.format, arazzoBaseName(path))
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create %s: %w", outDir, err)
+	}
+	var files []string
 	for _, wf := range workflows {
 		body, err := hurlgen.Generate(wf, sources)
 		if err != nil {
-			return fmt.Errorf("failed to generate workflow %q: %w", wf.WorkflowID, err)
+			return nil, fmt.Errorf("failed to generate workflow %q: %w", wf.WorkflowID, err)
 		}
 		outPath := filepath.Join(outDir, wf.WorkflowID+".hurl")
 		if err := os.WriteFile(outPath, []byte(body), 0o644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", outPath, err)
+			return nil, fmt.Errorf("failed to write %s: %w", outPath, err)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", outPath)
+		files = append(files, outPath)
 	}
-	return nil
+	return files, nil
+}
+
+// selectWorkflows returns all workflows, or just the one matching
+// workflowID. An unknown id is an error listing the available ids.
+func selectWorkflows(doc *model.ArazzoDocument, workflowID string) ([]model.Workflow, error) {
+	if workflowID == "" {
+		return doc.Workflows, nil
+	}
+	var filtered []model.Workflow
+	for _, w := range doc.Workflows {
+		if w.WorkflowID == workflowID {
+			filtered = append(filtered, w)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("workflow %q not found. Available: %s", workflowID, availableWorkflows(doc))
+	}
+	return filtered, nil
 }
 
 // arazzoBaseName strips the conventional ".arazzo.yaml" / ".arazzo.yml"

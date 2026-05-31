@@ -110,7 +110,7 @@ workflows:
 		t.Fatalf("expected generated file at %s: %v", hurlFile, err)
 	}
 
-	out, err := exec.Command("hurl", "--test", hurlFile).CombinedOutput()
+	out, err := exec.Command("hurl", "--test", "--variable", "baseUrl="+mock.URL, hurlFile).CombinedOutput()
 	if err != nil {
 		body, _ := os.ReadFile(hurlFile)
 		t.Fatalf("`hurl --test` failed: %v\n--- generated hurl ---\n%s\n--- hurl output ---\n%s",
@@ -118,6 +118,93 @@ workflows:
 	}
 	if !strings.Contains(string(out), "Executed files") {
 		t.Errorf("hurl --test output unexpected:\n%s", out)
+	}
+}
+
+// TestRunE2EExecutesAndWritesReport drives the full `test run e2e`
+// command against a mock server: generation, hurl execution with the
+// baseUrl variable pointed at the mock, and HTML report emission.
+func TestRunE2EExecutesAndWritesReport(t *testing.T) {
+	if _, err := exec.LookPath("hurl"); err != nil {
+		t.Skip("hurl binary not in PATH; install with `brew install hurl`")
+	}
+
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/widgets":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]string{{"id": "w-42"}},
+			})
+		case r.Method == "GET" && r.URL.Path == "/widgets/w-42":
+			_ = json.NewEncoder(w).Encode(map[string]string{"id": "w-42", "name": "Bolt"})
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer mock.Close()
+
+	dir := t.TempDir()
+	// The OpenAPI servers URL is intentionally a placeholder the mock
+	// does not serve: the run must hit --base-url, not this default.
+	openapi := `openapi: "3.1.0"
+info: { title: Widgets, version: "1.0.0" }
+servers:
+  - url: https://unused.example.com
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      responses: { "200": { description: ok } }
+  /widgets/{id}:
+    get:
+      operationId: getWidget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses: { "200": { description: ok } }
+`
+	writeFile(t, filepath.Join(dir, "openapi.yaml"), openapi)
+
+	arazzo := `arazzo: "1.0.1"
+info: { title: t, summary: chain, version: "1.0.0" }
+sourceDescriptions:
+  - name: api
+    url: ./openapi.yaml
+    type: openapi
+workflows:
+  - workflowId: chain
+    summary: list then fetch one
+    steps:
+      - stepId: list
+        operationId: listWidgets
+        outputs:
+          firstId: $response.body#/items/0/id
+        successCriteria:
+          - condition: $statusCode == 200
+      - stepId: get
+        operationId: getWidget
+        parameters:
+          - name: id
+            in: path
+            value: $steps.list.outputs.firstId
+        successCriteria:
+          - condition: $statusCode == 200
+`
+	arazzoPath := filepath.Join(dir, "wf.arazzo.yaml")
+	writeFile(t, arazzoPath, arazzo)
+
+	reportDir := filepath.Join(dir, "report")
+	stdout, stderr, err := runCmd(t, "test", "run", "e2e", arazzoPath,
+		"--base-url", mock.URL, "--report-html", reportDir)
+	if err != nil {
+		t.Fatalf("test run e2e failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(reportDir, "index.html")); err != nil {
+		t.Errorf("expected HTML report index at %s/index.html: %v", reportDir, err)
 	}
 }
 

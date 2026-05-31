@@ -32,7 +32,8 @@ func TestGenE2EAgainstShopExample(t *testing.T) {
 	got := string(body)
 	for _, want := range []string{
 		"# Workflow: happy-path-checkout",
-		"GET https://shop.example.com/api/v1/products",
+		"GET {{baseUrl}}/products",
+		"# Base URL (required)",
 		"[QueryStringParams]",
 		"[Captures]",
 		`jsonpath "`,
@@ -164,6 +165,53 @@ workflows:
 	}
 	if !strings.Contains(err.Error(), "HTTP source URLs are not supported") {
 		t.Errorf("error should mention HTTP source rejection, got %v", err)
+	}
+}
+
+func TestRunE2ERequiresBaseURL(t *testing.T) {
+	_, _, err := runCmd(t, "test", "run", "e2e",
+		filepath.Join(examplesDir(t), "shop.arazzo.yaml"))
+	if err == nil {
+		t.Fatal("expected an error when --base-url is omitted")
+	}
+	if !strings.Contains(err.Error(), "base-url") {
+		t.Errorf("error should name the required base-url flag, got %v", err)
+	}
+}
+
+func TestRunE2ERejectsNonHTTPBaseURL(t *testing.T) {
+	_, _, err := runCmd(t, "test", "run", "e2e",
+		filepath.Join(examplesDir(t), "shop.arazzo.yaml"),
+		"--base-url", "ftp://nope.example.com")
+	if err == nil {
+		t.Fatal("expected an error for a non-http(s) base-url")
+	}
+	if !strings.Contains(err.Error(), "http(s)") {
+		t.Errorf("error should explain the http(s) requirement, got %v", err)
+	}
+}
+
+func TestRunE2ERejectsUnsupportedFormat(t *testing.T) {
+	_, _, err := runCmd(t, "test", "run", "e2e",
+		filepath.Join(examplesDir(t), "shop.arazzo.yaml"),
+		"--base-url", "https://staging.example.com", "--format", "k6")
+	if err == nil {
+		t.Fatal("expected an error for an unsupported run format")
+	}
+	if !strings.Contains(err.Error(), "unsupported format") {
+		t.Errorf("error should mention unsupported format, got %v", err)
+	}
+}
+
+func TestRunE2EHelpAdvertisesEndpointAndReport(t *testing.T) {
+	stdout, _, err := runCmd(t, "test", "run", "e2e", "--help")
+	if err != nil {
+		t.Fatalf("test run e2e --help failed: %v", err)
+	}
+	for _, want := range []string{"--base-url", "--report-html", "--variable", "--workflow"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("'test run e2e --help' should mention %q, got:\n%s", want, stdout)
+		}
 	}
 }
 
