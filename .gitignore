@@ -8,6 +8,9 @@
 # Build / release output
 /dist/
 
+# Local-only Hurl demo mock (run with `go run ./scripts/hurl-demo`)
+/scripts/hurl-demo/
+
 # User-local themes file (the example stays tracked)
 /themes.yml
 
