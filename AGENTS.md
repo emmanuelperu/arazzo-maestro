@@ -55,6 +55,8 @@ specifications into:
 
 - structured validation findings (`lint` subcommand)
 - standalone HTML pages per workflow (`view` subcommand)
+- runnable end-to-end tests (`test gen e2e` / `test run e2e`,
+  `--format=hurl` today; perf `test gen perf` with k6 is planned, #22)
 
 Originally a Python POC (now removed), migrated to Go in May 2026.
 
@@ -67,6 +69,10 @@ Originally a Python POC (now removed), migrated to Go in May 2026.
   order of `outputs` blocks)
 - [`santhosh-tekuri/jsonschema/v5`](https://github.com/santhosh-tekuri/jsonschema), 
   pure-Go JSON Schema validator (first pass of the linter)
+- [`pb33f/libopenapi`](https://github.com/pb33f/libopenapi), pure-Go
+  OpenAPI parser used by `internal/oasresolver` to resolve
+  `operationId` → `(method, path, server, parameters)` for both the
+  cross-file linter pass and the Hurl test generator (adopted in #28)
 - Stdlib `html/template` for HTML rendering
 - Stdlib `embed` for templates + JSON Schema + built-in themes
 - Tailwind CSS via CDN (the only external runtime dep of the generated
@@ -84,8 +90,13 @@ internal/
 ├── linter/                  Three-pass validator:
 │   ├── schema.go            JSON Schema (official OAI, embedded)
 │   ├── linter.go            Semantic rules (uniqueness, $steps refs)
-│   ├── crossfile.go         sourceDescriptions resolution
+│   ├── crossfile.go         sourceDescriptions checks (operationId
+│   │                        exists?), built on internal/oasresolver
 │   └── schemas/arazzo-1.0.json   Embedded schema (patched at load)
+├── oasresolver/             OpenAPI source loader (pb33f/libopenapi):
+│                            operationId → method/path/server/params
+├── hurlgen/                 model.Workflow + oasresolver → .hurl e2e
+│                            tests ([Captures], [Asserts], {{baseUrl}})
 ├── theme/                   Theme registry, validation, WCAG audit
 │   └── themes/builtin.yml   Built-in light + dark themes
 └── renderer/                model + theme → standalone HTML
@@ -110,25 +121,29 @@ The Makefile's `dist` and `lint` targets glob `examples/*.arazzo.yaml`
 and pick it up automatically, no changes needed elsewhere.
 
 Dependency graph (no cycles): `model` → ∅, `parser` → `model`,
-`linter` → `parser` + `model`, `theme` → ∅, `renderer` → `model` + `theme`,
-`cmd` → all.
+`oasresolver` → libopenapi, `linter` → `parser` + `model` + `oasresolver`,
+`hurlgen` → `model` + `oasresolver`, `theme` → ∅,
+`renderer` → `model` + `theme`, `cmd` → all.
 
-### State as of 2026-05-21
+### State as of 2026-06-01
 
 | Area | Status | Where |
 |---|---|---|
 | Parser (YAML → model, ordered outputs) | ✅ done | `internal/parser/` |
 | Renderer (HTML output) | ✅ done | `internal/renderer/` |
-| CLI (`lint`, `view`) | ✅ done | `cmd/arazzo-maestro/` |
+| CLI (`lint`, `view`, `test`) | ✅ done | `cmd/arazzo-maestro/` |
 | Theme system (light, dark, user `themes.yml`, WCAG audit) | ✅ done | `internal/theme/` |
 | Linter pass 1: JSON Schema | ✅ done | `internal/linter/schema.go` |
 | Linter pass 2: semantic rules | ✅ done | `internal/linter/linter.go` |
 | Linter pass 3: cross-file (operationId in OpenAPI) | ✅ done | `internal/linter/crossfile.go` |
+| OpenAPI source resolution (libopenapi) | ✅ done (#28) | `internal/oasresolver/` |
+| Test gen: e2e → Hurl (`test gen/run e2e`) | ✅ done (#21, on `feat/hurl-gen-21`, PR pending) | `internal/hurlgen/` |
+| Test gen: perf → k6 | ❌ planned (#22) | see Plan.md |
 | Test coverage | ✅ ≥80 % all packages | `*_test.go` |
 | README | ✅ structurally done, ⏭️ visual hero pending | `README.md` |
-| CI (GitHub Actions) | ❌ not set up |, |
-| Releases (goreleaser, signed) | ❌ not set up |, |
-| OpenSSF Best Practices badge | ❌ pending Phase 1 of OpenSSF roadmap | see Plan.md |
+| CI (GitHub Actions) | ✅ done | `.github/workflows/ci.yml` |
+| Releases (goreleaser, cosign-signed, SBOM) | ✅ v0.1.0 shipped | `.github/workflows/release.yml` |
+| OpenSSF Best Practices badge | ✅ Phases 1-2 done; registered on bestpractices.dev | see Plan.md |
 | Logo / demo GIF / screenshots | ❌ pending | see Plan.md README polish |
 
 See [`Plan.md`](./Plan.md) for the full roadmap, including the OpenSSF
@@ -147,7 +162,8 @@ make test                            # go test ./...
 make vet                             # go vet ./...
 make lint                            # arazzo-maestro lint examples/*.arazzo.yaml
 make dist                            # render every example into dist/<workflow>/{light,dark}/
-make clean                           # rm -rf dist bin
+make hurl                            # generate Hurl e2e tests under examples/generated/e2e/hurl/
+make clean                           # rm -rf dist bin examples/generated
 
 # One-off invocations still work:
 go test -cover ./...                                        # coverage per package
