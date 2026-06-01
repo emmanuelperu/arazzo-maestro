@@ -16,8 +16,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>arazzo-maestro, lint &amp; render Arazzo workflows</title>
-  <meta name="description" content="A single Go binary that lints Arazzo workflow specs and renders them to standalone, eco-designed, accessible HTML. No server, no build, no JavaScript.">
+  <title>arazzo-maestro, lint, render &amp; test Arazzo workflows</title>
+  <meta name="description" content="A single Go binary that lints Arazzo workflow specs, renders them to standalone, eco-designed, accessible HTML, and generates runnable end-to-end tests (Hurl). No server, no build, no JavaScript.">
   <style>
     /* ── Blueprint theme (light) ─────────────────────────────────── */
     :root {
@@ -376,12 +376,13 @@
           <div>
             <p class="eyebrow">Arazzo · CLI · Go · Apache-2.0</p>
             <h1>arazzo-maestro</h1>
-            <p class="tagline">Lint &amp; render Arazzo workflows. One Go binary. Eco-designed, accessible by default.</p>
+            <p class="tagline">Lint, render &amp; test Arazzo workflows. One Go binary. Eco-designed, accessible by default.</p>
             <p class="lede">
               arazzo-maestro turns <a href="https://spec.openapis.org/arazzo/latest.html">Arazzo</a>
-              workflow specs into two things the rest of your team can actually use:
-              validation that fails your CI when something is wrong, and standalone
-              HTML pages anyone can open in a browser, no server, no build, no JavaScript.
+              workflow specs into three things the rest of your team can actually use:
+              validation that fails your CI when something is wrong, standalone
+              HTML pages anyone can open in a browser, and runnable end-to-end tests
+              you point at any environment, no server, no build, no JavaScript.
             </p>
             <div class="cta">
               <a class="btn btn-primary" href="https://github.com/emmanuelperu/arazzo-maestro">View on GitHub</a>
@@ -399,21 +400,25 @@
 Error: 2 issue(s) found
 
 <span class="pr">$</span> arazzo-maestro view workflow.yaml -o dist/
-<span class="cmt"># dist/happy-path-checkout.html  (~3 kB gzipped)</span></pre>
+<span class="cmt"># dist/happy-path-checkout.html  (~3 kB gzipped)</span>
+
+<span class="pr">$</span> arazzo-maestro test run e2e workflow.yaml --base-url https://staging.example.com
+<span class="ok">Success</span>: 6 requests, all assertions passed
+<span class="cmt"># add --report-html dist/report for an HTML report</span></pre>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ── TWO COMMANDS ─────────────────────────────────────────── -->
+    <!-- ── THREE COMMANDS ───────────────────────────────────────── -->
     <section id="commands">
       <div class="wrap">
         <div class="section-head">
-          <p class="eyebrow">Two subcommands</p>
-          <h2>One score, two batons</h2>
-          <p>The maestro both inspects the score and conducts it: <code>lint</code> validates, <code>view</code> renders. No other moving parts.</p>
+          <p class="eyebrow">Three subcommands</p>
+          <h2>One score, three batons</h2>
+          <p>The maestro inspects the score, conducts it, and rehearses it: <code>lint</code> validates, <code>view</code> renders, <code>test</code> generates runnable tests. No other moving parts.</p>
         </div>
-        <div class="grid-2">
+        <div class="grid-3">
           <div class="card">
             <span class="tag">lint</span>
             <h3>Validate, then fail CI on demand</h3>
@@ -434,6 +439,17 @@ Error: 2 issue(s) found
               opens offline in any browser. Commit it, or ship it to GitHub Pages.
             </p>
           </div>
+          <div class="card">
+            <span class="tag">test</span>
+            <h3>Generate runnable tests from a workflow</h3>
+            <p>
+              <code>test gen e2e</code> turns a workflow into <a href="https://hurl.dev">Hurl</a>
+              files: each step becomes a request, outputs become captures, success
+              criteria become asserts, the host stays a <code class="rt">{{baseUrl}}</code>
+              variable. <code>test run e2e</code> runs them against any environment with an
+              optional HTML report. Performance tests (k6) are coming next.
+            </p>
+          </div>
         </div>
 
         <!-- pipeline schematic -->
@@ -451,6 +467,7 @@ Error: 2 issue(s) found
           <div class="stack">
             <div class="node">lint<span class="sub">exit 0/1 + findings</span></div>
             <div class="node">view<span class="sub">dist/*.html</span></div>
+            <div class="node">test<span class="sub">dist/e2e/*.hurl</span></div>
           </div>
         </div>
       </div>
@@ -2312,21 +2329,26 @@ the final payment status.</p>
           </div>
           <div class="card">
             <div class="card-marker"><span class="num">03</span></div>
+            <h3>Test generation</h3>
+            <p>Turn a workflow into runnable end-to-end tests. <code>test gen/run e2e</code> emits <a href="https://hurl.dev">Hurl</a> files (<code class="rt">{{baseUrl}}</code>, captures, asserts) and runs them with an HTML report. Performance tests (k6) are coming next.</p>
+          </div>
+          <div class="card">
+            <div class="card-marker"><span class="num">04</span></div>
             <h3>Eco-designed by rule</h3>
             <p>System fonts only, inline SVG, minimal requests, a single static binary on a <code>FROM scratch</code> image. Sobriety is enforced, not aspirational.</p>
           </div>
           <div class="card">
-            <div class="card-marker"><span class="num">04</span></div>
+            <div class="card-marker"><span class="num">05</span></div>
             <h3>Accessible by default</h3>
             <p>WCAG 2.2 AA contrasts, semantic HTML, visible focus, no info by colour alone, <code>prefers-reduced-motion</code> honoured.</p>
           </div>
           <div class="card">
-            <div class="card-marker"><span class="num">05</span></div>
+            <div class="card-marker"><span class="num">06</span></div>
             <h3>Themeable</h3>
             <p>Light and dark built in; drop a <code>themes.yml</code> to set a default or add your own. Custom themes are contrast-audited at load time.</p>
           </div>
           <div class="card">
-            <div class="card-marker"><span class="num">06</span></div>
+            <div class="card-marker"><span class="num">07</span></div>
             <h3>One binary, no runtime</h3>
             <p>No Python, no Node, no cgo. Trivial cross-compilation, instant startup, a tiny Docker image. Install in one command.</p>
           </div>
@@ -2386,7 +2408,10 @@ the final payment status.</p>
 <span class="cmt"># Render (light + dark)</span>
 <span class="pr">$</span> arazzo-maestro view workflow.yaml -o dist/light
 <span class="pr">$</span> arazzo-maestro view workflow.yaml -o dist/dark --theme dark
-<span class="pr">$</span> open dist/light/index.html</pre>
+<span class="pr">$</span> open dist/light/index.html
+
+<span class="cmt"># Generate + run e2e tests (Hurl)</span>
+<span class="pr">$</span> arazzo-maestro test run e2e workflow.yaml --base-url https://staging.example.com</pre>
           <pre class="terminal" tabindex="0" aria-label="Run with Docker"><span class="cmt"># Or via Docker, FROM scratch image</span>
 <span class="pr">$</span> docker run --rm -v "$PWD":/work \
     ghcr.io/emmanuelperu/arazzo-maestro:latest \

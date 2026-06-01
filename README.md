@@ -51,12 +51,14 @@
 
 - **`lint`**: validate Arazzo files against the official JSON Schema, internal semantic rules (unique IDs, `$steps` references), and cross-file checks against the referenced OpenAPI contracts.
 - **`view`**: generate a standalone HTML page per workflow, no server, no build, no JavaScript framework. Open in any browser, commit to a docs folder, ship to GitHub Pages.
+- **`test`**: generate runnable end-to-end tests from a workflow (`test gen e2e`, `--format=hurl` today), or generate and run them against an endpoint with an optional HTML report (`test run e2e`). Perf tests (`test gen perf`, k6) are planned (#22).
 
 ```text
 *.arazzo.yaml (Arazzo) ────┐
                            ├──►  arazzo-maestro lint   →  exit 0/1 + structured findings
 *-openapi.yaml / *-api.yaml ┤
                            ├──►  arazzo-maestro view   →  dist/*.html  (standalone)
+                           ├──►  arazzo-maestro test   →  dist/e2e/hurl/*.hurl  (+ optional run / HTML report)
 themes.yml (opt.)        ──┘
 ```
 
@@ -67,6 +69,7 @@ themes.yml (opt.)        ──┘
 | Validate Arazzo files in CI | ✅ Single binary, deterministic, offline. `lint` → exit code + parseable findings | An IDE plugin |
 | Share workflows with non-devs | ✅ Standalone HTML, no IDE, no auth | A live editor |
 | Cross-file integrity (operationId exists?) | ✅ Reads `sourceDescriptions.url`, indexes operations, validates references | A full OpenAPI validator |
+| Turn a workflow into runnable tests | ✅ `test gen/run e2e` emits Hurl files (`{{baseUrl}}`, captures, asserts), runs them, writes an HTML report | A workflow runtime/orchestrator |
 | Eco-designed output | ✅ 1 network request, system fonts, ~18 kB HTML | A pixel-perfect design system |
 | Accessibility-first | ✅ WCAG 2.2 AA contrasts, semantic HTML, `aria-hidden` on decoratives | An a11y testing tool |
 
