@@ -184,7 +184,7 @@ func runTestRunE2E(cmd *cobra.Command, path string, opts *testRunE2EOptions) err
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	files, err := generateE2EFiles(e2eGenSpec{
 		output:     tmp,
@@ -291,7 +291,7 @@ func generateE2EFiles(spec e2eGenSpec, path string) ([]string, error) {
 		return nil, nil
 	}
 	outDir := filepath.Join(spec.output, "e2e", spec.format, arazzoBaseName(path))
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create %s: %w", outDir, err)
 	}
 	var files []string

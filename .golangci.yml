@@ -42,6 +42,11 @@ linters:
         - G304
         # G306: 0644 is the right mode for a generated HTML output.
         - G306
+        # G204: `test run e2e` shells out to `hurl` (constant program
+        # name); only flags plus generated/temp .hurl paths and the
+        # user-supplied --base-url / --variable values form the args,
+        # all under the CLI's control. Same rationale as G304.
+        - G204
         # G203: every call to `template.HTML(...)` / `template.CSS(...)`
         # in internal/renderer/renderer.go is preceded by an explicit
         # `html.EscapeString(...)` on the user-controlled portion, or
