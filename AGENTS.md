@@ -55,8 +55,8 @@ specifications into:
 
 - structured validation findings (`lint` subcommand)
 - standalone HTML pages per workflow (`view` subcommand)
-- runnable end-to-end tests (`test gen e2e` / `test run e2e`,
-  `--format=hurl` today; perf `test gen perf` with k6 is planned, #22)
+- runnable tests: end-to-end (`test gen e2e` / `test run e2e`, Hurl)
+  and load/performance (`test gen perf`, k6)
 
 Originally a Python POC (now removed), migrated to Go in May 2026.
 
@@ -97,6 +97,8 @@ internal/
 │                            operationId → method/path/server/params
 ├── hurlgen/                 model.Workflow + oasresolver → .hurl e2e
 │                            tests ([Captures], [Asserts], {{baseUrl}})
+├── k6gen/                   model.Workflow + oasresolver → .k6.js perf
+│                            tests (http.request, check, BASE_URL env)
 ├── theme/                   Theme registry, validation, WCAG audit
 │   └── themes/builtin.yml   Built-in light + dark themes
 └── renderer/                model + theme → standalone HTML
@@ -122,10 +124,10 @@ and pick it up automatically, no changes needed elsewhere.
 
 Dependency graph (no cycles): `model` → ∅, `parser` → `model`,
 `oasresolver` → libopenapi, `linter` → `parser` + `model` + `oasresolver`,
-`hurlgen` → `model` + `oasresolver`, `theme` → ∅,
-`renderer` → `model` + `theme`, `cmd` → all.
+`hurlgen` → `model` + `oasresolver`, `k6gen` → `model` + `oasresolver`,
+`theme` → ∅, `renderer` → `model` + `theme`, `cmd` → all.
 
-### State as of 2026-06-01
+### State as of 2026-06-02
 
 | Area | Status | Where |
 |---|---|---|
@@ -137,8 +139,8 @@ Dependency graph (no cycles): `model` → ∅, `parser` → `model`,
 | Linter pass 2: semantic rules | ✅ done | `internal/linter/linter.go` |
 | Linter pass 3: cross-file (operationId in OpenAPI) | ✅ done | `internal/linter/crossfile.go` |
 | OpenAPI source resolution (libopenapi) | ✅ done (#28) | `internal/oasresolver/` |
-| Test gen: e2e → Hurl (`test gen/run e2e`) | ✅ done (#21, on `feat/hurl-gen-21`, PR pending) | `internal/hurlgen/` |
-| Test gen: perf → k6 | ❌ planned (#22) | see Plan.md |
+| Test gen: e2e → Hurl (`test gen/run e2e`) | ✅ done (#21, merged) | `internal/hurlgen/` |
+| Test gen: perf → k6 (`test gen perf`) | ✅ done (#22, on `feat/k6-gen-22`) | `internal/k6gen/` |
 | Test coverage | ✅ ≥80 % all packages | `*_test.go` |
 | README | ✅ structurally done, ⏭️ visual hero pending | `README.md` |
 | CI (GitHub Actions) | ✅ done | `.github/workflows/ci.yml` |
@@ -163,6 +165,7 @@ make vet                             # go vet ./...
 make lint                            # arazzo-maestro lint examples/*.arazzo.yaml
 make dist                            # render every example into dist/<workflow>/{light,dark}/
 make hurl                            # generate Hurl e2e tests under examples/generated/e2e/hurl/
+make perf                            # generate k6 perf tests under examples/generated/perf/k6/
 make clean                           # rm -rf dist bin examples/generated
 
 # One-off invocations still work:

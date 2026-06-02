@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/hurlgen"
+	"github.com/emmanuelperu/arazzo-maestro/internal/k6gen"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
@@ -24,10 +25,10 @@ func newTestCmd() *cobra.Command {
 		Short: "Generate executable tests from Arazzo workflows",
 		Long: `Generate executable test artifacts from an Arazzo workflow file.
 
-Two kinds of generation are planned:
+Two kinds of generation are available:
 
   e2e   end-to-end functional tests        (formats: hurl)
-  perf  load and performance tests         (formats: k6, drill)
+  perf  load and performance tests         (formats: k6)
 
 Each kind is a subcommand of 'test gen'; the output technology is
 picked through '--format'. Kind-specific options (e.g. virtual users
@@ -47,7 +48,7 @@ func newTestGenCmd() *cobra.Command {
 		Use:   "gen",
 		Short: "Generate test files from an Arazzo file",
 	}
-	cmd.AddCommand(newTestGenE2ECmd())
+	cmd.AddCommand(newTestGenE2ECmd(), newTestGenPerfCmd())
 	return cmd
 }
 
@@ -102,6 +103,153 @@ Examples:
 	cmd.Flags().StringVar(&opts.workflowID, "workflow", "", "Only generate this workflow (default: all)")
 	cmd.Flags().StringVar(&opts.format, "format", "hurl", "Output format (currently only 'hurl')")
 	return cmd
+}
+
+type testGenPerfOptions struct {
+	output     string
+	workflowID string
+	format     string
+	vus        int
+	duration   string
+	thresholds []string
+}
+
+func newTestGenPerfCmd() *cobra.Command {
+	opts := &testGenPerfOptions{}
+	cmd := &cobra.Command{
+		Use:   "perf <file>",
+		Short: "Generate load/performance test files from an Arazzo workflow",
+		Long: `Generate load/performance test files from an Arazzo workflow file.
+
+Each workflow becomes one test file under the output directory:
+
+  <-o>/perf/<format>/<arazzo-name>/<workflowId>.k6.js
+
+Supported formats:
+
+  k6      a k6 script (.k6.js); runs via the single 'k6' binary
+
+The load profile and thresholds are not part of Arazzo, so they are
+supplied here and written into the script's exported 'options':
+
+  --vus        concurrent virtual users
+  --duration   how long to run (e.g. 30s, 5m)
+  --threshold  a k6 threshold as 'metric=expression' (repeatable);
+               a bare 'expression' defaults the metric to
+               http_req_duration
+
+The generated script reads its target from the BASE_URL environment
+variable (default: the OpenAPI servers URL), and each workflow input
+from a same-named variable, so the same script runs against any
+environment:
+
+  k6 run -e BASE_URL=https://staging.example.com -e productId=p-001 out.k6.js
+
+Operation resolution uses the OpenAPI documents declared under
+'sourceDescriptions' (local files only). Steps whose operationId cannot
+be resolved emit a placeholder request and a comment naming the missing
+id, so the script stays valid JavaScript a human can patch.
+
+Examples:
+
+  arazzo-maestro test gen perf shop.arazzo.yaml -o dist/ --vus=10 --duration=30s
+  arazzo-maestro test gen perf shop.arazzo.yaml -o dist/ \
+    --threshold='http_req_duration=p(95)<500' --threshold='http_req_failed=rate<0.01'`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runTestGenPerf(cmd, args[0], opts)
+		},
+	}
+	cmd.Flags().StringVarP(&opts.output, "output", "o", "dist", "Output directory")
+	cmd.Flags().StringVar(&opts.workflowID, "workflow", "", "Only generate this workflow (default: all)")
+	cmd.Flags().StringVar(&opts.format, "format", "k6", "Output format (currently only 'k6')")
+	cmd.Flags().IntVar(&opts.vus, "vus", 1, "Concurrent virtual users")
+	cmd.Flags().StringVar(&opts.duration, "duration", "30s", "Test duration (e.g. 30s, 5m)")
+	cmd.Flags().StringArrayVar(&opts.thresholds, "threshold", nil, "k6 threshold as 'metric=expression' (repeatable)")
+	return cmd
+}
+
+func runTestGenPerf(cmd *cobra.Command, path string, opts *testGenPerfOptions) error {
+	files, err := generatePerfFiles(opts, path)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: no workflows found in %s\n", path)
+		return nil
+	}
+	for _, f := range files {
+		fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", f)
+	}
+	return nil
+}
+
+// generatePerfFiles parses the Arazzo file, resolves its OpenAPI sources,
+// and writes one k6 script per selected workflow under
+// <output>/perf/<format>/<arazzo-name>/.
+func generatePerfFiles(opts *testGenPerfOptions, path string) ([]string, error) {
+	if opts.format != "k6" {
+		return nil, fmt.Errorf("unsupported format %q (supported: k6)", opts.format)
+	}
+	thresholds, err := parseThresholds(opts.thresholds)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := parser.ParseFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
+	}
+	sources, err := loadArazzoSources(doc, filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	workflows, err := selectWorkflows(doc, opts.workflowID)
+	if err != nil {
+		return nil, err
+	}
+	if len(workflows) == 0 {
+		return nil, nil
+	}
+	outDir := filepath.Join(opts.output, "perf", opts.format, arazzoBaseName(path))
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
+		return nil, fmt.Errorf("failed to create %s: %w", outDir, err)
+	}
+	genOpts := k6gen.Options{VUs: opts.vus, Duration: opts.duration, Thresholds: thresholds}
+	var files []string
+	for _, wf := range workflows {
+		body, err := k6gen.Generate(wf, sources, genOpts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate workflow %q: %w", wf.WorkflowID, err)
+		}
+		outPath := filepath.Join(outDir, wf.WorkflowID+".k6.js")
+		if err := os.WriteFile(outPath, []byte(body), 0o644); err != nil {
+			return nil, fmt.Errorf("failed to write %s: %w", outPath, err)
+		}
+		files = append(files, outPath)
+	}
+	return files, nil
+}
+
+// parseThresholds turns the repeatable --threshold flag into a k6
+// thresholds map. Each entry is 'metric=expression'; a bare 'expression'
+// (no '=') defaults the metric to http_req_duration. Multiple entries
+// for the same metric accumulate.
+func parseThresholds(raw []string) (map[string][]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	out := make(map[string][]string)
+	for _, t := range raw {
+		metric, expr := "http_req_duration", t
+		if i := strings.Index(t, "="); i >= 0 {
+			metric, expr = strings.TrimSpace(t[:i]), strings.TrimSpace(t[i+1:])
+		}
+		if metric == "" || expr == "" {
+			return nil, fmt.Errorf("invalid --threshold %q (expected 'metric=expression')", t)
+		}
+		out[metric] = append(out[metric], expr)
+	}
+	return out, nil
 }
 
 func newTestRunCmd() *cobra.Command {
