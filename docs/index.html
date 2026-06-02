@@ -447,7 +447,8 @@ Error: 2 issue(s) found
               files: each step becomes a request, outputs become captures, success
               criteria become asserts, the host stays a <code class="rt">{{baseUrl}}</code>
               variable. <code>test run e2e</code> runs them against any environment with an
-              optional HTML report. Performance tests (k6) are coming next.
+              optional HTML report. <code>test gen perf</code> does the same for load
+              testing, emitting a <a href="https://k6.io">k6</a> script.
             </p>
           </div>
         </div>
@@ -467,7 +468,7 @@ Error: 2 issue(s) found
           <div class="stack">
             <div class="node">lint<span class="sub">exit 0/1 + findings</span></div>
             <div class="node">view<span class="sub">dist/*.html</span></div>
-            <div class="node">test<span class="sub">dist/e2e/*.hurl</span></div>
+            <div class="node">test<span class="sub">*.hurl · *.k6.js</span></div>
           </div>
         </div>
       </div>
@@ -2330,7 +2331,7 @@ the final payment status.</p>
           <div class="card">
             <div class="card-marker"><span class="num">03</span></div>
             <h3>Test generation</h3>
-            <p>Turn a workflow into runnable end-to-end tests. <code>test gen/run e2e</code> emits <a href="https://hurl.dev">Hurl</a> files (<code class="rt">{{baseUrl}}</code>, captures, asserts) and runs them with an HTML report. Performance tests (k6) are coming next.</p>
+            <p>Turn a workflow into runnable tests. <code>test gen/run e2e</code> emits <a href="https://hurl.dev">Hurl</a> files (<code class="rt">{{baseUrl}}</code>, captures, asserts) and runs them with an HTML report; <code>test gen perf</code> emits a <a href="https://k6.io">k6</a> load-test script (VUs, duration, thresholds).</p>
           </div>
           <div class="card">
             <div class="card-marker"><span class="num">04</span></div>

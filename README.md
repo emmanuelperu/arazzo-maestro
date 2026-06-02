@@ -51,15 +51,13 @@
 
 - **`lint`**: validate Arazzo files against the official JSON Schema, internal semantic rules (unique IDs, `$steps` references), and cross-file checks against the referenced OpenAPI contracts.
 - **`view`**: generate a standalone HTML page per workflow, no server, no build, no JavaScript framework. Open in any browser, commit to a docs folder, ship to GitHub Pages.
-- **`test`**: generate runnable end-to-end tests from a workflow (`test gen e2e`, `--format=hurl` today), or generate and run them against an endpoint with an optional HTML report (`test run e2e`). Perf tests (`test gen perf`, k6) are planned (#22).
+- **`test`**: generate runnable tests from a workflow. End-to-end with `test gen e2e` (Hurl), or generate and run them against an endpoint with an optional HTML report (`test run e2e`); load/performance with `test gen perf` (k6).
 
 ```text
-*.arazzo.yaml (Arazzo) ────┐
-                           ├──►  arazzo-maestro lint   →  exit 0/1 + structured findings
-*-openapi.yaml / *-api.yaml ┤
-                           ├──►  arazzo-maestro view   →  dist/*.html  (standalone)
-                           ├──►  arazzo-maestro test   →  dist/e2e/hurl/*.hurl  (+ optional run / HTML report)
-themes.yml (opt.)        ──┘
+*.arazzo.yaml (Arazzo) ────┐                       ┌─►  lint   →  exit 0/1 + structured findings
+                           ├──►  arazzo-maestro  ──┼─►  view   →  dist/*.html  (standalone)
+*-openapi.yaml / *-api.yaml ┤                       ├─►  test e2e  →  dist/e2e/hurl/*.hurl  (+ run / HTML report)
+themes.yml (opt.)        ──┘                       └─►  test perf →  dist/perf/k6/*.k6.js
 ```
 
 ## Why it exists
@@ -249,13 +247,23 @@ arazzo-maestro test run e2e examples/shop.arazzo.yaml \
 
 `--base-url` sets the `{{baseUrl}}` variable; `--variable name=value` (repeatable) supplies the workflow inputs listed in each generated file's header. The process exit status mirrors Hurl (non-zero on any failure), and with `--report-html` the report is written even when tests fail, so CI can publish it as an artifact. Hurl must be on `PATH` ([install](https://hurl.dev/docs/installation.html), e.g. `brew install hurl`); prefer `test gen e2e` when you only want the files.
 
-**Planned: `perf --format=k6|drill`** (issue #22). The intended shape is:
+**Available: `perf --format=k6`** (issue #22). Each workflow becomes one k6 script:
 
 ```bash
 arazzo-maestro test gen perf shop.arazzo.yaml -o dist/ \
-  --format=k6 --vus=10 --duration=30s --threshold='http_req_duration{p(95)}<500'
+  --vus=10 --duration=30s \
+  --threshold='http_req_duration=p(95)<500' --threshold='http_req_failed=rate<0.01'
 # → wrote dist/perf/k6/shop/happy-path-checkout.k6.js
 ```
+
+The load profile and thresholds are not part of Arazzo, so they come from flags and land in the script's exported `options`. Each `--threshold` is a k6 `metric=expression` (repeatable); a bare `expression` defaults the metric to `http_req_duration`. The generated script reads its target from the `BASE_URL` environment variable (default: the OpenAPI `servers:` URL) and each workflow input from a same-named variable, so the same script runs anywhere:
+
+```bash
+k6 run -e BASE_URL=https://staging.example.com -e productId=p-001 \
+  dist/perf/k6/shop/happy-path-checkout.k6.js
+```
+
+Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are not substituted yet, same as the e2e generator. Drill is a planned lighter alternative.
 
 The perf-only flags (`--vus`, `--duration`, `--threshold`) live on `test gen perf` so `test gen perf --help` documents exactly what makes sense for load testing; `test gen e2e --help` stays focused on functional concerns. Both subcommands share the same underlying workflow IR, so adding a new format is a per-template change, not a CLI redesign.
 
@@ -274,7 +282,7 @@ arazzo-maestro lint <file>                       Validate against schema + rules
 arazzo-maestro view <file> [flags]               Render to HTML
 arazzo-maestro test gen e2e  <file> [flags]      Generate e2e tests (hurl)
 arazzo-maestro test run e2e  <file> [flags]      Generate + run e2e tests, optional HTML report
-arazzo-maestro test gen perf <file> [flags]      Generate perf tests (planned, #22)
+arazzo-maestro test gen perf <file> [flags]      Generate perf tests (k6)
 
 view flags:
   -o, --output <dir>          Output directory (default: dist)
@@ -296,11 +304,13 @@ test run e2e flags:
       --workflow <id>         Only run this workflow
       --format <name>         Output format (default: hurl)
 
-test gen perf flags (planned, #22):
-      --format <k6|drill>     Output format (default: k6)
-      --vus <n>               Concurrent virtual users
-      --duration <d>          Test duration (e.g. 30s, 5m)
-      --threshold <expr>      Performance threshold (e.g. p(95)<500)
+test gen perf flags:
+  -o, --output <dir>          Output directory (default: dist)
+      --workflow <id>         Only generate this workflow
+      --format <name>         Output format (default: k6)
+      --vus <n>               Concurrent virtual users (default: 1)
+      --duration <d>          Test duration (e.g. 30s, 5m) (default: 30s)
+      --threshold <m=expr>    k6 threshold as metric=expression (repeatable)
 ```
 
 ## Architecture
