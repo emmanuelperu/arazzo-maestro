@@ -168,6 +168,119 @@ workflows:
 	}
 }
 
+func TestGenPerfAgainstShopExample(t *testing.T) {
+	out := t.TempDir()
+	stdout, _, err := runCmd(t, "test", "gen", "perf",
+		filepath.Join(examplesDir(t), "shop.arazzo.yaml"),
+		"-o", out, "--vus", "10", "--duration", "30s",
+		"--threshold", "http_req_duration=p(95)<500")
+	if err != nil {
+		t.Fatalf("test gen perf failed: %v\n%s", err, stdout)
+	}
+	shopDir := filepath.Join(out, "perf", "k6", "shop")
+	for _, name := range []string{"happy-path-checkout.k6.js", "payment-refused-path.k6.js"} {
+		path := filepath.Join(shopDir, name)
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("expected file %s to exist: %v", path, err)
+		}
+		if !strings.Contains(stdout, name) {
+			t.Errorf("stdout should mention written file %q, got %q", name, stdout)
+		}
+	}
+	body, err := os.ReadFile(filepath.Join(shopDir, "happy-path-checkout.k6.js"))
+	if err != nil {
+		t.Fatalf("read generated k6 script: %v", err)
+	}
+	got := string(body)
+	for _, want := range []string{
+		"// Workflow: happy-path-checkout",
+		"import http from 'k6/http';",
+		"const BASE_URL = __ENV.BASE_URL",
+		"export const options = {",
+		"vus: 10,",
+		`duration: "30s",`,
+		`"http_req_duration": ["p(95)<500"],`,
+		"http.request('GET', `${BASE_URL}/products",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("generated k6 missing %q\n--- output ---\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "__unresolved__") {
+		t.Errorf("operation resolution failed on a valid example:\n%s", got)
+	}
+}
+
+func TestGenPerfFiltersByWorkflowID(t *testing.T) {
+	out := t.TempDir()
+	_, _, err := runCmd(t, "test", "gen", "perf",
+		filepath.Join(examplesDir(t), "shop.arazzo.yaml"),
+		"-o", out, "--workflow", "happy-path-checkout")
+	if err != nil {
+		t.Fatalf("filtered run failed: %v", err)
+	}
+	shopDir := filepath.Join(out, "perf", "k6", "shop")
+	if _, err := os.Stat(filepath.Join(shopDir, "happy-path-checkout.k6.js")); err != nil {
+		t.Errorf("happy-path-checkout.k6.js should exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(shopDir, "payment-refused-path.k6.js")); !os.IsNotExist(err) {
+		t.Errorf("payment-refused-path.k6.js should NOT exist when filtering, stat err = %v", err)
+	}
+}
+
+func TestGenPerfRejectsUnsupportedFormat(t *testing.T) {
+	_, _, err := runCmd(t, "test", "gen", "perf",
+		filepath.Join(examplesDir(t), "shop.arazzo.yaml"),
+		"-o", t.TempDir(), "--format", "drill")
+	if err == nil {
+		t.Fatal("expected an error for unsupported perf format")
+	}
+	if !strings.Contains(err.Error(), "unsupported format") {
+		t.Errorf("error should mention unsupported format, got %v", err)
+	}
+}
+
+func TestGenPerfRejectsMalformedThreshold(t *testing.T) {
+	_, _, err := runCmd(t, "test", "gen", "perf",
+		filepath.Join(examplesDir(t), "shop.arazzo.yaml"),
+		"-o", t.TempDir(), "--threshold", "=oops")
+	if err == nil {
+		t.Fatal("expected an error for a malformed --threshold")
+	}
+	if !strings.Contains(err.Error(), "invalid --threshold") {
+		t.Errorf("error should mention the invalid threshold, got %v", err)
+	}
+}
+
+func TestGenPerfBareThresholdDefaultsMetric(t *testing.T) {
+	out := t.TempDir()
+	_, _, err := runCmd(t, "test", "gen", "perf",
+		filepath.Join(examplesDir(t), "shop.arazzo.yaml"),
+		"-o", out, "--workflow", "happy-path-checkout", "--threshold", "p(95)<500")
+	if err != nil {
+		t.Fatalf("test gen perf failed: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(out, "perf", "k6", "shop", "happy-path-checkout.k6.js"))
+	if err != nil {
+		t.Fatalf("read generated k6 script: %v", err)
+	}
+	if !strings.Contains(string(body), `"http_req_duration": ["p(95)<500"],`) {
+		t.Errorf("a bare threshold should default to http_req_duration\n%s", body)
+	}
+}
+
+func TestGenPerfHelpAdvertisesLoadFlags(t *testing.T) {
+	stdout, _, err := runCmd(t, "test", "gen", "perf", "--help")
+	if err != nil {
+		t.Fatalf("test gen perf --help failed: %v", err)
+	}
+	for _, want := range []string{"--vus", "--duration", "--threshold", "--format", "k6"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("'test gen perf --help' should mention %q, got:\n%s", want, stdout)
+		}
+	}
+}
+
 func TestRunE2ERequiresBaseURL(t *testing.T) {
 	_, _, err := runCmd(t, "test", "run", "e2e",
 		filepath.Join(examplesDir(t), "shop.arazzo.yaml"))
