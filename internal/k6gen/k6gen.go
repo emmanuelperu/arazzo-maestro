@@ -178,7 +178,8 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 // writeBody declares the request body constant when the step has one and
 // returns the argument to pass as the http.request body (the constant
 // name for a raw string, JSON.stringify(...) for a structured payload,
-// or "null" when there is no body).
+// or "null" when there is no body). Runtime expressions inside the
+// payload are translated to the JS identifiers holding their values.
 func writeBody(b *strings.Builder, stepID string, body *model.RequestBody) string {
 	if body == nil {
 		return "null"
@@ -186,15 +187,79 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody) strin
 	fmt.Fprintf(b, "  // requestBody content-type: %s\n", body.ContentType)
 	name := jsIdent(stepID) + "Body"
 	if s, ok := body.Payload.(string); ok {
-		fmt.Fprintf(b, "  const %s = %s;\n", name, jsString(s))
+		value, _ := jsBodyValue(s, "  ") // a string value never errors
+		fmt.Fprintf(b, "  const %s = %s;\n", name, value)
 		return name
 	}
-	if raw, err := jsonMarshal(body.Payload, "  ", "  "); err == nil {
+	if raw, err := jsBodyValue(body.Payload, "  "); err == nil {
 		fmt.Fprintf(b, "  const %s = %s;\n", name, raw)
 		return "JSON.stringify(" + name + ")"
 	}
 	fmt.Fprintf(b, "  const %s = %s;\n", name, jsString(fmt.Sprintf("%v", body.Payload)))
 	return name
+}
+
+// jsBodyValue renders a requestBody value as a JS expression, walking
+// maps and slices recursively so string values that are runtime
+// expressions become bare identifiers ("productId": productId) instead
+// of literal strings, with the same fallthrough for unrecognised forms
+// as the inline parameter translation. The layout mirrors jsonMarshal's
+// two-space indentation (sorted keys, no trailing comma) so payloads
+// without expressions render exactly as before.
+func jsBodyValue(v any, indent string) (string, error) {
+	switch t := v.(type) {
+	case string:
+		if ident, isExpr := exprIdent(t); isExpr {
+			return ident, nil
+		}
+		return jsString(t), nil
+	case map[string]any:
+		if len(t) == 0 {
+			return "{}", nil
+		}
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var b strings.Builder
+		b.WriteString("{\n")
+		for i, k := range keys {
+			val, err := jsBodyValue(t[k], indent+"  ")
+			if err != nil {
+				return "", err
+			}
+			fmt.Fprintf(&b, "%s  %s: %s%s\n", indent, jsString(k), val, comma(i, len(keys)))
+		}
+		b.WriteString(indent + "}")
+		return b.String(), nil
+	case []any:
+		if len(t) == 0 {
+			return "[]", nil
+		}
+		var b strings.Builder
+		b.WriteString("[\n")
+		for i, item := range t {
+			val, err := jsBodyValue(item, indent+"  ")
+			if err != nil {
+				return "", err
+			}
+			fmt.Fprintf(&b, "%s  %s%s\n", indent, val, comma(i, len(t)))
+		}
+		b.WriteString(indent + "]")
+		return b.String(), nil
+	default:
+		return jsonMarshal(v, "", "")
+	}
+}
+
+// comma returns the separator after element i of a length-n literal:
+// "," between elements, "" after the last one.
+func comma(i, n int) string {
+	if i < n-1 {
+		return ","
+	}
+	return ""
 }
 
 // writeChecks emits a single check() call grouping the step's success

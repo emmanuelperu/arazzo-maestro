@@ -160,19 +160,49 @@ func writeBody(b *strings.Builder, body *model.RequestBody) {
 }
 
 // serialiseBody turns the workflow's requestBody payload into the text
-// that goes inside the Hurl body block. JSON content types are marshalled
-// through encoding/json so the result is valid JSON; raw string payloads
-// are passed through; anything else falls back to Go's default formatting.
+// that goes inside the Hurl body block. Runtime expressions inside the
+// payload are translated to Hurl templates first, then JSON content
+// types are marshalled through encoding/json so the result is valid
+// JSON; raw string payloads are passed through; anything else falls
+// back to Go's default formatting.
 func serialiseBody(body *model.RequestBody) string {
-	if s, ok := body.Payload.(string); ok {
+	payload := translateBodyExprs(body.Payload)
+	if s, ok := payload.(string); ok {
 		return s
 	}
 	if strings.Contains(body.ContentType, "json") {
-		if raw, err := json.MarshalIndent(body.Payload, "", "  "); err == nil {
+		if raw, err := json.MarshalIndent(payload, "", "  "); err == nil {
 			return string(raw)
 		}
 	}
-	return fmt.Sprintf("%v", body.Payload)
+	return fmt.Sprintf("%v", payload)
+}
+
+// translateBodyExprs walks the requestBody payload and translates string
+// values that are runtime expressions, so the emitted body carries Hurl
+// templates ({{productId}}) instead of literal "$inputs..." strings.
+// Maps and slices are rebuilt with translated values; everything else
+// passes through unchanged, with the same fallthrough for unrecognised
+// forms as the inline parameter translation.
+func translateBodyExprs(v any) any {
+	switch t := v.(type) {
+	case string:
+		return translateInlineExpr(t)
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = translateBodyExprs(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = translateBodyExprs(val)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 func writeAsserts(b *strings.Builder, crits []model.SuccessCriterion) {

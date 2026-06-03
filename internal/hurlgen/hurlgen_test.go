@@ -327,6 +327,74 @@ func TestGenerateMarshalsMapBodyAsJSON(t *testing.T) {
 	assertNotContains(t, out, "map[")
 }
 
+func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload any
+		want    []string
+		notWant []string
+	}{
+		{
+			name:    "flat object value",
+			payload: map[string]any{"productId": "$inputs.productId", "quantity": 2},
+			want:    []string{`"productId": "{{productId}}"`, `"quantity": 2`},
+			notWant: []string{"$inputs.productId"},
+		},
+		{
+			name:    "step output reference",
+			payload: map[string]any{"cartId": "$steps.add-to-cart.outputs.cartId"},
+			want:    []string{`"cartId": "{{add-to-cart_cartId}}"`},
+		},
+		{
+			name:    "nested object",
+			payload: map[string]any{"customer": map[string]any{"id": "$inputs.customerId"}},
+			want:    []string{`"id": "{{customerId}}"`},
+		},
+		{
+			name: "nested array",
+			payload: map[string]any{"items": []any{
+				"$inputs.productId",
+				map[string]any{"ref": "$steps.list.outputs.first"},
+			}},
+			want: []string{`"{{productId}}"`, `"ref": "{{list_first}}"`},
+		},
+		{
+			name:    "unrecognised expression form passes through",
+			payload: map[string]any{"note": "$response.body#/x"},
+			want:    []string{`"note": "$response.body#/x"`},
+		},
+		{
+			name:    "raw string payload that is an expression",
+			payload: "$inputs.rawBody",
+			want:    []string{"{{rawBody}}"},
+			notWant: []string{"$inputs.rawBody"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wf := model.Workflow{
+				WorkflowID: "wf",
+				Steps: []model.Step{
+					{
+						StepID:      "create",
+						OperationID: "createOrder",
+						RequestBody: &model.RequestBody{ContentType: "application/json", Payload: tt.payload},
+					},
+				},
+			}
+			out, _ := Generate(wf, map[string]*oasresolver.Source{
+				"shop": loadSource(t, shopSpec),
+			})
+			for _, w := range tt.want {
+				assertContains(t, out, w)
+			}
+			for _, nw := range tt.notWant {
+				assertNotContains(t, out, nw)
+			}
+		})
+	}
+}
+
 func TestGenerateFallsBackToGoFormattingForUnknownContentType(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",
