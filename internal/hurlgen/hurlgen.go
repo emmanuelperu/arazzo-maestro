@@ -50,13 +50,28 @@ import (
 func Generate(wf model.Workflow, sources map[string]*oasresolver.Source) (string, error) {
 	var b strings.Builder
 	writeHeader(&b, wf, defaultBaseURL(wf, sources))
+	unquoted := nonStringInputs(wf.Inputs)
 	for i, step := range wf.Steps {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		writeStep(&b, step, sources)
+		writeStep(&b, step, sources, unquoted)
 	}
 	return b.String(), nil
+}
+
+// nonStringInputs lists the workflow inputs whose declared type is not
+// a JSON string, so their body templates are emitted without quotes and
+// the substituted value keeps its type.
+func nonStringInputs(inputs []model.InputProperty) map[string]bool {
+	m := make(map[string]bool)
+	for _, in := range inputs {
+		switch in.Type {
+		case "number", "integer", "boolean":
+			m[in.Name] = true
+		}
+	}
+	return m
 }
 
 func writeHeader(b *strings.Builder, wf model.Workflow, defaultBase string) {
@@ -103,7 +118,7 @@ func defaultBaseURL(wf model.Workflow, sources map[string]*oasresolver.Source) s
 	return ""
 }
 
-func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source) {
+func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source, unquoted map[string]bool) {
 	fmt.Fprintf(b, "# Step: %s\n", s.StepID)
 	if s.Description != "" {
 		for _, line := range strings.Split(strings.TrimSpace(s.Description), "\n") {
@@ -121,7 +136,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 
 	writeHeaders(b, s.Parameters)
 	writeQuery(b, s.Parameters)
-	writeBody(b, s.RequestBody)
+	writeBody(b, s.RequestBody, unquoted)
 
 	b.WriteString("\nHTTP *\n")
 	writeAsserts(b, s.SuccessCriteria)
@@ -151,12 +166,12 @@ func writeQuery(b *strings.Builder, params []model.Parameter) {
 	}
 }
 
-func writeBody(b *strings.Builder, body *model.RequestBody) {
+func writeBody(b *strings.Builder, body *model.RequestBody, unquoted map[string]bool) {
 	if body == nil {
 		return
 	}
 	fmt.Fprintf(b, "# requestBody content-type: %s\n", body.ContentType)
-	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(body))
+	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(body, unquoted))
 }
 
 // serialiseBody turns the workflow's requestBody payload into the text
@@ -164,15 +179,20 @@ func writeBody(b *strings.Builder, body *model.RequestBody) {
 // payload are translated to Hurl templates first, then JSON content
 // types are marshalled through encoding/json so the result is valid
 // JSON; raw string payloads are passed through; anything else falls
-// back to Go's default formatting.
-func serialiseBody(body *model.RequestBody) string {
+// back to Go's default formatting. Templates for non-string inputs
+// drop their JSON quotes so the substituted value keeps its type.
+func serialiseBody(body *model.RequestBody, unquoted map[string]bool) string {
 	payload := translateBodyExprs(body.Payload)
 	if s, ok := payload.(string); ok {
 		return s
 	}
 	if strings.Contains(body.ContentType, "json") {
 		if raw, err := json.MarshalIndent(payload, "", "  "); err == nil {
-			return string(raw)
+			out := string(raw)
+			for name := range unquoted {
+				out = strings.ReplaceAll(out, `"{{`+name+`}}"`, "{{"+name+"}}")
+			}
+			return out
 		}
 	}
 	return fmt.Sprintf("%v", payload)

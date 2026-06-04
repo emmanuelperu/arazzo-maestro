@@ -397,6 +397,11 @@ func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
 			payload: map[string]any{"id": "$steps.foo.bar"},
 			want:    []string{`"id": "$steps.foo.bar"`},
 		},
+		{
+			name:    "expression embedded in surrounding text stays a literal",
+			payload: map[string]any{"auth": "Bearer $inputs.productId"},
+			want:    []string{`"auth": "Bearer $inputs.productId"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -421,6 +426,27 @@ func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGenerateUnquotesNonStringInputTemplatesInBody(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs: []model.InputProperty{
+			{Name: "qty", Type: "integer"},
+			{Name: "productId", Type: "string"},
+		},
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				Payload:     map[string]any{"quantity": "$inputs.qty", "productId": "$inputs.productId"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, `"quantity": {{qty}}`)
+	assertContains(t, out, `"productId": "{{productId}}"`)
 }
 
 func TestGenerateFallsBackToGoFormattingForUnknownContentType(t *testing.T) {
