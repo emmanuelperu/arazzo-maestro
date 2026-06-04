@@ -17,7 +17,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>arazzo-maestro, lint, render &amp; test Arazzo workflows</title>
-  <meta name="description" content="A single Go binary that lints Arazzo workflow specs, renders them to standalone, eco-designed, accessible HTML, and generates runnable end-to-end tests (Hurl). No server, no build, no JavaScript.">
+  <meta name="description" content="A single Go binary that lints Arazzo workflow specs, renders them to standalone, eco-designed, accessible HTML, and generates runnable tests: end-to-end (Hurl) and performance (k6). No server, no build, no JavaScript.">
   <style>
     /* ── Blueprint theme (light) ─────────────────────────────────── */
     :root {
@@ -2382,9 +2382,9 @@ the final payment status.</p>
           <tbody>
             <tr><th scope="row">Generated workflow HTML</th><td class="val">~18 kB raw · ~3 kB gzipped</td></tr>
             <tr><th scope="row">Requests at page load</th><td class="val">1 (output) · 0 (this page)</td></tr>
-            <tr><th scope="row">Direct Go dependencies</th><td class="val">3</td></tr>
-            <tr><th scope="row">Binary size</th><td class="val">~7.6 MB, static, no cgo</td></tr>
-            <tr><th scope="row">Built-in themes passing WCAG AA</th><td class="val">10 / 10 critical pairs</td></tr>
+            <tr><th scope="row">Direct Go dependencies</th><td class="val">4</td></tr>
+            <tr><th scope="row">Binary size</th><td class="val">~19 MB, static, no cgo</td></tr>
+            <tr><th scope="row">Built-in themes passing WCAG AA</th><td class="val">11 / 11 critical pairs</td></tr>
             <tr><th scope="row">Arazzo versions</th><td class="val">1.0 &amp; 1.1</td></tr>
           </tbody>
         </table>
@@ -2397,10 +2397,10 @@ the final payment status.</p>
         <div class="section-head">
           <p class="eyebrow">Get going</p>
           <h2>Quick start</h2>
-          <p>Go 1.23+ for a source install, or run it straight from Docker, nothing else to set up.</p>
+          <p>Go 1.25+ for a source install, or run it straight from Docker, nothing else to set up.</p>
         </div>
         <div class="grid-2">
-          <pre class="terminal" tabindex="0" aria-label="Install and use with Go"><span class="cmt"># Install (Go 1.23+)</span>
+          <pre class="terminal" tabindex="0" aria-label="Install and use with Go"><span class="cmt"># Install (Go 1.25+)</span>
 <span class="pr">$</span> go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
 
 <span class="cmt"># Validate</span>
@@ -2412,7 +2412,10 @@ the final payment status.</p>
 <span class="pr">$</span> open dist/light/index.html
 
 <span class="cmt"># Generate + run e2e tests (Hurl)</span>
-<span class="pr">$</span> arazzo-maestro test run e2e workflow.yaml --base-url https://staging.example.com</pre>
+<span class="pr">$</span> arazzo-maestro test run e2e workflow.yaml --base-url https://staging.example.com
+
+<span class="cmt"># Generate perf tests (k6)</span>
+<span class="pr">$</span> arazzo-maestro test gen perf workflow.yaml --vus 10 --duration 30s</pre>
           <pre class="terminal" tabindex="0" aria-label="Run with Docker"><span class="cmt"># Or via Docker, FROM scratch image</span>
 <span class="pr">$</span> docker run --rm -v "$PWD":/work \
     ghcr.io/emmanuelperu/arazzo-maestro:latest \
@@ -2421,7 +2424,8 @@ the final payment status.</p>
 <span class="cmt"># List available themes</span>
 <span class="pr">$</span> arazzo-maestro view --list-themes
 <span class="em">dark</span>
-<span class="em">light</span> (default)</pre>
+<span class="em">light</span> (default)
+<span class="em">pb33f</span></pre>
         </div>
       </div>
     </section>
