@@ -99,6 +99,17 @@
       outline-offset: 2px;
       border-radius: var(--radius-sm);
     }
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      top: 0;
+      z-index: 10;
+      padding: 0.5rem 1rem;
+      background: var(--fill);
+      color: var(--bg);
+      font-family: var(--mono);
+    }
+    .skip-link:focus { left: 0; }
     code { font-family: var(--mono); }
     h1, h2, h3 { color: var(--heading); }
 
@@ -341,6 +352,8 @@
 </head>
 <body>
 
+  <a class="skip-link" href="#main">Skip to main content</a>
+
   <header class="wrap">
     <div class="topbar">
       <div class="brand">
@@ -367,7 +380,7 @@
     </div>
   </header>
 
-  <main>
+  <main id="main">
 
     <!-- ── HERO ─────────────────────────────────────────────────── -->
     <div class="wrap">
@@ -381,8 +394,8 @@
               arazzo-maestro turns <a href="https://spec.openapis.org/arazzo/latest.html">Arazzo</a>
               workflow specs into three things the rest of your team can actually use:
               validation that fails your CI when something is wrong, standalone
-              HTML pages anyone can open in a browser, and runnable end-to-end tests
-              you point at any environment, no server, no build, no JavaScript.
+              HTML pages anyone can open in a browser, and runnable end-to-end and
+              load tests you point at any environment, no server, no build, no JavaScript.
             </p>
             <div class="cta">
               <a class="btn btn-primary" href="https://github.com/emmanuelperu/arazzo-maestro">View on GitHub</a>
@@ -404,7 +417,10 @@ Error: 2 issue(s) found
 
 <span class="pr">$</span> arazzo-maestro test run e2e workflow.yaml --base-url https://staging.example.com
 <span class="ok">Success</span>: 6 requests, all assertions passed
-<span class="cmt"># add --report-html dist/report for an HTML report</span></pre>
+<span class="cmt"># add --report-html dist/report for an HTML report</span>
+
+<span class="pr">$</span> arazzo-maestro test gen perf workflow.yaml -o dist/
+<span class="cmt"># dist/perf/k6/happy-path-checkout.k6.js</span></pre>
           </div>
         </div>
       </div>
@@ -454,17 +470,17 @@ Error: 2 issue(s) found
         </div>
 
         <!-- pipeline schematic -->
-        <div class="pipe" aria-hidden="false">
+        <div class="pipe">
           <div class="stack">
             <div class="node">workflow.yaml<span class="sub">Arazzo</span></div>
             <div class="node">openapi.yaml<span class="sub">contract</span></div>
           </div>
-          <div class="arrow">→</div>
+          <div class="arrow" aria-hidden="true">→</div>
           <div class="node node-core">arazzo-maestro<span class="sub">single binary</span></div>
         </div>
         <div class="pipe" style="margin-top:0.75rem">
           <div class="node node-core">arazzo-maestro</div>
-          <div class="arrow">→</div>
+          <div class="arrow" aria-hidden="true">→</div>
           <div class="stack">
             <div class="node">lint<span class="sub">exit 0/1 + findings</span></div>
             <div class="node">view<span class="sub">dist/*.html</span></div>
