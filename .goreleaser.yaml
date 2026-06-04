@@ -137,7 +137,7 @@ release:
   # prerelease automatically. v0.0.1 is a regular release.
   prerelease: auto
   header: |
-    First public release of `arazzo-maestro`.
+    `arazzo-maestro` {{ .Tag }}.
 
     See the [README](https://github.com/emmanuelperu/arazzo-maestro#readme)
     for installation and usage.
@@ -145,13 +145,13 @@ release:
     ---
 
     Binaries are signed with [cosign](https://docs.sigstore.dev/cosign/overview/)
-    via GitHub OIDC. To verify:
+    via GitHub OIDC. The `.sig` assets are cosign bundles; to verify:
 
     ```sh
     cosign verify-blob \
       --certificate-identity-regexp 'https://github.com/emmanuelperu/arazzo-maestro/.github/workflows/release.yml@.*' \
       --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-      --signature arazzo-maestro_<version>_<os>_<arch>.tar.gz.sig \
+      --bundle arazzo-maestro_<version>_<os>_<arch>.tar.gz.sig \
       arazzo-maestro_<version>_<os>_<arch>.tar.gz
     ```
 
