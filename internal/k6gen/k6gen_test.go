@@ -402,6 +402,11 @@ func TestGenerateLeavesUndeclaredOrMalformedBodyExprsAsLiterals(t *testing.T) {
 			payload: map[string]any{"ref": "$steps.later.outputs.a.b"},
 			want:    []string{`"ref": "$steps.later.outputs.a.b"`},
 		},
+		{
+			name:    "expression embedded in surrounding text",
+			payload: map[string]any{"auth": "Bearer $inputs.user"},
+			want:    []string{`"auth": "Bearer $inputs.user"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

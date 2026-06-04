@@ -195,11 +195,11 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, decla
 	fmt.Fprintf(b, "  // requestBody content-type: %s\n", body.ContentType)
 	name := jsIdent(stepID) + "Body"
 	if s, ok := body.Payload.(string); ok {
-		value, _ := jsBodyValue(s, "  ", declared) // a string value never errors
+		value, _ := jsBodyValue(s, declared) // a string value never errors
 		fmt.Fprintf(b, "  const %s = %s;\n", name, value)
 		return name
 	}
-	if raw, err := jsBodyValue(body.Payload, "  ", declared); err == nil {
+	if raw, err := jsBodyValue(body.Payload, declared); err == nil {
 		fmt.Fprintf(b, "  const %s = %s;\n", name, raw)
 		return "JSON.stringify(" + name + ")"
 	}
@@ -207,67 +207,59 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, decla
 	return name
 }
 
-// jsBodyValue renders a requestBody value as a JS expression, walking
-// maps and slices recursively so string values that are runtime
-// expressions become bare identifiers ("productId": productId) instead
-// of literal strings. Only expressions mapping to a declared identifier
-// are translated; anything else stays a literal string. The layout
-// mirrors jsonMarshal's two-space indentation (sorted keys, no trailing
-// comma).
-func jsBodyValue(v any, indent string, declared map[string]bool) (string, error) {
+// jsBodyValue renders a requestBody value as a JS expression: runtime
+// expressions resolving to a declared identifier are swapped for
+// sentinels, the payload is marshalled once (indented JSON is valid
+// JS), and the quoted sentinels are replaced by the bare identifiers
+// ("productId": productId). Undeclared or malformed expressions stay
+// literal strings.
+func jsBodyValue(v any, declared map[string]bool) (string, error) {
+	var idents []string
+	swapped := swapBodyExprs(v, declared, &idents)
+	raw, err := jsonMarshal(swapped, "  ", "  ")
+	if err != nil {
+		return "", err
+	}
+	for i, ident := range idents {
+		raw = strings.Replace(raw, `"`+bodyExprSentinel(i)+`"`, ident, 1)
+	}
+	return raw, nil
+}
+
+// swapBodyExprs walks the payload and replaces every string that is a
+// runtime expression resolving to a declared identifier with a
+// sentinel, recording the identifier; everything else passes through
+// unchanged.
+func swapBodyExprs(v any, declared map[string]bool, idents *[]string) any {
 	switch t := v.(type) {
 	case string:
 		if ident, isExpr := exprIdent(t); isExpr && declared[ident] {
-			return ident, nil
+			*idents = append(*idents, ident)
+			return bodyExprSentinel(len(*idents) - 1)
 		}
-		return jsString(t), nil
+		return t
 	case map[string]any:
-		if len(t) == 0 {
-			return "{}", nil
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = swapBodyExprs(val, declared, idents)
 		}
-		keys := make([]string, 0, len(t))
-		for k := range t {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		var b strings.Builder
-		b.WriteString("{\n")
-		for i, k := range keys {
-			val, err := jsBodyValue(t[k], indent+"  ", declared)
-			if err != nil {
-				return "", err
-			}
-			fmt.Fprintf(&b, "%s  %s: %s%s\n", indent, jsString(k), val, comma(i, len(keys)))
-		}
-		b.WriteString(indent + "}")
-		return b.String(), nil
+		return out
 	case []any:
-		if len(t) == 0 {
-			return "[]", nil
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = swapBodyExprs(val, declared, idents)
 		}
-		var b strings.Builder
-		b.WriteString("[\n")
-		for i, item := range t {
-			val, err := jsBodyValue(item, indent+"  ", declared)
-			if err != nil {
-				return "", err
-			}
-			fmt.Fprintf(&b, "%s  %s%s\n", indent, val, comma(i, len(t)))
-		}
-		b.WriteString(indent + "]")
-		return b.String(), nil
+		return out
 	default:
-		return jsonMarshal(v)
+		return v
 	}
 }
 
-// comma returns the separator after element i of a length-n literal:
-// "," between elements, "" after the last one.
-func comma(i, n int) string {
-	if i < n-1 {
-		return ","
-	}
-	return ""
+// bodyExprSentinel returns the placeholder swapped in for the i-th
+// translated body expression; plain ASCII so its JSON encoding is the
+// quoted sentinel itself.
+func bodyExprSentinel(i int) string {
+	return fmt.Sprintf("__arazzo_expr_%d__", i)
 }
 
 // writeChecks emits a single check() call grouping the step's success
@@ -586,7 +578,7 @@ func jsIdent(name string) string {
 // jsString encodes v as a JS string literal. JSON string encoding
 // produces a valid, escaped double-quoted JS string.
 func jsString(v string) string {
-	raw, err := jsonMarshal(v)
+	raw, err := jsonMarshal(v, "", "")
 	if err != nil {
 		return `""`
 	}
@@ -599,7 +591,7 @@ func jsDefault(v any) string {
 	if v == nil {
 		return `''`
 	}
-	if raw, err := jsonMarshal(v); err == nil {
+	if raw, err := jsonMarshal(v, "", ""); err == nil {
 		return raw
 	}
 	return `''`
@@ -607,12 +599,17 @@ func jsDefault(v any) string {
 
 // jsonMarshal encodes v as JSON with HTML escaping disabled, so that JS
 // operators like '<' in k6 threshold expressions survive verbatim
-// instead of becoming <. The trailing newline that json.Encoder
+// instead of becoming <. With a non-empty indent the output is
+// pretty-printed (indented JSON is valid JS), each line after the first
+// carrying the given prefix. The trailing newline that json.Encoder
 // appends is trimmed.
-func jsonMarshal(v any) (string, error) {
+func jsonMarshal(v any, prefix, indent string) (string, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
+	if indent != "" {
+		enc.SetIndent(prefix, indent)
+	}
 	if err := enc.Encode(v); err != nil {
 		return "", err
 	}
