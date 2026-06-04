@@ -369,6 +369,24 @@ func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
 			want:    []string{"{{rawBody}}"},
 			notWant: []string{"$inputs.rawBody"},
 		},
+		{
+			name:    "free text after the inputs prefix stays a literal",
+			payload: map[string]any{"note": "$inputs.tax is included"},
+			want:    []string{`"note": "$inputs.tax is included"`},
+			notWant: []string{"{{tax is included}}"},
+		},
+		{
+			name:    "dotted input sub-path stays a literal",
+			payload: map[string]any{"name": "$inputs.user.name"},
+			want:    []string{`"name": "$inputs.user.name"`},
+			notWant: []string{"{{user.name}}"},
+		},
+		{
+			name:    "dotted step output sub-path stays a literal",
+			payload: map[string]any{"ref": "$steps.s.outputs.user.name"},
+			want:    []string{`"ref": "$steps.s.outputs.user.name"`},
+			notWant: []string{"{{s_user.name}}"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

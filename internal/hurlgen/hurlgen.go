@@ -303,18 +303,53 @@ func renderValue(v any) string {
 
 // translateInlineExpr maps an Arazzo runtime expression used inline
 // (in a parameter value, URL, header...) to a Hurl template. Anything
-// not recognised is returned unchanged so the user can spot it.
+// not recognised, including names that are not plain Arazzo names
+// (dotted sub-paths, free text after a matching prefix), is returned
+// unchanged so the user can spot it.
 func translateInlineExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	switch {
 	case strings.HasPrefix(e, "$inputs."):
-		return "{{" + strings.TrimPrefix(e, "$inputs.") + "}}"
+		if name := strings.TrimPrefix(e, "$inputs."); isExprName(name) {
+			return "{{" + name + "}}"
+		}
+		return expr
 	case strings.HasPrefix(e, "$steps."):
 		rest := strings.TrimPrefix(e, "$steps.")
-		return "{{" + strings.ReplaceAll(rest, ".outputs.", "_") + "}}"
+		if step, out, ok := splitStepOutput(rest); ok && isExprName(step) && isExprName(out) {
+			return "{{" + step + "_" + out + "}}"
+		}
+		return expr
 	default:
 		return expr
 	}
+}
+
+// splitStepOutput splits "<stepId>.outputs.<outputName>" into its step
+// and output parts.
+func splitStepOutput(rest string) (step, out string, ok bool) {
+	const sep = ".outputs."
+	idx := strings.Index(rest, sep)
+	if idx < 0 {
+		return "", "", false
+	}
+	return rest[:idx], rest[idx+len(sep):], true
+}
+
+// isExprName reports whether s is a plain Arazzo name (letters, digits,
+// '_' or '-'), the only form the generator can map to a Hurl variable.
+func isExprName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // translateCaptureExpr maps an Arazzo output expression to a Hurl

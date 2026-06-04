@@ -141,16 +141,24 @@ func writeOptions(b *strings.Builder, opts Options) {
 
 func writeDefaultFunc(b *strings.Builder, wf model.Workflow, sources map[string]*oasresolver.Source) {
 	b.WriteString("export default function () {\n")
+	// Identifiers declared so far: inputs first, then each step's
+	// captures as the steps are written. Body expressions are only
+	// translated to identifiers found here, so the script never
+	// references an undeclared constant.
+	declared := make(map[string]bool, len(wf.Inputs))
+	for _, in := range wf.Inputs {
+		declared[jsIdent(in.Name)] = true
+	}
 	for i, step := range wf.Steps {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		writeStep(b, step, sources)
+		writeStep(b, step, sources, declared)
 	}
 	b.WriteString("}\n")
 }
 
-func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source) {
+func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source, declared map[string]bool) {
 	fmt.Fprintf(b, "  // Step: %s\n", s.StepID)
 	if s.Description != "" {
 		for _, line := range strings.Split(strings.TrimSpace(s.Description), "\n") {
@@ -167,12 +175,12 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	url += queryString(s.Parameters)
 
 	resVar := jsIdent(s.StepID) + "Res"
-	bodyArg := writeBody(b, s.StepID, s.RequestBody)
+	bodyArg := writeBody(b, s.StepID, s.RequestBody, declared)
 	fmt.Fprintf(b, "  const %s = http.request('%s', `%s`, %s, { headers: %s });\n",
 		resVar, method, url, bodyArg, headersObject(s.Parameters))
 
 	writeChecks(b, resVar, s.StepID, s.SuccessCriteria)
-	writeCaptures(b, resVar, s.StepID, s.Outputs)
+	writeCaptures(b, resVar, s.StepID, s.Outputs, declared)
 }
 
 // writeBody declares the request body constant when the step has one and
@@ -180,18 +188,18 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 // name for a raw string, JSON.stringify(...) for a structured payload,
 // or "null" when there is no body). Runtime expressions inside the
 // payload are translated to the JS identifiers holding their values.
-func writeBody(b *strings.Builder, stepID string, body *model.RequestBody) string {
+func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, declared map[string]bool) string {
 	if body == nil {
 		return "null"
 	}
 	fmt.Fprintf(b, "  // requestBody content-type: %s\n", body.ContentType)
 	name := jsIdent(stepID) + "Body"
 	if s, ok := body.Payload.(string); ok {
-		value, _ := jsBodyValue(s, "  ") // a string value never errors
+		value, _ := jsBodyValue(s, "  ", declared) // a string value never errors
 		fmt.Fprintf(b, "  const %s = %s;\n", name, value)
 		return name
 	}
-	if raw, err := jsBodyValue(body.Payload, "  "); err == nil {
+	if raw, err := jsBodyValue(body.Payload, "  ", declared); err == nil {
 		fmt.Fprintf(b, "  const %s = %s;\n", name, raw)
 		return "JSON.stringify(" + name + ")"
 	}
@@ -202,14 +210,14 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody) strin
 // jsBodyValue renders a requestBody value as a JS expression, walking
 // maps and slices recursively so string values that are runtime
 // expressions become bare identifiers ("productId": productId) instead
-// of literal strings, with the same fallthrough for unrecognised forms
-// as the inline parameter translation. The layout mirrors jsonMarshal's
-// two-space indentation (sorted keys, no trailing comma) so payloads
-// without expressions render exactly as before.
-func jsBodyValue(v any, indent string) (string, error) {
+// of literal strings. Only expressions mapping to a declared identifier
+// are translated; anything else stays a literal string. The layout
+// mirrors jsonMarshal's two-space indentation (sorted keys, no trailing
+// comma).
+func jsBodyValue(v any, indent string, declared map[string]bool) (string, error) {
 	switch t := v.(type) {
 	case string:
-		if ident, isExpr := exprIdent(t); isExpr {
+		if ident, isExpr := exprIdent(t); isExpr && declared[ident] {
 			return ident, nil
 		}
 		return jsString(t), nil
@@ -225,7 +233,7 @@ func jsBodyValue(v any, indent string) (string, error) {
 		var b strings.Builder
 		b.WriteString("{\n")
 		for i, k := range keys {
-			val, err := jsBodyValue(t[k], indent+"  ")
+			val, err := jsBodyValue(t[k], indent+"  ", declared)
 			if err != nil {
 				return "", err
 			}
@@ -240,7 +248,7 @@ func jsBodyValue(v any, indent string) (string, error) {
 		var b strings.Builder
 		b.WriteString("[\n")
 		for i, item := range t {
-			val, err := jsBodyValue(item, indent+"  ")
+			val, err := jsBodyValue(item, indent+"  ", declared)
 			if err != nil {
 				return "", err
 			}
@@ -297,11 +305,13 @@ func writeChecks(b *strings.Builder, resVar, stepID string, crits []model.Succes
 
 // writeCaptures declares one constant per output, namespaced by step id
 // (<stepId>_<outputName>) so a later step's $steps.<stepId>.outputs.<o>
-// reference resolves to the same identifier.
-func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.OutputEntry) {
+// reference resolves to the same identifier, and registers it as
+// declared for the steps that follow.
+func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.OutputEntry, declared map[string]bool) {
 	for _, o := range outs {
 		name := jsIdent(stepID) + "_" + jsIdent(o.Name)
 		fmt.Fprintf(b, "  const %s = %s;\n", name, translateCaptureExpr(resVar, o.Expression))
+		declared[name] = true
 	}
 }
 
@@ -494,21 +504,41 @@ func exprIdent(s string) (string, bool) {
 // translateInlineExpr maps an inline Arazzo runtime expression to the JS
 // identifier holding its value. $inputs.foo -> foo, $steps.s.outputs.o ->
 // s_o. Names are sanitised so they match their declarations. Anything
-// unrecognised is returned unchanged.
+// unrecognised, including names that are not plain Arazzo names (dotted
+// sub-paths, free text after a matching prefix), is returned unchanged.
 func translateInlineExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	switch {
 	case strings.HasPrefix(e, "$inputs."):
-		return jsIdent(strings.TrimPrefix(e, "$inputs."))
+		if name := strings.TrimPrefix(e, "$inputs."); isExprName(name) {
+			return jsIdent(name)
+		}
+		return expr
 	case strings.HasPrefix(e, "$steps."):
 		rest := strings.TrimPrefix(e, "$steps.")
-		if step, out, ok := splitStepOutput(rest); ok {
+		if step, out, ok := splitStepOutput(rest); ok && isExprName(step) && isExprName(out) {
 			return jsIdent(step) + "_" + jsIdent(out)
 		}
 		return expr
 	default:
 		return expr
 	}
+}
+
+// isExprName reports whether s is a plain Arazzo name (letters, digits,
+// '_' or '-'), the only form the generator can map to an identifier.
+func isExprName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // splitStepOutput splits "<stepId>.outputs.<outputName>" into its step

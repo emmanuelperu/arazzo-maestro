@@ -317,11 +317,93 @@ func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			wf := model.Workflow{
 				WorkflowID: "wf",
-				Steps: []model.Step{{
-					StepID:      "create",
-					OperationID: "createOrder",
-					RequestBody: &model.RequestBody{ContentType: "application/json", Payload: tt.payload},
-				}},
+				Inputs: []model.InputProperty{
+					{Name: "productId", Type: "string"},
+					{Name: "customerId", Type: "string"},
+					{Name: "rawBody", Type: "string"},
+				},
+				Steps: []model.Step{
+					{
+						StepID:      "add-to-cart",
+						OperationID: "createOrder",
+						Outputs:     []model.OutputEntry{{Name: "cartId", Expression: "$response.body#/cartId"}},
+					},
+					{
+						StepID:      "list",
+						OperationID: "listProducts",
+						Outputs:     []model.OutputEntry{{Name: "first", Expression: "$response.body#/items/0/id"}},
+					},
+					{
+						StepID:      "create",
+						OperationID: "createOrder",
+						RequestBody: &model.RequestBody{ContentType: "application/json", Payload: tt.payload},
+					},
+				},
+			}
+			out := gen(t, wf, shopSources(t), defaultOpts())
+			for _, w := range tt.want {
+				assertContains(t, out, w)
+			}
+			for _, nw := range tt.notWant {
+				assertNotContains(t, out, nw)
+			}
+		})
+	}
+}
+
+func TestGenerateLeavesUndeclaredOrMalformedBodyExprsAsLiterals(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload any
+		want    []string
+		notWant []string
+	}{
+		{
+			name:    "free text after the inputs prefix",
+			payload: map[string]any{"note": "$inputs.tax is included"},
+			want:    []string{`"note": "$inputs.tax is included"`},
+			notWant: []string{"tax_is_included"},
+		},
+		{
+			name:    "dotted input sub-path",
+			payload: map[string]any{"name": "$inputs.user.name"},
+			want:    []string{`"name": "$inputs.user.name"`},
+			notWant: []string{"user_name"},
+		},
+		{
+			name:    "undeclared input",
+			payload: map[string]any{"id": "$inputs.ghost"},
+			want:    []string{`"id": "$inputs.ghost"`},
+		},
+		{
+			name:    "forward step reference",
+			payload: map[string]any{"cartId": "$steps.later.outputs.cartId"},
+			want:    []string{`"cartId": "$steps.later.outputs.cartId"`},
+			notWant: []string{`"cartId": later_cartId`},
+		},
+		{
+			name:    "raw string payload referencing an undeclared input",
+			payload: "$inputs.ghost",
+			want:    []string{`const createBody = "$inputs.ghost";`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wf := model.Workflow{
+				WorkflowID: "wf",
+				Inputs:     []model.InputProperty{{Name: "user", Type: "object"}},
+				Steps: []model.Step{
+					{
+						StepID:      "create",
+						OperationID: "createOrder",
+						RequestBody: &model.RequestBody{ContentType: "application/json", Payload: tt.payload},
+					},
+					{
+						StepID:      "later",
+						OperationID: "listProducts",
+						Outputs:     []model.OutputEntry{{Name: "cartId", Expression: "$response.body#/cartId"}},
+					},
+				},
 			}
 			out := gen(t, wf, shopSources(t), defaultOpts())
 			for _, w := range tt.want {
