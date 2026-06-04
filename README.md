@@ -7,7 +7,7 @@
 -->
 
 <p align="center">
-  <img src="./docs/banner-full.png" alt="arazzo-maestro: validator and HTML renderer for OpenAPI Arazzo workflows" width="480">
+  <img src="./docs/banner-full.webp" alt="arazzo-maestro: validator and HTML renderer for OpenAPI Arazzo workflows" width="480">
 </p>
 
 <h1 align="center">arazzo-maestro</h1>
