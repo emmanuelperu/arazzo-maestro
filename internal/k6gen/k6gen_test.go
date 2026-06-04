@@ -587,6 +587,23 @@ func TestGenerateTranslatesStatusCodeCriteriaToChecks(t *testing.T) {
 	assertContains(t, out, "// successCriteria (not translated): $response.body#/items != []")
 }
 
+func TestGenerateUnescapesAndEscapesJSONPointerForGJSON(t *testing.T) {
+	// RFC 6901 escapes (~1 -> /, ~0 -> ~) are decoded and gjson
+	// specials in the resulting key are backslash-escaped.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Outputs: []model.OutputEntry{
+				{Name: "path", Expression: "$response.body#/foo~1bar/a.b/q~0t"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, `const list_path = listRes.json("foo/bar.a\\.b.q~t");`)
+}
+
 func TestGenerateEmitsCapturesNamespacedByStep(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",

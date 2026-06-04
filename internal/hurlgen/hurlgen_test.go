@@ -561,8 +561,9 @@ func TestGenerateEmitsOutputsAsCaptures(t *testing.T) {
 }
 
 func TestGenerateHandlesEmptyJSONPointerSegment(t *testing.T) {
-	// Double-slash in the pointer produces an empty segment; it must
-	// be treated as a named (dotted) segment, not as a numeric index.
+	// Double-slash in the pointer produces an empty segment, i.e. the
+	// "" key per RFC 6901; it must be bracket-quoted (a bare dot would
+	// read as JSONPath recursive descent).
 	wf := model.Workflow{
 		WorkflowID: "wf",
 		Steps: []model.Step{
@@ -578,7 +579,34 @@ func TestGenerateHandlesEmptyJSONPointerSegment(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{
 		"shop": loadSource(t, shopSpec),
 	})
-	assertContains(t, out, `list_weird: jsonpath "$.items..id"`)
+	assertContains(t, out, `list_weird: jsonpath "$.items[''].id"`)
+}
+
+func TestGenerateQuotesAndUnescapesJSONPointerSegments(t *testing.T) {
+	// RFC 6901 escapes (~1 -> /, ~0 -> ~) are decoded, and segments
+	// that are not plain identifiers are bracket-quoted so the
+	// resulting JSONPath stays valid (a bare hyphen would parse as
+	// subtraction).
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Outputs: []model.OutputEntry{
+					{Name: "uid", Expression: "$response.body#/user-id"},
+					{Name: "path", Expression: "$response.body#/foo~1bar/q~0t"},
+					{Name: "ver", Expression: "$response.body#/v2/2fa"},
+				},
+			},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{
+		"shop": loadSource(t, shopSpec),
+	})
+	assertContains(t, out, `list_uid: jsonpath "$['user-id']"`)
+	assertContains(t, out, `list_path: jsonpath "$['foo/bar']['q~t']"`)
+	assertContains(t, out, `list_ver: jsonpath "$.v2['2fa']"`)
 }
 
 func TestGenerateChainsStepCaptureToLaterStepReference(t *testing.T) {

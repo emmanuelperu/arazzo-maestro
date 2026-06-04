@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
 	"github.com/emmanuelperu/arazzo-maestro/internal/theme"
 )
@@ -166,6 +167,34 @@ func TestRenderWorkflowContainsExpectedSections(t *testing.T) {
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("expected output to contain %q", want)
+		}
+	}
+}
+
+func TestRenderWorkflowShowsRetryLoopWhenStepIDOmitted(t *testing.T) {
+	// Per the Arazzo spec a retry action without stepId retries the
+	// current step, so the loop curve must render exactly as if the
+	// step had targeted itself explicitly.
+	w := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "pay",
+			OperationID: "payOrder",
+			OnFailure: []model.FailureAction{{
+				Name:       "retry-pay",
+				Type:       "retry",
+				RetryAfter: 1000,
+				RetryLimit: 2,
+			}},
+		}},
+	}
+	html, err := RenderWorkflow(w, loadTheme(t, "light"))
+	if err != nil {
+		t.Fatalf("RenderWorkflow: %v", err)
+	}
+	for _, want := range []string{`class="step-loop"`, `class="step-loop-curve"`} {
+		if !strings.Contains(html, want) {
+			t.Errorf("output missing %q", want)
 		}
 	}
 }
