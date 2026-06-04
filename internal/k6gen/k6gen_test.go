@@ -1,6 +1,7 @@
 package k6gen
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -386,6 +387,21 @@ func TestGenerateLeavesUndeclaredOrMalformedBodyExprsAsLiterals(t *testing.T) {
 			payload: "$inputs.ghost",
 			want:    []string{`const createBody = "$inputs.ghost";`},
 		},
+		{
+			name:    "empty name after the inputs prefix",
+			payload: map[string]any{"id": "$inputs."},
+			want:    []string{`"id": "$inputs."`},
+		},
+		{
+			name:    "step reference without an outputs segment",
+			payload: map[string]any{"id": "$steps.foo.bar"},
+			want:    []string{`"id": "$steps.foo.bar"`},
+		},
+		{
+			name:    "dotted step output sub-path",
+			payload: map[string]any{"ref": "$steps.later.outputs.a.b"},
+			want:    []string{`"ref": "$steps.later.outputs.a.b"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -413,6 +429,130 @@ func TestGenerateLeavesUndeclaredOrMalformedBodyExprsAsLiterals(t *testing.T) {
 				assertNotContains(t, out, nw)
 			}
 		})
+	}
+}
+
+func TestGenerateRendersStepDescription(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Description: "Browse the catalog\nfirst page only",
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "  // Browse the catalog\n  // first page only\n")
+}
+
+func TestGenerateBodyEdgeCases(t *testing.T) {
+	bodyWf := func(payload any) model.Workflow {
+		return model.Workflow{
+			WorkflowID: "wf",
+			Steps: []model.Step{{
+				StepID:      "create",
+				OperationID: "createOrder",
+				RequestBody: &model.RequestBody{ContentType: "application/json", Payload: payload},
+			}},
+		}
+	}
+	t.Run("empty containers render as {} and []", func(t *testing.T) {
+		out := gen(t, bodyWf(map[string]any{"obj": map[string]any{}, "arr": []any{}}), shopSources(t), defaultOpts())
+		assertContains(t, out, `"obj": {}`)
+		assertContains(t, out, `"arr": []`)
+	})
+	t.Run("unmarshalable map value falls back to a quoted literal", func(t *testing.T) {
+		out := gen(t, bodyWf(map[string]any{"bad": math.NaN()}), shopSources(t), defaultOpts())
+		assertContains(t, out, `const createBody = "map[bad:NaN]";`)
+		assertNotContains(t, out, "JSON.stringify")
+	})
+	t.Run("unmarshalable array value falls back to a quoted literal", func(t *testing.T) {
+		out := gen(t, bodyWf([]any{math.NaN()}), shopSources(t), defaultOpts())
+		assertContains(t, out, `const createBody = "[NaN]";`)
+		assertNotContains(t, out, "JSON.stringify")
+	})
+}
+
+func TestGenerateSanitisesLeadingDigitIdentifiers(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "1st-id2", Type: "string"}},
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{ContentType: "application/json", Payload: map[string]any{"id": "$inputs.1st-id2"}},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, `const _1st_id2 = __ENV["1st-id2"]`)
+	assertContains(t, out, `"id": _1st_id2`)
+}
+
+func TestGenerateOmitsCheckWhenNoCriterionTranslates(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			SuccessCriteria: []model.SuccessCriterion{
+				{Condition: `$response.body#/status == "OK"`},
+				{Condition: "$statusCode == abc"},
+				{Condition: "$statusCode <="},
+				{Condition: "$statusCode ~ 200"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "// successCriteria (not translated): $statusCode == abc")
+	assertContains(t, out, "// successCriteria (not translated): $statusCode <=")
+	assertNotContains(t, out, "check(")
+}
+
+func TestGenerateFallsBackOnUnknownQualifiedSource(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "ghost", OperationID: "$sourceDescriptions.ghost.listProducts"},
+			{StepID: "list", OperationID: "listProducts"},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "// unresolved operationId: $sourceDescriptions.ghost.listProducts")
+	// defaultBaseURL skips the unresolvable step and documents the next one.
+	assertContains(t, out, "https://api.shop.test")
+}
+
+func TestGenerateFallsBackOnMalformedQualifiedRef(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps:      []model.Step{{StepID: "s", OperationID: "$sourceDescriptions.bare"}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "// unresolved operationId: $sourceDescriptions.bare")
+}
+
+func TestGenerateRendersNonStringHeaderValue(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters:  []model.Parameter{{Name: "X-Retry", In: "header", Value: 3}},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, `"X-Retry": 3`)
+}
+
+func TestJSIdentEmptyName(t *testing.T) {
+	if got := jsIdent(""); got != "_" {
+		t.Errorf("jsIdent(%q) = %q, want %q", "", got, "_")
+	}
+}
+
+func TestJSDefaultUnmarshalableFallsBack(t *testing.T) {
+	if got := jsDefault(math.NaN()); got != "''" {
+		t.Errorf("jsDefault(NaN) = %q, want ''", got)
 	}
 }
 

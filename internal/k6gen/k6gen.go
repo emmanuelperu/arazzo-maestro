@@ -257,7 +257,7 @@ func jsBodyValue(v any, indent string, declared map[string]bool) (string, error)
 		b.WriteString(indent + "]")
 		return b.String(), nil
 	default:
-		return jsonMarshal(v, "", "")
+		return jsonMarshal(v)
 	}
 }
 
@@ -586,7 +586,7 @@ func jsIdent(name string) string {
 // jsString encodes v as a JS string literal. JSON string encoding
 // produces a valid, escaped double-quoted JS string.
 func jsString(v string) string {
-	raw, err := jsonMarshal(v, "", "")
+	raw, err := jsonMarshal(v)
 	if err != nil {
 		return `""`
 	}
@@ -599,7 +599,7 @@ func jsDefault(v any) string {
 	if v == nil {
 		return `''`
 	}
-	if raw, err := jsonMarshal(v, "", ""); err == nil {
+	if raw, err := jsonMarshal(v); err == nil {
 		return raw
 	}
 	return `''`
@@ -607,17 +607,12 @@ func jsDefault(v any) string {
 
 // jsonMarshal encodes v as JSON with HTML escaping disabled, so that JS
 // operators like '<' in k6 threshold expressions survive verbatim
-// instead of becoming <. With a non-empty indent the output is
-// pretty-printed (indented JSON is valid JS), each line carrying the
-// given prefix so a multi-line value aligns under its declaration. The
-// trailing newline that json.Encoder appends is trimmed.
-func jsonMarshal(v any, prefix, indent string) (string, error) {
+// instead of becoming <. The trailing newline that json.Encoder
+// appends is trimmed.
+func jsonMarshal(v any) (string, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
-	if indent != "" {
-		enc.SetIndent(prefix, indent)
-	}
 	if err := enc.Encode(v); err != nil {
 		return "", err
 	}

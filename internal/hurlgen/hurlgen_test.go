@@ -387,6 +387,16 @@ func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
 			want:    []string{`"ref": "$steps.s.outputs.user.name"`},
 			notWant: []string{"{{s_user.name}}"},
 		},
+		{
+			name:    "empty name after the inputs prefix stays a literal",
+			payload: map[string]any{"id": "$inputs."},
+			want:    []string{`"id": "$inputs."`},
+		},
+		{
+			name:    "step reference without an outputs segment stays a literal",
+			payload: map[string]any{"id": "$steps.foo.bar"},
+			want:    []string{`"id": "$steps.foo.bar"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
