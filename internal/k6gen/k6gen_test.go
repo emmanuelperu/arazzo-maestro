@@ -604,6 +604,28 @@ func TestGenerateUnescapesAndEscapesJSONPointerForGJSON(t *testing.T) {
 	assertContains(t, out, `const list_path = listRes.json("foo/bar.a\\.b.q~t");`)
 }
 
+func TestGenerateEscapesGJSONSyntaxCharacters(t *testing.T) {
+	// Keys containing gjson syntax characters (| # and the backslash
+	// escape character itself) must be escaped or the lookup silently
+	// resolves to nothing.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Outputs: []model.OutputEntry{
+				{Name: "pipe", Expression: "$response.body#/a|b"},
+				{Name: "hash", Expression: "$response.body#/a#b"},
+				{Name: "bslash", Expression: `$response.body#/a\b`},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, `const list_pipe = listRes.json("a\\|b");`)
+	assertContains(t, out, `const list_hash = listRes.json("a\\#b");`)
+	assertContains(t, out, `const list_bslash = listRes.json("a\\\\b");`)
+}
+
 func TestGenerateEmitsCapturesNamespacedByStep(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",
