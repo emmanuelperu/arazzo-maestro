@@ -609,6 +609,32 @@ func TestGenerateQuotesAndUnescapesJSONPointerSegments(t *testing.T) {
 	assertContains(t, out, `list_ver: jsonpath "$.v2['2fa']"`)
 }
 
+func TestGenerateFallsBackOnUnrepresentableJSONPointerSegments(t *testing.T) {
+	// Hurl's jsonpath grammar offers no escape for quotes or
+	// backslashes inside a bracket segment, so such keys degrade to
+	// the unsupported-comment pattern instead of an invalid file.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Outputs: []model.OutputEntry{
+					{Name: "apos", Expression: "$response.body#/it's"},
+					{Name: "quote", Expression: `$response.body#/a"b`},
+					{Name: "bslash", Expression: `$response.body#/a\b`},
+				},
+			},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{
+		"shop": loadSource(t, shopSpec),
+	})
+	assertContains(t, out, `list_apos: # unsupported: $response.body#/it's`)
+	assertContains(t, out, `list_quote: # unsupported: $response.body#/a"b`)
+	assertContains(t, out, `list_bslash: # unsupported: $response.body#/a\b`)
+}
+
 func TestGenerateChainsStepCaptureToLaterStepReference(t *testing.T) {
 	// The whole point of generating Hurl rather than a bag of
 	// unrelated requests: a capture defined in step A must produce a

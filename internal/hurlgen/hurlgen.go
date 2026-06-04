@@ -439,7 +439,10 @@ func isExprName(s string) bool {
 func translateCaptureExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	if strings.HasPrefix(e, "$response.body#/") {
-		return `jsonpath "` + jsonPointerToJSONPath(strings.TrimPrefix(e, "$response.body#/")) + `"`
+		if path, ok := jsonPointerToJSONPath(strings.TrimPrefix(e, "$response.body#/")); ok {
+			return `jsonpath "` + path + `"`
+		}
+		return "# unsupported: " + expr
 	}
 	if e == "$statusCode" {
 		return "status"
@@ -451,9 +454,11 @@ func translateCaptureExpr(expr string) string {
 // after '#/') to a JSONPath expression rooted at $. Segments are
 // RFC 6901-unescaped (~1 -> /, ~0 -> ~); numeric segments are emitted
 // as array indexers ([0]); plain identifier segments are dotted
-// (.name); anything else is bracket-quoted (['user-id']) so the result
-// stays valid JSONPath.
-func jsonPointerToJSONPath(ptr string) string {
+// (.name); anything else is bracket-quoted (['user-id']). Hurl's
+// jsonpath grammar offers no escape for quotes or backslashes inside a
+// bracket segment, so a key containing one is not representable and
+// ok=false is returned.
+func jsonPointerToJSONPath(ptr string) (string, bool) {
 	var b strings.Builder
 	b.WriteString("$")
 	for _, seg := range strings.Split(ptr, "/") {
@@ -464,11 +469,13 @@ func jsonPointerToJSONPath(ptr string) string {
 		case isJSONPathIdent(seg):
 			b.WriteString(".")
 			b.WriteString(seg)
+		case strings.ContainsAny(seg, `'"\`):
+			return "", false
 		default:
-			fmt.Fprintf(&b, "['%s']", strings.ReplaceAll(seg, "'", `\'`))
+			fmt.Fprintf(&b, "['%s']", seg)
 		}
 	}
-	return b.String()
+	return b.String(), true
 }
 
 // unescapeJSONPointer decodes the RFC 6901 escape sequences inside a
