@@ -151,12 +151,13 @@ func buildTemplate() (*template.Template, error) {
 		},
 		"add1": func(i int) int { return i + 1 },
 		// stepRetrySelfAction returns the first onFailure retry action
-		// targeting the step itself, or nil. Used to draw the visible
-		// loop curve on the right side of the step with the retry
-		// meta inline.
+		// targeting the step itself, or nil. An omitted stepId retries
+		// the current step per the Arazzo spec, so it counts too. Used
+		// to draw the visible loop curve on the right side of the step
+		// with the retry meta inline.
 		"stepRetrySelfAction": func(step model.Step) *model.FailureAction {
 			for i, a := range step.OnFailure {
-				if a.Type == "retry" && a.StepID == step.StepID {
+				if a.Type == "retry" && (a.StepID == "" || a.StepID == step.StepID) {
 					return &step.OnFailure[i]
 				}
 			}

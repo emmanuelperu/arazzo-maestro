@@ -556,9 +556,26 @@ func splitStepOutput(rest string) (step, out string, ok bool) {
 
 // jsonPointerToGJSON converts the body of a JSON Pointer (after '#/') to
 // a gjson selector, which is what k6's Response.json() expects: segments
-// joined by dots, numeric segments kept as array indices.
+// are RFC 6901-unescaped (~1 -> /, ~0 -> ~), gjson specials (. * ?)
+// backslash-escaped, then joined by dots; numeric segments keep working
+// as array indices.
 func jsonPointerToGJSON(ptr string) string {
-	return strings.ReplaceAll(ptr, "/", ".")
+	segs := strings.Split(ptr, "/")
+	for i, seg := range segs {
+		segs[i] = gjsonEscaper.Replace(unescapeJSONPointer(seg))
+	}
+	return strings.Join(segs, ".")
+}
+
+// gjsonEscaper protects characters that gjson treats as syntax inside a
+// path segment.
+var gjsonEscaper = strings.NewReplacer(".", `\.`, "*", `\*`, "?", `\?`)
+
+// unescapeJSONPointer decodes the RFC 6901 escape sequences inside a
+// pointer segment: ~1 is '/', ~0 is '~'. ~1 must be decoded first so
+// that ~01 yields the literal ~1.
+func unescapeJSONPointer(seg string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(seg, "~1", "/"), "~0", "~")
 }
 
 // jsIdent turns an arbitrary name into a valid JS identifier: every

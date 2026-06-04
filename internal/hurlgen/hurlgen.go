@@ -448,21 +448,55 @@ func translateCaptureExpr(expr string) string {
 }
 
 // jsonPointerToJSONPath converts the body of a JSON Pointer (the part
-// after '#/') to a JSONPath expression rooted at $. Numeric segments
-// are emitted as array indexers ([0]) so the result is a valid
-// JSONPath; named segments are dotted (.name).
+// after '#/') to a JSONPath expression rooted at $. Segments are
+// RFC 6901-unescaped (~1 -> /, ~0 -> ~); numeric segments are emitted
+// as array indexers ([0]); plain identifier segments are dotted
+// (.name); anything else is bracket-quoted (['user-id']) so the result
+// stays valid JSONPath.
 func jsonPointerToJSONPath(ptr string) string {
 	var b strings.Builder
 	b.WriteString("$")
 	for _, seg := range strings.Split(ptr, "/") {
-		if isUint(seg) {
+		seg = unescapeJSONPointer(seg)
+		switch {
+		case isUint(seg):
 			fmt.Fprintf(&b, "[%s]", seg)
-		} else {
+		case isJSONPathIdent(seg):
 			b.WriteString(".")
 			b.WriteString(seg)
+		default:
+			fmt.Fprintf(&b, "['%s']", strings.ReplaceAll(seg, "'", `\'`))
 		}
 	}
 	return b.String()
+}
+
+// unescapeJSONPointer decodes the RFC 6901 escape sequences inside a
+// pointer segment: ~1 is '/', ~0 is '~'. ~1 must be decoded first so
+// that ~01 yields the literal ~1.
+func unescapeJSONPointer(seg string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(seg, "~1", "/"), "~0", "~")
+}
+
+// isJSONPathIdent reports whether s is a plain identifier segment
+// (letters, digits or '_', not starting with a digit), safe to emit in
+// JSONPath dot notation.
+func isJSONPathIdent(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r == '_':
+		case r >= '0' && r <= '9':
+			if i == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func isUint(s string) bool {
