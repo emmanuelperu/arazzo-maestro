@@ -41,7 +41,7 @@ Accept-Language: {{acceptLanguage}}
 # requestBody content-type: application/json
 ```
 {
-  "productId": "$inputs.productId",
+  "productId": "{{productId}}",
   "quantity": 2
 }
 ```

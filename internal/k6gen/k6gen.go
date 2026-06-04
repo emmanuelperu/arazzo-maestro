@@ -141,16 +141,24 @@ func writeOptions(b *strings.Builder, opts Options) {
 
 func writeDefaultFunc(b *strings.Builder, wf model.Workflow, sources map[string]*oasresolver.Source) {
 	b.WriteString("export default function () {\n")
+	// Identifiers declared so far: inputs first, then each step's
+	// captures as the steps are written. Body expressions are only
+	// translated to identifiers found here, so the script never
+	// references an undeclared constant.
+	declared := make(map[string]bool, len(wf.Inputs))
+	for _, in := range wf.Inputs {
+		declared[jsIdent(in.Name)] = true
+	}
 	for i, step := range wf.Steps {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		writeStep(b, step, sources)
+		writeStep(b, step, sources, declared)
 	}
 	b.WriteString("}\n")
 }
 
-func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source) {
+func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source, declared map[string]bool) {
 	fmt.Fprintf(b, "  // Step: %s\n", s.StepID)
 	if s.Description != "" {
 		for _, line := range strings.Split(strings.TrimSpace(s.Description), "\n") {
@@ -167,34 +175,101 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	url += queryString(s.Parameters)
 
 	resVar := jsIdent(s.StepID) + "Res"
-	bodyArg := writeBody(b, s.StepID, s.RequestBody)
+	bodyArg := writeBody(b, s.StepID, s.RequestBody, declared)
 	fmt.Fprintf(b, "  const %s = http.request('%s', `%s`, %s, { headers: %s });\n",
 		resVar, method, url, bodyArg, headersObject(s.Parameters))
 
 	writeChecks(b, resVar, s.StepID, s.SuccessCriteria)
-	writeCaptures(b, resVar, s.StepID, s.Outputs)
+	writeCaptures(b, resVar, s.StepID, s.Outputs, declared)
 }
 
 // writeBody declares the request body constant when the step has one and
 // returns the argument to pass as the http.request body (the constant
 // name for a raw string, JSON.stringify(...) for a structured payload,
-// or "null" when there is no body).
-func writeBody(b *strings.Builder, stepID string, body *model.RequestBody) string {
+// or "null" when there is no body). Runtime expressions inside the
+// payload are translated to the JS identifiers holding their values.
+func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, declared map[string]bool) string {
 	if body == nil {
 		return "null"
 	}
 	fmt.Fprintf(b, "  // requestBody content-type: %s\n", body.ContentType)
 	name := jsIdent(stepID) + "Body"
 	if s, ok := body.Payload.(string); ok {
-		fmt.Fprintf(b, "  const %s = %s;\n", name, jsString(s))
+		value, _ := jsBodyValue(s, declared) // a string value never errors
+		fmt.Fprintf(b, "  const %s = %s;\n", name, value)
 		return name
 	}
-	if raw, err := jsonMarshal(body.Payload, "  ", "  "); err == nil {
+	if raw, err := jsBodyValue(body.Payload, declared); err == nil {
 		fmt.Fprintf(b, "  const %s = %s;\n", name, raw)
 		return "JSON.stringify(" + name + ")"
 	}
 	fmt.Fprintf(b, "  const %s = %s;\n", name, jsString(fmt.Sprintf("%v", body.Payload)))
 	return name
+}
+
+// jsBodyValue renders a requestBody value as a JS expression: runtime
+// expressions resolving to a declared identifier are swapped for
+// sentinels, the payload is marshalled once (indented JSON is valid
+// JS), and the quoted sentinels are replaced by the bare identifiers
+// ("productId": productId). Undeclared or malformed expressions stay
+// literal strings.
+func jsBodyValue(v any, declared map[string]bool) (string, error) {
+	// Derive a sentinel base absent from the payload itself, so a
+	// literal string can never be mistaken for a swapped expression.
+	probe, err := jsonMarshal(v, "", "")
+	if err != nil {
+		return "", err
+	}
+	base := "__arazzo_expr_"
+	for strings.Contains(probe, base) {
+		base = "_" + base
+	}
+	var idents []string
+	swapped := swapBodyExprs(v, declared, base, &idents)
+	raw, err := jsonMarshal(swapped, "  ", "  ")
+	if err != nil {
+		return "", err
+	}
+	for i, ident := range idents {
+		raw = strings.Replace(raw, `"`+bodyExprSentinel(base, i)+`"`, ident, 1)
+	}
+	return raw, nil
+}
+
+// swapBodyExprs walks the payload and replaces every string that is a
+// runtime expression resolving to a declared identifier with a
+// sentinel, recording the identifier; everything else passes through
+// unchanged.
+func swapBodyExprs(v any, declared map[string]bool, base string, idents *[]string) any {
+	switch t := v.(type) {
+	case string:
+		if ident, isExpr := exprIdent(t); isExpr && declared[ident] {
+			*idents = append(*idents, ident)
+			return bodyExprSentinel(base, len(*idents)-1)
+		}
+		return t
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = swapBodyExprs(val, declared, base, idents)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = swapBodyExprs(val, declared, base, idents)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+// bodyExprSentinel returns the placeholder swapped in for the i-th
+// translated body expression; plain ASCII so its JSON encoding is the
+// quoted sentinel itself.
+func bodyExprSentinel(base string, i int) string {
+	return fmt.Sprintf("%s%d__", base, i)
 }
 
 // writeChecks emits a single check() call grouping the step's success
@@ -232,11 +307,13 @@ func writeChecks(b *strings.Builder, resVar, stepID string, crits []model.Succes
 
 // writeCaptures declares one constant per output, namespaced by step id
 // (<stepId>_<outputName>) so a later step's $steps.<stepId>.outputs.<o>
-// reference resolves to the same identifier.
-func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.OutputEntry) {
+// reference resolves to the same identifier, and registers it as
+// declared for the steps that follow.
+func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.OutputEntry, declared map[string]bool) {
 	for _, o := range outs {
 		name := jsIdent(stepID) + "_" + jsIdent(o.Name)
 		fmt.Fprintf(b, "  const %s = %s;\n", name, translateCaptureExpr(resVar, o.Expression))
+		declared[name] = true
 	}
 }
 
@@ -429,21 +506,41 @@ func exprIdent(s string) (string, bool) {
 // translateInlineExpr maps an inline Arazzo runtime expression to the JS
 // identifier holding its value. $inputs.foo -> foo, $steps.s.outputs.o ->
 // s_o. Names are sanitised so they match their declarations. Anything
-// unrecognised is returned unchanged.
+// unrecognised, including names that are not plain Arazzo names (dotted
+// sub-paths, free text after a matching prefix), is returned unchanged.
 func translateInlineExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	switch {
 	case strings.HasPrefix(e, "$inputs."):
-		return jsIdent(strings.TrimPrefix(e, "$inputs."))
+		if name := strings.TrimPrefix(e, "$inputs."); isExprName(name) {
+			return jsIdent(name)
+		}
+		return expr
 	case strings.HasPrefix(e, "$steps."):
 		rest := strings.TrimPrefix(e, "$steps.")
-		if step, out, ok := splitStepOutput(rest); ok {
+		if step, out, ok := splitStepOutput(rest); ok && isExprName(step) && isExprName(out) {
 			return jsIdent(step) + "_" + jsIdent(out)
 		}
 		return expr
 	default:
 		return expr
 	}
+}
+
+// isExprName reports whether s is a plain Arazzo name (letters, digits,
+// '_' or '-'), the only form the generator can map to an identifier.
+func isExprName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // splitStepOutput splits "<stepId>.outputs.<outputName>" into its step
@@ -513,9 +610,9 @@ func jsDefault(v any) string {
 // jsonMarshal encodes v as JSON with HTML escaping disabled, so that JS
 // operators like '<' in k6 threshold expressions survive verbatim
 // instead of becoming <. With a non-empty indent the output is
-// pretty-printed (indented JSON is valid JS), each line carrying the
-// given prefix so a multi-line value aligns under its declaration. The
-// trailing newline that json.Encoder appends is trimmed.
+// pretty-printed (indented JSON is valid JS), each line after the first
+// carrying the given prefix. The trailing newline that json.Encoder
+// appends is trimmed.
 func jsonMarshal(v any, prefix, indent string) (string, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

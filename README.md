@@ -7,7 +7,7 @@
 -->
 
 <p align="center">
-  <img src="./docs/banner.webp" alt="arazzo-maestro: validator and HTML renderer for OpenAPI Arazzo workflows" width="480">
+  <img src="./docs/banner-full.webp" alt="arazzo-maestro: validator and HTML renderer for OpenAPI Arazzo workflows" width="480">
 </p>
 
 <h1 align="center">arazzo-maestro</h1>
@@ -67,7 +67,7 @@ themes.yml (opt.)        ──┘                       └─►  test perf �
 | Validate Arazzo files in CI | ✅ Single binary, deterministic, offline. `lint` → exit code + parseable findings | An IDE plugin |
 | Share workflows with non-devs | ✅ Standalone HTML, no IDE, no auth | A live editor |
 | Cross-file integrity (operationId exists?) | ✅ Reads `sourceDescriptions.url`, indexes operations, validates references | A full OpenAPI validator |
-| Turn a workflow into runnable tests | ✅ `test gen/run e2e` emits Hurl files (`{{baseUrl}}`, captures, asserts), runs them, writes an HTML report | A workflow runtime/orchestrator |
+| Turn a workflow into runnable tests | ✅ `test gen/run e2e` emits Hurl files (`{{baseUrl}}`, captures, asserts), runs them, writes an HTML report; `test gen perf` emits k6 scripts | A workflow runtime/orchestrator |
 | Eco-designed output | ✅ 1 network request, system fonts, ~18 kB HTML | A pixel-perfect design system |
 | Accessibility-first | ✅ WCAG 2.2 AA contrasts, semantic HTML, `aria-hidden` on decoratives | An a11y testing tool |
 
@@ -76,10 +76,10 @@ See ["What makes us different"](#what-makes-us-different) below for the longer t
 ## Quick start
 
 ```bash
-# Install (Go 1.23+)
+# Install (Go 1.25+)
 go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
 
-# Or build the Docker image locally (~5 MB FROM scratch)
+# Or build the Docker image locally (~19 MB FROM scratch)
 docker build --build-arg VERSION=0.0.1 -t arazzo-maestro:0.0.1 .
 # Mount cwd into /work AND set it as workdir, so relative paths
 # (e.g. examples/shop.arazzo.yaml, dist/) resolve against your host cwd.
@@ -114,7 +114,7 @@ make dist
 
 The Makefile iterates over `examples/*.arazzo.yaml`: adding a new file requires no change to the build command.
 
-> 📂 **Live HTML demos in this repo**: [`dist/shop/{light,dark}/`](./dist/shop) and [`dist/checkout-branching/{light,dark}/`](./dist/checkout-branching). Regenerate with `make dist`.
+> 📂 **Try the HTML output locally**: `make dist` renders every example into `dist/<workflow>/{light,dark}/` (the directory is gitignored).
 
 ## Features
 
@@ -195,7 +195,7 @@ Turn an Arazzo workflow into a runnable test artifact, then run it against any e
 ```text
 arazzo-maestro test gen e2e  <file> [flags]      Write end-to-end functional tests to disk
 arazzo-maestro test run e2e  <file> [flags]      Generate + run them against an endpoint
-arazzo-maestro test gen perf <file> [flags]      Load / performance tests (planned, #22)
+arazzo-maestro test gen perf <file> [flags]      Load / performance tests (k6)
 ```
 
 The kind (`e2e` / `perf`) is a subcommand so each one declares its own flags: e2e doesn't pretend to know about virtual users, perf doesn't pretend to know about response assertions. The target technology is picked through `--format`, with a sensible default per kind. Cobra validates the combination, so `--format=drill` on `e2e` is rejected at parse time; no manual validation code.
@@ -263,7 +263,7 @@ k6 run -e BASE_URL=https://staging.example.com -e productId=p-001 \
   dist/perf/k6/shop/happy-path-checkout.k6.js
 ```
 
-Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are not substituted yet, same as the e2e generator. Drill is a planned lighter alternative.
+Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are substituted too (`"$inputs.productId"` becomes the `productId` constant; the e2e generator emits `{{productId}}`, unquoted when the input's declared type is numeric or boolean). Only whole-string expressions resolving to a declared input or earlier step output are substituted; anything else stays a literal. Drill is a planned lighter alternative.
 
 The perf-only flags (`--vus`, `--duration`, `--threshold`) live on `test gen perf` so `test gen perf --help` documents exactly what makes sense for load testing; `test gen e2e --help` stays focused on functional concerns. Both subcommands share the same underlying workflow IR, so adding a new format is a per-template change, not a CLI redesign.
 
@@ -271,7 +271,7 @@ The perf-only flags (`--vus`, `--duration`, `--threshold`) live on `test gen per
 
 These are **engineering constraints**, not afterthoughts. The rules are formalised in [`.agents/rules/`](./.agents/rules/) and enforced by reviews and tests:
 
-- **Eco-design**: 1 network request at page load (Tailwind CDN), ~23 kB HTML, ~4 kB gzipped, no JavaScript, no fonts loaded from third parties, single Go binary (~5 MB) packaged in a `FROM scratch` Docker image.
+- **Eco-design**: 1 network request at page load (Tailwind CDN), ~23 kB HTML, ~4 kB gzipped, no JavaScript, no fonts loaded from third parties, single Go binary (~19 MB) packaged in a `FROM scratch` Docker image.
 - **Accessibility**: WCAG 2.2 AA contrasts (4.5:1 on body text), semantic HTML (`<main>`, `<section>`, `<h1>`→`<h2>`→`<h3>`), `aria-hidden` on decorative icons, visible focus, `prefers-reduced-motion` honoured, no info conveyed by colour alone, fluid `rem` sizing.
 
 ### 🧰 Built-in CLI
@@ -326,12 +326,13 @@ internal/
 │                  linter.go (uniqueness, $steps.X.outputs.Y references)
 │                  crossfile.go (sourceDescriptions[].url → oasresolver, opId checks)
 ├── hurlgen/       model.Workflow + oasresolver → Hurl (.hurl) e2e test text
+├── k6gen/         model.Workflow + oasresolver → k6 (.k6.js) perf test script
 ├── theme/         Loads built-in + user themes, validates, audits WCAG contrast
 └── renderer/      model + theme → standalone HTML (html/template + embedded assets)
 cmd/arazzo-maestro/   Cobra CLI entry point
 ```
 
-Dependency graph: `model` → ∅, `parser` → `model`, `oasresolver` → ∅ (external: `pb33f/libopenapi`), `linter` → `parser` + `model` + `oasresolver`, `hurlgen` → `model` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `cmd` → all. No cycles.
+Dependency graph: `model` → ∅, `parser` → `model`, `oasresolver` → ∅ (external: `pb33f/libopenapi`), `linter` → `parser` + `model` + `oasresolver`, `hurlgen` → `model` + `oasresolver`, `k6gen` → `model` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `cmd` → all. No cycles.
 
 ## What makes us different
 
@@ -363,7 +364,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.23' }
+        with: { go-version: '1.25' }
       - run: |
           go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
           arazzo-maestro lint workflows/checkout.yaml
@@ -414,13 +415,13 @@ docker run --rm -v "$PWD":/work -w /work \
 ```
 
 `-v "$PWD":/work` exposes your current directory inside the container,
-and `-w /work` makes it the working directory — so relative paths
+and `-w /work` makes it the working directory, so relative paths
 (input file, `-o dist/` default) resolve where you expect on the host.
 Without `-w`, the container's cwd is `/` and `view`'s default output
 (`./dist/`) is written to `/dist/` inside the container, then discarded
 by `--rm`.
 
-The image is `FROM scratch` (~5 MB) — no shell, no libc, no package
+The image is `FROM scratch` (~19 MB): no shell, no libc, no package
 manager. The binary is the entire userland.
 
 ## Roadmap
@@ -438,7 +439,11 @@ manager. The binary is the entire userland.
 - [x] `Dockerfile` (`FROM scratch`, ~5 MB) with `VERSION` build-arg
 - [x] OpenSSF Phase 2: `goreleaser` (multi-OS binaries + Docker image), cosign-signed releases, first tag `v0.0.1`
 - [x] OpenSSF Phase 3: actions pinned to commit SHAs, CodeQL SAST workflow, `FuzzParseBytes` for the parser, `repo_token` plumbed for a `SCORECARD_TOKEN` PAT (unlocks Branch-Protection check once the secret is set)
-- [ ] Reach OpenSSF Best Practices `passing` badge ([project 12929](https://www.bestpractices.dev/projects/12929) — currently `in_progress`)
+- [x] OpenAPI source parsing via `pb33f/libopenapi` (`internal/oasresolver`, replaces the hand-rolled YAML walk)
+- [x] `test gen e2e` / `test run e2e`: Hurl generation, runner with `--base-url`, `--variable`, optional HTML report
+- [x] `test gen perf`: k6 script generation with `--vus` / `--duration` / `--threshold`, runtime expressions substituted in request bodies
+- [ ] Reach OpenSSF Best Practices `passing` badge ([project 12929](https://www.bestpractices.dev/projects/12929), currently `in_progress`)
+- [ ] Shrink the binary (~5 MB before libopenapi, ~19 MB after: its `index` package links the whole `net/http`/TLS stack for remote `$ref` support we deliberately refuse)
 - [ ] Nested workflows (`step.workflowId`)
 - [ ] `step.dependsOn` parallel branches
 - [ ] `components.{parameters,successActions,failureActions}` `$ref` reuse
@@ -466,11 +471,11 @@ manager. The binary is the entire userland.
 |---|---|
 | Generated HTML (`happy-path-checkout.html`) | ~23 kB raw, ~4 kB gzipped |
 | Network requests at page load | 1 (Tailwind CDN, to be internalised) |
-| Binary size (`-s -w -trimpath`) | ~5.1 MB |
-| Docker image (`FROM scratch`) | ~5.0 MB |
-| Direct dependencies | 3 (`cobra`, `yaml.v3`, `jsonschema`) |
-| Lines of Go (excl. tests) | ~1,300 |
-| Test coverage | parser 82 %, linter 83 %, theme 86 %, renderer 81 %, cmd 81 % |
+| Binary size (`-s -w -trimpath`) | ~19 MB |
+| Docker image (`FROM scratch`) | ~19 MB |
+| Direct dependencies | 4 (`cobra`, `yaml.v3`, `jsonschema`, `libopenapi`) |
+| Lines of Go (excl. tests) | ~3,800 |
+| Test coverage | parser 82 %, linter 84 %, oasresolver 100 %, hurlgen 100 %, k6gen 100 %, theme 86 %, renderer 81 %, cmd 76 % |
 | Built-in themes WCAG AA conformance | 100 % on critical pairs (11/11, incl. `jsonRuntime` on `jsonBg`) |
 
 ## Feedback
@@ -486,9 +491,9 @@ PRs welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full
 guide (dev environment, PR checklist, conventions). The short version:
 
 1. Read [`AGENTS.md`](./AGENTS.md) and the rules in [`.agents/rules/`](./.agents/rules/).
-2. `make test vet` — both must be clean.
-3. `make lint` — every `examples/*.arazzo.yaml` must lint with no issues.
-4. `make dist` — every example must render without errors.
+2. `make test vet`: both must be clean.
+3. `make lint`: every `examples/*.arazzo.yaml` must lint with no issues.
+4. `make dist`: every example must render without errors.
 5. If you touch the HTML output, attach the gzipped byte count of an `examples/*.arazzo.yaml` rendering to the PR. Regressions > 10 % require discussion.
 
 ## Security
@@ -505,6 +510,8 @@ coordinated disclosure timeline.
 
 - The [OpenAPI Initiative](https://www.openapis.org/) for the Arazzo specification.
 - [`santhosh-tekuri/jsonschema`](https://github.com/santhosh-tekuri/jsonschema), the JSON Schema validator powering the linter's first pass.
+- [`pb33f/libopenapi`](https://github.com/pb33f/libopenapi), the OpenAPI 3.x parser behind `oasresolver`.
+- [Hurl](https://hurl.dev) and [k6](https://k6.io), the runners targeted by the test generators.
 - [Cobra](https://github.com/spf13/cobra), CLI framework.
 - [`yaml.v3`](https://gopkg.in/yaml.v3), YAML parsing with node-level access.
 - The [WebAIM](https://webaim.org/) contrast checker, the reference we test against.

@@ -45,7 +45,7 @@ export default function () {
   // Add the product to the shopping cart
   // requestBody content-type: application/json
   const add_to_cartBody = {
-    "productId": "$inputs.productId",
+    "productId": productId,
     "quantity": 2
   };
   const add_to_cartRes = http.request('POST', `${BASE_URL}/cart/items`, JSON.stringify(add_to_cartBody), { headers: { "Accept-Language": acceptLanguage } });

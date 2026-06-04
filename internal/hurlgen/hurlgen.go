@@ -50,13 +50,28 @@ import (
 func Generate(wf model.Workflow, sources map[string]*oasresolver.Source) (string, error) {
 	var b strings.Builder
 	writeHeader(&b, wf, defaultBaseURL(wf, sources))
+	unquoted := nonStringInputs(wf.Inputs)
 	for i, step := range wf.Steps {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		writeStep(&b, step, sources)
+		writeStep(&b, step, sources, unquoted)
 	}
 	return b.String(), nil
+}
+
+// nonStringInputs lists the workflow inputs whose declared type is not
+// a JSON string, so their body templates are emitted without quotes and
+// the substituted value keeps its type.
+func nonStringInputs(inputs []model.InputProperty) map[string]bool {
+	m := make(map[string]bool)
+	for _, in := range inputs {
+		switch in.Type {
+		case "number", "integer", "boolean":
+			m[in.Name] = true
+		}
+	}
+	return m
 }
 
 func writeHeader(b *strings.Builder, wf model.Workflow, defaultBase string) {
@@ -103,7 +118,7 @@ func defaultBaseURL(wf model.Workflow, sources map[string]*oasresolver.Source) s
 	return ""
 }
 
-func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source) {
+func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source, unquoted map[string]bool) {
 	fmt.Fprintf(b, "# Step: %s\n", s.StepID)
 	if s.Description != "" {
 		for _, line := range strings.Split(strings.TrimSpace(s.Description), "\n") {
@@ -121,7 +136,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 
 	writeHeaders(b, s.Parameters)
 	writeQuery(b, s.Parameters)
-	writeBody(b, s.RequestBody)
+	writeBody(b, s.RequestBody, unquoted)
 
 	b.WriteString("\nHTTP *\n")
 	writeAsserts(b, s.SuccessCriteria)
@@ -151,28 +166,119 @@ func writeQuery(b *strings.Builder, params []model.Parameter) {
 	}
 }
 
-func writeBody(b *strings.Builder, body *model.RequestBody) {
+func writeBody(b *strings.Builder, body *model.RequestBody, unquoted map[string]bool) {
 	if body == nil {
 		return
 	}
 	fmt.Fprintf(b, "# requestBody content-type: %s\n", body.ContentType)
-	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(body))
+	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(body, unquoted))
 }
 
 // serialiseBody turns the workflow's requestBody payload into the text
-// that goes inside the Hurl body block. JSON content types are marshalled
-// through encoding/json so the result is valid JSON; raw string payloads
-// are passed through; anything else falls back to Go's default formatting.
-func serialiseBody(body *model.RequestBody) string {
+// that goes inside the Hurl body block. Runtime expressions inside the
+// payload become Hurl templates: for JSON content types the payload is
+// marshalled with expressions swapped for sentinels, then the templates
+// are injected, without quotes when the input's declared type is not a
+// string so the substituted value keeps its type. Raw string payloads
+// are passed through; anything else falls back to Go's default
+// formatting.
+func serialiseBody(body *model.RequestBody, unquoted map[string]bool) string {
 	if s, ok := body.Payload.(string); ok {
-		return s
+		return translateInlineExpr(s)
 	}
 	if strings.Contains(body.ContentType, "json") {
-		if raw, err := json.MarshalIndent(body.Payload, "", "  "); err == nil {
-			return string(raw)
+		if out, err := jsonBodyWithTemplates(body.Payload, unquoted); err == nil {
+			return out
 		}
 	}
-	return fmt.Sprintf("%v", body.Payload)
+	return fmt.Sprintf("%v", translateBodyExprs(body.Payload))
+}
+
+// jsonBodyWithTemplates marshals the payload with every whole-string
+// runtime expression swapped for a sentinel absent from the payload
+// itself, then replaces the quoted sentinels with the Hurl templates,
+// so a literal string can never be mistaken for a template.
+func jsonBodyWithTemplates(payload any, unquoted map[string]bool) (string, error) {
+	probe, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	base := "__arazzo_tpl_"
+	for strings.Contains(string(probe), base) {
+		base = "_" + base
+	}
+	var repls []string
+	swapped := swapBodyExprs(payload, unquoted, base, &repls)
+	raw, err := json.MarshalIndent(swapped, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	out := string(raw)
+	for i, repl := range repls {
+		out = strings.Replace(out, fmt.Sprintf("%q", fmt.Sprintf("%s%d__", base, i)), repl, 1)
+	}
+	return out, nil
+}
+
+// swapBodyExprs walks the payload and replaces every string that is a
+// whole-string runtime expression with a sentinel, recording the Hurl
+// text to inject afterwards: the {{name}} template, quoted unless the
+// input's declared type is non-string.
+func swapBodyExprs(v any, unquoted map[string]bool, base string, repls *[]string) any {
+	switch t := v.(type) {
+	case string:
+		tpl := translateInlineExpr(t)
+		if tpl == t {
+			return t
+		}
+		repl := `"` + tpl + `"`
+		if e := strings.TrimSpace(t); strings.HasPrefix(e, "$inputs.") && unquoted[strings.TrimPrefix(e, "$inputs.")] {
+			repl = tpl
+		}
+		*repls = append(*repls, repl)
+		return fmt.Sprintf("%s%d__", base, len(*repls)-1)
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = swapBodyExprs(val, unquoted, base, repls)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = swapBodyExprs(val, unquoted, base, repls)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+// translateBodyExprs walks the requestBody payload and translates string
+// values that are runtime expressions, so the emitted body carries Hurl
+// templates ({{productId}}) instead of literal "$inputs..." strings.
+// Maps and slices are rebuilt with translated values; everything else
+// passes through unchanged, with the same fallthrough for unrecognised
+// forms as the inline parameter translation.
+func translateBodyExprs(v any) any {
+	switch t := v.(type) {
+	case string:
+		return translateInlineExpr(t)
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = translateBodyExprs(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = translateBodyExprs(val)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 func writeAsserts(b *strings.Builder, crits []model.SuccessCriterion) {
@@ -273,18 +379,53 @@ func renderValue(v any) string {
 
 // translateInlineExpr maps an Arazzo runtime expression used inline
 // (in a parameter value, URL, header...) to a Hurl template. Anything
-// not recognised is returned unchanged so the user can spot it.
+// not recognised, including names that are not plain Arazzo names
+// (dotted sub-paths, free text after a matching prefix), is returned
+// unchanged so the user can spot it.
 func translateInlineExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	switch {
 	case strings.HasPrefix(e, "$inputs."):
-		return "{{" + strings.TrimPrefix(e, "$inputs.") + "}}"
+		if name := strings.TrimPrefix(e, "$inputs."); isExprName(name) {
+			return "{{" + name + "}}"
+		}
+		return expr
 	case strings.HasPrefix(e, "$steps."):
 		rest := strings.TrimPrefix(e, "$steps.")
-		return "{{" + strings.ReplaceAll(rest, ".outputs.", "_") + "}}"
+		if step, out, ok := splitStepOutput(rest); ok && isExprName(step) && isExprName(out) {
+			return "{{" + step + "_" + out + "}}"
+		}
+		return expr
 	default:
 		return expr
 	}
+}
+
+// splitStepOutput splits "<stepId>.outputs.<outputName>" into its step
+// and output parts.
+func splitStepOutput(rest string) (step, out string, ok bool) {
+	const sep = ".outputs."
+	idx := strings.Index(rest, sep)
+	if idx < 0 {
+		return "", "", false
+	}
+	return rest[:idx], rest[idx+len(sep):], true
+}
+
+// isExprName reports whether s is a plain Arazzo name (letters, digits,
+// '_' or '-'), the only form the generator can map to a Hurl variable.
+func isExprName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // translateCaptureExpr maps an Arazzo output expression to a Hurl

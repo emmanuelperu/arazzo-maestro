@@ -493,7 +493,8 @@
     }
 
     /* --- A11y ---------------------------------------------------- */
-    a:focus-visible {
+    a:focus-visible,
+    .json-block:focus-visible {
       outline: 2px solid var(--runtime);
       outline-offset: 2px;
     }
@@ -592,7 +593,7 @@
               <p class="block-label">
                 Request Body<span class="block-label-meta">{{ requestContentType . }}</span>
               </p>
-              <pre class="json-block">{{ renderPayload .Payload }}</pre>
+              <pre class="json-block" tabindex="0" aria-label="Request body payload">{{ renderPayload .Payload }}</pre>
             {{ end }}
 
             {{ if $step.SuccessCriteria }}

@@ -1,6 +1,7 @@
 package hurlgen
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -325,6 +326,189 @@ func TestGenerateMarshalsMapBodyAsJSON(t *testing.T) {
 	assertContains(t, out, `"amount": 49.99`)
 	assertContains(t, out, `"currency": "EUR"`)
 	assertNotContains(t, out, "map[")
+}
+
+func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload any
+		want    []string
+		notWant []string
+	}{
+		{
+			name:    "flat object value",
+			payload: map[string]any{"productId": "$inputs.productId", "quantity": 2},
+			want:    []string{`"productId": "{{productId}}"`, `"quantity": 2`},
+			notWant: []string{"$inputs.productId"},
+		},
+		{
+			name:    "step output reference",
+			payload: map[string]any{"cartId": "$steps.add-to-cart.outputs.cartId"},
+			want:    []string{`"cartId": "{{add-to-cart_cartId}}"`},
+		},
+		{
+			name:    "nested object",
+			payload: map[string]any{"customer": map[string]any{"id": "$inputs.customerId"}},
+			want:    []string{`"id": "{{customerId}}"`},
+		},
+		{
+			name: "nested array",
+			payload: map[string]any{"items": []any{
+				"$inputs.productId",
+				map[string]any{"ref": "$steps.list.outputs.first"},
+			}},
+			want: []string{`"{{productId}}"`, `"ref": "{{list_first}}"`},
+		},
+		{
+			name:    "unrecognised expression form passes through",
+			payload: map[string]any{"note": "$response.body#/x"},
+			want:    []string{`"note": "$response.body#/x"`},
+		},
+		{
+			name:    "raw string payload that is an expression",
+			payload: "$inputs.rawBody",
+			want:    []string{"{{rawBody}}"},
+			notWant: []string{"$inputs.rawBody"},
+		},
+		{
+			name:    "free text after the inputs prefix stays a literal",
+			payload: map[string]any{"note": "$inputs.tax is included"},
+			want:    []string{`"note": "$inputs.tax is included"`},
+			notWant: []string{"{{tax is included}}"},
+		},
+		{
+			name:    "dotted input sub-path stays a literal",
+			payload: map[string]any{"name": "$inputs.user.name"},
+			want:    []string{`"name": "$inputs.user.name"`},
+			notWant: []string{"{{user.name}}"},
+		},
+		{
+			name:    "dotted step output sub-path stays a literal",
+			payload: map[string]any{"ref": "$steps.s.outputs.user.name"},
+			want:    []string{`"ref": "$steps.s.outputs.user.name"`},
+			notWant: []string{"{{s_user.name}}"},
+		},
+		{
+			name:    "empty name after the inputs prefix stays a literal",
+			payload: map[string]any{"id": "$inputs."},
+			want:    []string{`"id": "$inputs."`},
+		},
+		{
+			name:    "step reference without an outputs segment stays a literal",
+			payload: map[string]any{"id": "$steps.foo.bar"},
+			want:    []string{`"id": "$steps.foo.bar"`},
+		},
+		{
+			name:    "expression embedded in surrounding text stays a literal",
+			payload: map[string]any{"auth": "Bearer $inputs.productId"},
+			want:    []string{`"auth": "Bearer $inputs.productId"`},
+		},
+		{
+			name:    "literal sentinel-looking string does not steal the swap",
+			payload: map[string]any{"a": "__arazzo_tpl_0__", "b": "$inputs.productId"},
+			want:    []string{`"a": "__arazzo_tpl_0__"`, `"b": "{{productId}}"`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wf := model.Workflow{
+				WorkflowID: "wf",
+				Steps: []model.Step{
+					{
+						StepID:      "create",
+						OperationID: "createOrder",
+						RequestBody: &model.RequestBody{ContentType: "application/json", Payload: tt.payload},
+					},
+				},
+			}
+			out, _ := Generate(wf, map[string]*oasresolver.Source{
+				"shop": loadSource(t, shopSpec),
+			})
+			for _, w := range tt.want {
+				assertContains(t, out, w)
+			}
+			for _, nw := range tt.notWant {
+				assertNotContains(t, out, nw)
+			}
+		})
+	}
+}
+
+func TestGenerateUnquotesNonStringInputTemplatesInBody(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs: []model.InputProperty{
+			{Name: "qty", Type: "integer"},
+			{Name: "productId", Type: "string"},
+		},
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				Payload:     map[string]any{"quantity": "$inputs.qty", "productId": "$inputs.productId"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, `"quantity": {{qty}}`)
+	assertContains(t, out, `"productId": "{{productId}}"`)
+}
+
+func TestGenerateKeepsLiteralTemplateLookingBodyStrings(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "qty", Type: "integer"}},
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				// "label" is literal data that merely looks like a template.
+				Payload: map[string]any{"label": "{{qty}}", "quantity": "$inputs.qty"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, `"label": "{{qty}}"`)
+	assertContains(t, out, `"quantity": {{qty}}`)
+}
+
+func TestGenerateFallsBackWhenJSONBodyUnmarshalable(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				Payload:     map[string]any{"bad": math.NaN()},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "map[bad:NaN]")
+}
+
+func TestGenerateTranslatesExprsInNonJSONBodyDump(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "text/plain",
+				Payload: map[string]any{
+					"id":   "$inputs.productId",
+					"tags": []any{"$steps.s.outputs.o"},
+				},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "{{productId}}")
+	assertContains(t, out, "{{s_o}}")
+	assertContains(t, out, "map[")
 }
 
 func TestGenerateFallsBackToGoFormattingForUnknownContentType(t *testing.T) {
