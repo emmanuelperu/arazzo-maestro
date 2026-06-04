@@ -475,7 +475,7 @@ manager. The binary is the entire userland.
 | Docker image (`FROM scratch`) | ~19 MB |
 | Direct dependencies | 4 (`cobra`, `yaml.v3`, `jsonschema`, `libopenapi`) |
 | Lines of Go (excl. tests) | ~3,800 |
-| Test coverage | parser 82 %, linter 84 %, oasresolver 100 %, hurlgen 100 %, k6gen 90 %, theme 86 %, renderer 81 %, cmd 76 % |
+| Test coverage | parser 82 %, linter 84 %, oasresolver 100 %, hurlgen 100 %, k6gen 100 %, theme 86 %, renderer 81 %, cmd 76 % |
 | Built-in themes WCAG AA conformance | 100 % on critical pairs (11/11, incl. `jsonRuntime` on `jsonBg`) |
 
 ## Feedback
