@@ -214,14 +214,24 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, decla
 // ("productId": productId). Undeclared or malformed expressions stay
 // literal strings.
 func jsBodyValue(v any, declared map[string]bool) (string, error) {
+	// Derive a sentinel base absent from the payload itself, so a
+	// literal string can never be mistaken for a swapped expression.
+	probe, err := jsonMarshal(v, "", "")
+	if err != nil {
+		return "", err
+	}
+	base := "__arazzo_expr_"
+	for strings.Contains(probe, base) {
+		base = "_" + base
+	}
 	var idents []string
-	swapped := swapBodyExprs(v, declared, &idents)
+	swapped := swapBodyExprs(v, declared, base, &idents)
 	raw, err := jsonMarshal(swapped, "  ", "  ")
 	if err != nil {
 		return "", err
 	}
 	for i, ident := range idents {
-		raw = strings.Replace(raw, `"`+bodyExprSentinel(i)+`"`, ident, 1)
+		raw = strings.Replace(raw, `"`+bodyExprSentinel(base, i)+`"`, ident, 1)
 	}
 	return raw, nil
 }
@@ -230,24 +240,24 @@ func jsBodyValue(v any, declared map[string]bool) (string, error) {
 // runtime expression resolving to a declared identifier with a
 // sentinel, recording the identifier; everything else passes through
 // unchanged.
-func swapBodyExprs(v any, declared map[string]bool, idents *[]string) any {
+func swapBodyExprs(v any, declared map[string]bool, base string, idents *[]string) any {
 	switch t := v.(type) {
 	case string:
 		if ident, isExpr := exprIdent(t); isExpr && declared[ident] {
 			*idents = append(*idents, ident)
-			return bodyExprSentinel(len(*idents) - 1)
+			return bodyExprSentinel(base, len(*idents)-1)
 		}
 		return t
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			out[k] = swapBodyExprs(val, declared, idents)
+			out[k] = swapBodyExprs(val, declared, base, idents)
 		}
 		return out
 	case []any:
 		out := make([]any, len(t))
 		for i, val := range t {
-			out[i] = swapBodyExprs(val, declared, idents)
+			out[i] = swapBodyExprs(val, declared, base, idents)
 		}
 		return out
 	default:
@@ -258,8 +268,8 @@ func swapBodyExprs(v any, declared map[string]bool, idents *[]string) any {
 // bodyExprSentinel returns the placeholder swapped in for the i-th
 // translated body expression; plain ASCII so its JSON encoding is the
 // quoted sentinel itself.
-func bodyExprSentinel(i int) string {
-	return fmt.Sprintf("__arazzo_expr_%d__", i)
+func bodyExprSentinel(base string, i int) string {
+	return fmt.Sprintf("%s%d__", base, i)
 }
 
 // writeChecks emits a single check() call grouping the step's success

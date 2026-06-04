@@ -407,6 +407,11 @@ func TestGenerateLeavesUndeclaredOrMalformedBodyExprsAsLiterals(t *testing.T) {
 			payload: map[string]any{"auth": "Bearer $inputs.user"},
 			want:    []string{`"auth": "Bearer $inputs.user"`},
 		},
+		{
+			name:    "literal sentinel-looking string does not steal the swap",
+			payload: map[string]any{"a": "__arazzo_expr_0__", "z": "$inputs.user"},
+			want:    []string{`"a": "__arazzo_expr_0__"`, `"z": user`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

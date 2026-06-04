@@ -1,6 +1,7 @@
 package hurlgen
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -402,6 +403,11 @@ func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
 			payload: map[string]any{"auth": "Bearer $inputs.productId"},
 			want:    []string{`"auth": "Bearer $inputs.productId"`},
 		},
+		{
+			name:    "literal sentinel-looking string does not steal the swap",
+			payload: map[string]any{"a": "__arazzo_tpl_0__", "b": "$inputs.productId"},
+			want:    []string{`"a": "__arazzo_tpl_0__"`, `"b": "{{productId}}"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -447,6 +453,62 @@ func TestGenerateUnquotesNonStringInputTemplatesInBody(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
 	assertContains(t, out, `"quantity": {{qty}}`)
 	assertContains(t, out, `"productId": "{{productId}}"`)
+}
+
+func TestGenerateKeepsLiteralTemplateLookingBodyStrings(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "qty", Type: "integer"}},
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				// "label" is literal data that merely looks like a template.
+				Payload: map[string]any{"label": "{{qty}}", "quantity": "$inputs.qty"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, `"label": "{{qty}}"`)
+	assertContains(t, out, `"quantity": {{qty}}`)
+}
+
+func TestGenerateFallsBackWhenJSONBodyUnmarshalable(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				Payload:     map[string]any{"bad": math.NaN()},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "map[bad:NaN]")
+}
+
+func TestGenerateTranslatesExprsInNonJSONBodyDump(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "text/plain",
+				Payload: map[string]any{
+					"id":   "$inputs.productId",
+					"tags": []any{"$steps.s.outputs.o"},
+				},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "{{productId}}")
+	assertContains(t, out, "{{s_o}}")
+	assertContains(t, out, "map[")
 }
 
 func TestGenerateFallsBackToGoFormattingForUnknownContentType(t *testing.T) {

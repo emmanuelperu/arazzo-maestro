@@ -176,26 +176,82 @@ func writeBody(b *strings.Builder, body *model.RequestBody, unquoted map[string]
 
 // serialiseBody turns the workflow's requestBody payload into the text
 // that goes inside the Hurl body block. Runtime expressions inside the
-// payload are translated to Hurl templates first, then JSON content
-// types are marshalled through encoding/json so the result is valid
-// JSON; raw string payloads are passed through; anything else falls
-// back to Go's default formatting. Templates for non-string inputs
-// drop their JSON quotes so the substituted value keeps its type.
+// payload become Hurl templates: for JSON content types the payload is
+// marshalled with expressions swapped for sentinels, then the templates
+// are injected, without quotes when the input's declared type is not a
+// string so the substituted value keeps its type. Raw string payloads
+// are passed through; anything else falls back to Go's default
+// formatting.
 func serialiseBody(body *model.RequestBody, unquoted map[string]bool) string {
-	payload := translateBodyExprs(body.Payload)
-	if s, ok := payload.(string); ok {
-		return s
+	if s, ok := body.Payload.(string); ok {
+		return translateInlineExpr(s)
 	}
 	if strings.Contains(body.ContentType, "json") {
-		if raw, err := json.MarshalIndent(payload, "", "  "); err == nil {
-			out := string(raw)
-			for name := range unquoted {
-				out = strings.ReplaceAll(out, `"{{`+name+`}}"`, "{{"+name+"}}")
-			}
+		if out, err := jsonBodyWithTemplates(body.Payload, unquoted); err == nil {
 			return out
 		}
 	}
-	return fmt.Sprintf("%v", payload)
+	return fmt.Sprintf("%v", translateBodyExprs(body.Payload))
+}
+
+// jsonBodyWithTemplates marshals the payload with every whole-string
+// runtime expression swapped for a sentinel absent from the payload
+// itself, then replaces the quoted sentinels with the Hurl templates,
+// so a literal string can never be mistaken for a template.
+func jsonBodyWithTemplates(payload any, unquoted map[string]bool) (string, error) {
+	probe, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	base := "__arazzo_tpl_"
+	for strings.Contains(string(probe), base) {
+		base = "_" + base
+	}
+	var repls []string
+	swapped := swapBodyExprs(payload, unquoted, base, &repls)
+	raw, err := json.MarshalIndent(swapped, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	out := string(raw)
+	for i, repl := range repls {
+		out = strings.Replace(out, fmt.Sprintf("%q", fmt.Sprintf("%s%d__", base, i)), repl, 1)
+	}
+	return out, nil
+}
+
+// swapBodyExprs walks the payload and replaces every string that is a
+// whole-string runtime expression with a sentinel, recording the Hurl
+// text to inject afterwards: the {{name}} template, quoted unless the
+// input's declared type is non-string.
+func swapBodyExprs(v any, unquoted map[string]bool, base string, repls *[]string) any {
+	switch t := v.(type) {
+	case string:
+		tpl := translateInlineExpr(t)
+		if tpl == t {
+			return t
+		}
+		repl := `"` + tpl + `"`
+		if e := strings.TrimSpace(t); strings.HasPrefix(e, "$inputs.") && unquoted[strings.TrimPrefix(e, "$inputs.")] {
+			repl = tpl
+		}
+		*repls = append(*repls, repl)
+		return fmt.Sprintf("%s%d__", base, len(*repls)-1)
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = swapBodyExprs(val, unquoted, base, repls)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = swapBodyExprs(val, unquoted, base, repls)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 // translateBodyExprs walks the requestBody payload and translates string
