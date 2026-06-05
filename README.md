@@ -226,6 +226,8 @@ Arazzo step features translated:
 | `parameters` in=header     | header lines on the request                   |
 | `parameters` in=query      | `[QueryStringParams]` block                   |
 | `parameters` in=path       | substituted into the URL template             |
+| `parameters` in=cookie     | `[Cookies]` block                             |
+| `parameters` in=querystring | appended to the request URL                  |
 | `step.outputs`             | `[Captures]` with `jsonpath` / `status`       |
 | `step.successCriteria`     | comments inside `[Asserts]`                   |
 | `$inputs.foo`              | `{{foo}}` (Hurl variable)                     |

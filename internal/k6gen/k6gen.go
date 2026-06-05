@@ -10,6 +10,8 @@
 //	parameters in=header      -> the request headers object
 //	parameters in=query       -> the request URL query string
 //	parameters in=path        -> substituted into the request URL
+//	parameters in=cookie      -> the request cookies object
+//	parameters in=querystring -> appended to the request URL
 //
 // Operation resolution goes through the oasresolver package, exactly as
 // the e2e generator does: callers pass a map of source-description name
@@ -173,11 +175,23 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		url = "${BASE_URL}/__unresolved__/" + s.OperationID
 	}
 	url += queryString(s.Parameters, declared)
+	if qs := querystringValue(s.Parameters, declared); qs != "" {
+		sep := "?"
+		if strings.Contains(url, "?") {
+			sep = "&"
+		}
+		url += sep + qs
+	}
 
 	resVar := jsIdent(s.StepID) + "Res"
 	bodyArg := writeBody(b, s.StepID, s.RequestBody, declared)
-	fmt.Fprintf(b, "  const %s = http.request('%s', `%s`, %s, { headers: %s });\n",
-		resVar, method, url, bodyArg, headersObject(s.Parameters, declared))
+	reqParams := "{ headers: " + headersObject(s.Parameters, declared)
+	if c := cookiesObject(s.Parameters, declared); c != "" {
+		reqParams += ", cookies: " + c
+	}
+	reqParams += " }"
+	fmt.Fprintf(b, "  const %s = http.request('%s', `%s`, %s, %s);\n",
+		resVar, method, url, bodyArg, reqParams)
 
 	writeChecks(b, resVar, s.StepID, s.SuccessCriteria)
 	writeCaptures(b, resVar, s.StepID, s.Outputs, declared)
@@ -459,6 +473,33 @@ func headersObject(params []model.Parameter, declared map[string]bool) string {
 		return "{}"
 	}
 	return "{ " + strings.Join(entries, ", ") + " }"
+}
+
+// cookiesObject renders the step's cookie parameters as a JS object
+// literal for the request params, or "" when there are none.
+func cookiesObject(params []model.Parameter, declared map[string]bool) string {
+	var entries []string
+	for _, p := range params {
+		if p.In != "cookie" {
+			continue
+		}
+		entries = append(entries, fmt.Sprintf("%s: %s", jsString(p.Name), headerValue(p.Value, declared)))
+	}
+	if len(entries) == 0 {
+		return ""
+	}
+	return "{ " + strings.Join(entries, ", ") + " }"
+}
+
+// querystringValue returns the rendered whole-query-string parameter
+// for interpolation inside the URL literal, or "".
+func querystringValue(params []model.Parameter, declared map[string]bool) string {
+	for _, p := range params {
+		if p.In == "querystring" {
+			return urlValue(p.Value, declared)
+		}
+	}
+	return ""
 }
 
 // urlValue renders a path or query parameter for interpolation inside a
