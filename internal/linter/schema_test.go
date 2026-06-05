@@ -45,6 +45,85 @@ func TestSchemaAccepts11VersionAfterPatch(t *testing.T) {
 	}
 }
 
+func TestSchemaAccepts11StructuralFeatures(t *testing.T) {
+	// Spec 1.1.0 structural additions grafted onto the 1.0 schema at
+	// load time: each of these documents is spec-valid 1.1 and must
+	// lint clean.
+	tests := []struct {
+		name string
+		doc  string
+	}{
+		{
+			name: "$self at root",
+			doc: strings.Replace(minimalValidDoc, `arazzo: "1.0.1"`,
+				"arazzo: \"1.1.0\"\n$self: https://example.com/checkout.arazzo.yaml", 1),
+		},
+		{
+			name: "asyncapi source description",
+			doc: strings.Replace(minimalValidDoc, "type: openapi",
+				"type: asyncapi", 1),
+		},
+		{
+			name: "querystring parameter location",
+			doc: strings.Replace(minimalValidDoc, "operationId: ping",
+				"operationId: ping\n        parameters:\n          - name: q\n            in: querystring\n            value: \"a=1&b=2\"", 1),
+		},
+		{
+			name: "channelPath step",
+			doc: strings.Replace(minimalValidDoc, "operationId: ping",
+				"channelPath: $sourceDescriptions.api#/channels/orders", 1),
+		},
+		{
+			// The official schema models the Expression Type Object
+			// inline: type and version are criterion-level siblings.
+			name: "jsonpath rfc9535 expression version",
+			doc: strings.Replace(minimalValidDoc, "- condition: $statusCode == 200",
+				"- condition: $.status\n            context: $response.body\n            type: jsonpath\n            version: rfc9535", 1),
+		},
+		{
+			name: "jsonpointer expression type",
+			doc: strings.Replace(minimalValidDoc, "- condition: $statusCode == 200",
+				"- condition: /status\n            context: $response.body\n            type: jsonpointer\n            version: rfc6901", 1),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, issue := range lintSchema([]byte(tt.doc)) {
+				t.Errorf("unexpected schema issue: %s", issue)
+			}
+		})
+	}
+}
+
+func TestSchemaStillRejectsInvalid11Lookalikes(t *testing.T) {
+	tests := []struct {
+		name string
+		doc  string
+		want string
+	}{
+		{
+			name: "unknown root key",
+			doc: strings.Replace(minimalValidDoc, `arazzo: "1.0.1"`,
+				"arazzo: \"1.1.0\"\n$selff: typo", 1),
+			want: "not allowed",
+		},
+		{
+			name: "bogus jsonpointer version",
+			doc: strings.Replace(minimalValidDoc, "- condition: $statusCode == 200",
+				"- condition: /status\n            context: $response.body\n            type: jsonpointer\n            version: rfc0000", 1),
+			want: "value must be",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issues := lintSchema([]byte(tt.doc))
+			if !containsMessage(issues, tt.want) {
+				t.Errorf("expected issue containing %q, got %v", tt.want, issues)
+			}
+		})
+	}
+}
+
 func TestSchemaRejectsMissingRequiredField(t *testing.T) {
 	// Omit the top-level `info`.
 	src := `

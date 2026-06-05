@@ -23,7 +23,6 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 
 | Gap | Issue |
 |---|---|
-| The patched 1.0 schema rejects 1.1 structural features: `$self`, `channelPath`, `in: querystring`, `type: asyncapi` sources, criterion expression versions `rfc9535`/`xpath-31`/`jsonpointer` | [#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47) |
 | `retryAfter` treated as integer milliseconds; spec says non-negative decimal **seconds** (decimals silently truncated; `retryLimit` default "single retry" not displayed) | [#41](https://github.com/emmanuelperu/arazzo-maestro/issues/41) |
 | `in: cookie` parameters are silently omitted from generated tests | [#48](https://github.com/emmanuelperu/arazzo-maestro/issues/48) |
 | `#/json-pointer` suffixes on `$inputs`/`$steps...outputs`, whole-body `$response.body`, and dotted names (legal per ABNF) are not translated by the generators | [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
@@ -33,9 +32,9 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 | Element | Parse | Lint | Render | TestGen | Verdict | Notes |
 |---|---|---|---|---|---|---|
 | `arazzo` version 1.0.x / 1.1.x | ✅ | ✅ | n/a | n/a | ✅ | Version pattern patched at schema load |
-| `$self` (1.1) | ❌ | ⛔ rejected | ❌ | ❌ | ⛔ | [#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47); no base-URI / identity-based reference resolution either |
+| `$self` (1.1) | ❌ | 😶 accepted | ❌ | ❌ | 😶 | Accepted structurally since #47; no base-URI / identity-based reference resolution |
 | `info` | ✅ | ✅ | 🟡 | n/a | 🟡 | `description` and `version` parsed but never rendered |
-| `sourceDescriptions` | ✅ | ✅ | ❌ | 🟡 | 🟡 | Never rendered; `type: arazzo` sources accepted but never resolved; `type: asyncapi` rejected ([#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47)); HTTP/HTTPS URLs rejected by design (offline-first) |
+| `sourceDescriptions` | ✅ | ✅ | ❌ | 🟡 | 🟡 | Never rendered; `type: arazzo` and `type: asyncapi` sources accepted but never resolved; HTTP/HTTPS URLs rejected by design (offline-first) |
 | `components` + Reusable Objects | ❌ | 😶 schema-only | ❌ | ❌ | ❌ | [#52](https://github.com/emmanuelperu/arazzo-maestro/issues/52); a `{reference: $components...}` entry parses to an empty struct |
 | `x-` extensions | 😶 | ✅ | ❌ | ❌ | 🟡 | Accepted, never surfaced |
 
@@ -60,8 +59,8 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 | `operationId` (short + qualified) | ✅ | ✅ cross-file | ✅ | ✅ | ✅ | |
 | `operationPath` | ❌ | 😶 schema-only | ❌ | ❌ placeholder | ❌ | [#53](https://github.com/emmanuelperu/arazzo-maestro/issues/53) |
 | `workflowId` (nested workflow) | ❌ | 😶 schema-only | ❌ "API" tag | ❌ misleading placeholder | ❌ | [#54](https://github.com/emmanuelperu/arazzo-maestro/issues/54) |
-| `channelPath` (1.1, AsyncAPI) | ❌ | ⛔ rejected | ❌ | ❌ | ⛔ | [#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47) |
-| `parameters` | ✅ | ✅ schema | ✅ | 🟡 | 🟡 | `cookie` dropped by generators ([#48](https://github.com/emmanuelperu/arazzo-maestro/issues/48)); `querystring` rejected by schema ([#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47)); Reusable entries parse empty ([#52](https://github.com/emmanuelperu/arazzo-maestro/issues/52)); `in` conditional rule unvalidated |
+| `channelPath` (1.1, AsyncAPI) | ❌ | 😶 accepted | ❌ placeholder | ❌ | 😶 | Accepted structurally since #47; resolution out of scope (AsyncAPI) |
+| `parameters` | ✅ | ✅ schema | ✅ | 🟡 | 🟡 | `cookie` and `querystring` dropped by generators ([#48](https://github.com/emmanuelperu/arazzo-maestro/issues/48)); Reusable entries parse empty ([#52](https://github.com/emmanuelperu/arazzo-maestro/issues/52)); `in` conditional rule unvalidated |
 | `requestBody.contentType` / `payload` | ✅ | ✅ | ✅ | ✅ | ✅ | Whole-string and embedded `{$expr}` substitution |
 | `requestBody.replacements` | ❌ | 😶 schema-only | ❌ | ❌ | ❌ | Generated bodies omit injected values ([#55](https://github.com/emmanuelperu/arazzo-maestro/issues/55)) |
 | `successCriteria` | 🟡 | ✅ | 🟡 | 🟡 | 🟡 | Only `condition` survives the parser ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
@@ -74,7 +73,7 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 |---|---|---|
 | Criterion `condition` (simple grammar) | 🟡 | k6 translates the `$statusCode <op> <number>` subset to real `check()`s; everything else is an explicit comment in both generators (never guessed) |
 | Criterion `context` / `type` (`simple`/`regex`/`jsonpath`/`xpath`) | 😶 | Schema enforces "context required with type"; dropped at the parser, indistinguishable downstream ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
-| Expression Type Object versions | ⛔ | 1.1 values `rfc9535`, `xpath-31`, `jsonpointer` rejected by the 1.0 schema ([#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47)) |
+| Expression Type Object versions | ✅ schema | 1.1 values `rfc9535` and `jsonpointer`/`rfc6901` accepted since #47 (per the spec's Expression Type table, xpath versions stay 10/20/30); still dropped at the parser ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
 | `retryAfter` | ⛔ | Spec: decimal seconds; we store integer "milliseconds", truncate decimals, render "ms" ([#41](https://github.com/emmanuelperu/arazzo-maestro/issues/41)) |
 | `retryLimit` | ⛔ | Absent means "a single retry" per spec; we display nothing, and `0` is indistinguishable from unset ([#41](https://github.com/emmanuelperu/arazzo-maestro/issues/41)) |
 
