@@ -23,9 +23,11 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 
 | Gap | Issue |
 |---|---|
-| `retryAfter` treated as integer milliseconds; spec says non-negative decimal **seconds** (decimals silently truncated; `retryLimit` default "single retry" not displayed) | [#41](https://github.com/emmanuelperu/arazzo-maestro/issues/41) |
-| `in: cookie` parameters are silently omitted from generated tests | [#48](https://github.com/emmanuelperu/arazzo-maestro/issues/48) |
 | `#/json-pointer` suffixes on `$inputs`/`$steps...outputs`, whole-body `$response.body`, and dotted names (legal per ABNF) are not translated by the generators | [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
+
+Resolved non-compliances: 1.1 structural schema rejections (#47),
+`retryAfter` unit and `retryLimit` default (#41), cookie and
+querystring parameters omitted from generated tests (#48).
 
 ## Document-level objects
 
@@ -60,7 +62,7 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 | `operationPath` | ❌ | 😶 schema-only | ❌ | ❌ placeholder | ❌ | [#53](https://github.com/emmanuelperu/arazzo-maestro/issues/53) |
 | `workflowId` (nested workflow) | ❌ | 😶 schema-only | ❌ "API" tag | ❌ misleading placeholder | ❌ | [#54](https://github.com/emmanuelperu/arazzo-maestro/issues/54) |
 | `channelPath` (1.1, AsyncAPI) | ❌ | 😶 accepted | ❌ placeholder | ❌ | 😶 | Accepted structurally since #47; resolution out of scope (AsyncAPI) |
-| `parameters` | ✅ | ✅ schema | ✅ | 🟡 | 🟡 | `cookie` and `querystring` dropped by generators ([#48](https://github.com/emmanuelperu/arazzo-maestro/issues/48)); Reusable entries parse empty ([#52](https://github.com/emmanuelperu/arazzo-maestro/issues/52)); `in` conditional rule unvalidated |
+| `parameters` | ✅ | ✅ schema | ✅ | ✅ | 🟡 | All five `in` locations emitted (cookie as `[Cookies]`/`cookies:`, querystring appended to the URL); Reusable entries parse empty ([#52](https://github.com/emmanuelperu/arazzo-maestro/issues/52)); `in` conditional rule unvalidated |
 | `requestBody.contentType` / `payload` | ✅ | ✅ | ✅ | ✅ | ✅ | Whole-string and embedded `{$expr}` substitution |
 | `requestBody.replacements` | ❌ | 😶 schema-only | ❌ | ❌ | ❌ | Generated bodies omit injected values ([#55](https://github.com/emmanuelperu/arazzo-maestro/issues/55)) |
 | `successCriteria` | 🟡 | ✅ | 🟡 | 🟡 | 🟡 | Only `condition` survives the parser ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
@@ -74,8 +76,8 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 | Criterion `condition` (simple grammar) | 🟡 | k6 translates the `$statusCode <op> <number>` subset to real `check()`s; everything else is an explicit comment in both generators (never guessed) |
 | Criterion `context` / `type` (`simple`/`regex`/`jsonpath`/`xpath`) | 😶 | Schema enforces "context required with type"; dropped at the parser, indistinguishable downstream ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
 | Expression Type Object versions | ✅ schema | 1.1 values `rfc9535` and `jsonpointer`/`rfc6901` accepted since #47 (per the spec's Expression Type table, xpath versions stay 10/20/30); still dropped at the parser ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
-| `retryAfter` | ⛔ | Spec: decimal seconds; we store integer "milliseconds", truncate decimals, render "ms" ([#41](https://github.com/emmanuelperu/arazzo-maestro/issues/41)) |
-| `retryLimit` | ⛔ | Absent means "a single retry" per spec; we display nothing, and `0` is indistinguishable from unset ([#41](https://github.com/emmanuelperu/arazzo-maestro/issues/41)) |
+| `retryAfter` | ✅ | Decimal seconds end to end (model `float64`, rendered `after Ns`) |
+| `retryLimit` | ✅ | Rendered `× N`, or the spec default `× 1` when unspecified; an explicit `0` is distinguished |
 
 ## Runtime expressions (ABNF)
 

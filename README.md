@@ -183,14 +183,12 @@ The short version:
   `operationPath`, nested `step.workflowId`, `requestBody.replacements`,
   `Criterion.type`/`context`: the official JSON Schema pass accepts
   them, the renderer and generators do not act on them yet.
-- **Known non-compliances** (each tracked): `retryAfter` is mis-handled
-  as integer milliseconds (spec: decimal seconds); cookie parameters do
-  not reach generated tests; `#/json-pointer` suffixes on
-  `$inputs`/`$steps` expressions are not translated. The embedded
-  schema is the official **1.0** one with the 1.1 structural additions
-  (`$self`, `channelPath`, `in: querystring`, AsyncAPI sources,
-  expression versions) grafted on at load time, so 1.1 documents lint;
-  their semantics are not implemented yet.
+- **Known non-compliances** (each tracked): `#/json-pointer` suffixes
+  on `$inputs`/`$steps` expressions are not translated by the
+  generators. The embedded schema is the official **1.0** one with the
+  1.1 structural additions (`$self`, `channelPath`, `in: querystring`,
+  AsyncAPI sources, expression versions) grafted on at load time, so
+  1.1 documents lint; their semantics are not implemented yet.
 
 ### 🧪 Test generation
 
