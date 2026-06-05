@@ -60,9 +60,8 @@ func Generate(wf model.Workflow, sources map[string]*oasresolver.Source) (string
 	return b.String(), nil
 }
 
-// nonStringInputs lists the workflow inputs whose declared type is not
-// a JSON string, so their body templates are emitted without quotes and
-// the substituted value keeps its type.
+// nonStringInputs lists the inputs whose body templates are emitted
+// without quotes so the substituted value keeps its JSON type.
 func nonStringInputs(inputs []model.InputProperty) map[string]bool {
 	m := make(map[string]bool)
 	for _, in := range inputs {
@@ -174,14 +173,8 @@ func writeBody(b *strings.Builder, body *model.RequestBody, unquoted map[string]
 	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(body, unquoted))
 }
 
-// serialiseBody turns the workflow's requestBody payload into the text
-// that goes inside the Hurl body block. Runtime expressions inside the
-// payload become Hurl templates: for JSON content types the payload is
-// marshalled with expressions swapped for sentinels, then the templates
-// are injected, without quotes when the input's declared type is not a
-// string so the substituted value keeps its type. Raw string payloads
-// are passed through; anything else falls back to Go's default
-// formatting.
+// serialiseBody turns the requestBody payload into the text of the Hurl
+// body block, with runtime expressions translated to Hurl templates.
 func serialiseBody(body *model.RequestBody, unquoted map[string]bool) string {
 	if s, ok := body.Payload.(string); ok {
 		return translateInlineExpr(s)
@@ -194,10 +187,9 @@ func serialiseBody(body *model.RequestBody, unquoted map[string]bool) string {
 	return fmt.Sprintf("%v", translateBodyExprs(body.Payload))
 }
 
-// jsonBodyWithTemplates marshals the payload with every whole-string
-// runtime expression swapped for a sentinel absent from the payload
-// itself, then replaces the quoted sentinels with the Hurl templates,
-// so a literal string can never be mistaken for a template.
+// jsonBodyWithTemplates marshals the payload with expressions swapped
+// for sentinels absent from the payload itself, so a literal string can
+// never be mistaken for a template.
 func jsonBodyWithTemplates(payload any, unquoted map[string]bool) (string, error) {
 	probe, err := json.Marshal(payload)
 	if err != nil {
@@ -220,10 +212,6 @@ func jsonBodyWithTemplates(payload any, unquoted map[string]bool) (string, error
 	return out, nil
 }
 
-// swapBodyExprs walks the payload and replaces every string that is a
-// whole-string runtime expression with a sentinel, recording the Hurl
-// text to inject afterwards: the {{name}} template, quoted unless the
-// input's declared type is non-string.
 func swapBodyExprs(v any, unquoted map[string]bool, base string, repls *[]string) any {
 	switch t := v.(type) {
 	case string:
@@ -254,12 +242,6 @@ func swapBodyExprs(v any, unquoted map[string]bool, base string, repls *[]string
 	}
 }
 
-// translateBodyExprs walks the requestBody payload and translates string
-// values that are runtime expressions, so the emitted body carries Hurl
-// templates ({{productId}}) instead of literal "$inputs..." strings.
-// Maps and slices are rebuilt with translated values; everything else
-// passes through unchanged, with the same fallthrough for unrecognised
-// forms as the inline parameter translation.
 func translateBodyExprs(v any) any {
 	switch t := v.(type) {
 	case string:
@@ -321,10 +303,7 @@ func resolveRequestLine(operationID string, params []model.Parameter, sources ma
 	if err != nil {
 		return "", "", false
 	}
-	// The host is always the {{baseUrl}} variable, never op.BaseURL:
-	// the OpenAPI servers URL is documented in the header as the
-	// default, but the request line stays environment-agnostic so the
-	// caller picks the target with `hurl --variable baseUrl=<endpoint>`.
+	// Always {{baseUrl}}, never op.BaseURL: requests stay environment-agnostic.
 	path := substitutePathParams(op.Path, params)
 	return op.Method, "{{baseUrl}}" + path, true
 }
@@ -366,9 +345,6 @@ func substitutePathParams(path string, params []model.Parameter) string {
 	return path
 }
 
-// renderValue stringifies a parameter or body value, translating
-// Arazzo runtime expressions into Hurl template placeholders where
-// the value is a string.
 func renderValue(v any) string {
 	s, ok := v.(string)
 	if !ok {
@@ -377,11 +353,9 @@ func renderValue(v any) string {
 	return translateInlineExpr(s)
 }
 
-// translateInlineExpr maps an Arazzo runtime expression used inline
-// (in a parameter value, URL, header...) to a Hurl template. Anything
-// not recognised, including names that are not plain Arazzo names
-// (dotted sub-paths, free text after a matching prefix), is returned
-// unchanged so the user can spot it.
+// translateInlineExpr maps an inline runtime expression to a Hurl
+// template ($inputs.foo -> {{foo}}, $steps.s.outputs.o -> {{s_o}});
+// anything else is returned unchanged so the user can spot it.
 func translateInlineExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	switch {
@@ -401,8 +375,6 @@ func translateInlineExpr(expr string) string {
 	}
 }
 
-// splitStepOutput splits "<stepId>.outputs.<outputName>" into its step
-// and output parts.
 func splitStepOutput(rest string) (step, out string, ok bool) {
 	const sep = ".outputs."
 	idx := strings.Index(rest, sep)
@@ -450,14 +422,11 @@ func translateCaptureExpr(expr string) string {
 	return "# unsupported: " + expr
 }
 
-// jsonPointerToJSONPath converts the body of a JSON Pointer (the part
-// after '#/') to a JSONPath expression rooted at $. Segments are
-// RFC 6901-unescaped (~1 -> /, ~0 -> ~); numeric segments are emitted
-// as array indexers ([0]); plain identifier segments are dotted
-// (.name); anything else is bracket-quoted (['user-id']). Hurl's
-// jsonpath grammar offers no escape for quotes or backslashes inside a
-// bracket segment, so a key containing one is not representable and
-// ok=false is returned.
+// jsonPointerToJSONPath converts the body of a JSON Pointer (after
+// '#/') to a JSONPath expression rooted at $. Hurl's jsonpath grammar
+// offers no escape for quotes or backslashes inside a bracket segment,
+// so keys containing one are not representable and ok=false is
+// returned.
 func jsonPointerToJSONPath(ptr string) (string, bool) {
 	var b strings.Builder
 	b.WriteString("$")
@@ -485,9 +454,8 @@ func unescapeJSONPointer(seg string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(seg, "~1", "/"), "~0", "~")
 }
 
-// isJSONPathIdent reports whether s is a plain identifier segment
-// (letters, digits or '_', not starting with a digit), safe to emit in
-// JSONPath dot notation.
+// isJSONPathIdent reports whether s is safe to emit in JSONPath dot
+// notation.
 func isJSONPathIdent(s string) bool {
 	if s == "" {
 		return false

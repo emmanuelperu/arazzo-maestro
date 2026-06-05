@@ -169,7 +169,6 @@ func jsonPointerToPath(ptr string) string {
 	parts := strings.Split(strings.TrimPrefix(ptr, "/"), "/")
 	var b strings.Builder
 	for _, p := range parts {
-		// Un-escape JSON Pointer special chars.
 		p = strings.ReplaceAll(p, "~1", "/")
 		p = strings.ReplaceAll(p, "~0", "~")
 		if isAllDigits(p) {
