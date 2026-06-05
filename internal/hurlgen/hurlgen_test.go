@@ -281,6 +281,24 @@ func TestGenerateEmitsQueryAndHeaderParameters(t *testing.T) {
 	assertContains(t, out, "cursor: {{prev_next}}")
 }
 
+func TestGenerateEmitsCookieAndQuerystringParameters(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "session", In: "cookie", Value: "$inputs.token"},
+				{Name: "theme", In: "cookie", Value: "dark"},
+				{Name: "q", In: "querystring", Value: "a=1&b=2"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "GET {{baseUrl}}/products?a=1&b=2")
+	assertContains(t, out, "[Cookies]\nsession: {{token}}\ntheme: dark\n")
+}
+
 func TestGenerateEmitsRequestBody(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",

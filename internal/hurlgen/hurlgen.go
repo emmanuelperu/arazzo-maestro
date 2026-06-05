@@ -11,6 +11,8 @@
 //	parameters in=header      -> header lines
 //	parameters in=query       -> [QueryStringParams]
 //	parameters in=path        -> substituted into the request URL
+//	parameters in=cookie      -> [Cookies]
+//	parameters in=querystring -> appended to the request URL
 //
 // Operation resolution goes through the oasresolver package: callers
 // pass a map of source-description name to *oasresolver.Source. Short
@@ -133,10 +135,18 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		method = "GET"
 		url = "{{baseUrl}}/__unresolved__/" + s.OperationID
 	}
+	if qs := querystringValue(s.Parameters); qs != "" {
+		sep := "?"
+		if strings.Contains(url, "?") {
+			sep = "&"
+		}
+		url += sep + qs
+	}
 	fmt.Fprintf(b, "%s %s\n", method, url)
 
 	writeHeaders(b, s.Parameters)
 	writeQuery(b, s.Parameters)
+	writeCookies(b, s.Parameters)
 	writeBody(b, s.RequestBody, unquoted)
 
 	b.WriteString("\nHTTP *\n")
@@ -165,6 +175,31 @@ func writeQuery(b *strings.Builder, params []model.Parameter) {
 		}
 		fmt.Fprintf(b, "%s: %s\n", p.Name, renderValue(p.Value))
 	}
+}
+
+func writeCookies(b *strings.Builder, params []model.Parameter) {
+	first := true
+	for _, p := range params {
+		if p.In != "cookie" {
+			continue
+		}
+		if first {
+			b.WriteString("[Cookies]\n")
+			first = false
+		}
+		fmt.Fprintf(b, "%s: %s\n", p.Name, renderValue(p.Value))
+	}
+}
+
+// querystringValue returns the rendered value of the querystring
+// parameter, the spec's whole-query-string location, or "".
+func querystringValue(params []model.Parameter) string {
+	for _, p := range params {
+		if p.In == "querystring" {
+			return renderValue(p.Value)
+		}
+	}
+	return ""
 }
 
 func writeBody(b *strings.Builder, body *model.RequestBody, unquoted map[string]bool) {

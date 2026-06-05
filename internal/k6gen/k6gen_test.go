@@ -313,6 +313,25 @@ func TestGenerateEscapesURLParamTextInsideTemplateLiteral(t *testing.T) {
 	assertContains(t, out, "v=a\\`b-${version}")
 }
 
+func TestGenerateEmitsCookieAndQuerystringParameters(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "token", Type: "string"}, {Name: "qs", Type: "string"}},
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "session", In: "cookie", Value: "$inputs.token"},
+				{Name: "theme", In: "cookie", Value: "dark"},
+				{Name: "q", In: "querystring", Value: "$inputs.qs"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "${BASE_URL}/products?${qs}")
+	assertContains(t, out, `cookies: { "session": token, "theme": "dark" }`)
+}
+
 func TestGenerateEmitsStringRequestBody(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",
