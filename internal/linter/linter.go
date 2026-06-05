@@ -98,8 +98,16 @@ func lintSemantic(doc *model.ArazzoDocument) []Issue {
 		})
 	}
 	issues = append(issues, checkUniqueWorkflowIDs(doc)...)
+	workflowIDs := make(map[string]bool, len(doc.Workflows))
+	for _, wf := range doc.Workflows {
+		workflowIDs[wf.WorkflowID] = true
+	}
+	sourceNames := make(map[string]bool, len(doc.SourceDescriptions))
+	for _, s := range doc.SourceDescriptions {
+		sourceNames[s.Name] = true
+	}
 	for i := range doc.Workflows {
-		issues = append(issues, lintWorkflow(&doc.Workflows[i])...)
+		issues = append(issues, lintWorkflow(&doc.Workflows[i], workflowIDs, sourceNames)...)
 	}
 	return issues
 }
@@ -125,7 +133,7 @@ func checkUniqueWorkflowIDs(doc *model.ArazzoDocument) []Issue {
 	return issues
 }
 
-func lintWorkflow(wf *model.Workflow) []Issue {
+func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool) []Issue {
 	var issues []Issue
 	path := "workflows[" + wf.WorkflowID + "]"
 
@@ -168,6 +176,75 @@ func lintWorkflow(wf *model.Workflow) []Issue {
 		for _, c := range step.SuccessCriteria {
 			issues = append(issues, checkStepsRef(c.Condition, wf, stepPath+".successCriteria", i)...)
 		}
+		for _, a := range step.OnSuccess {
+			issues = append(issues, checkAction(a.Type, a.StepID, a.WorkflowID, a.Criteria, wf, workflowIDs, sourceNames, stepPath+".onSuccess["+a.Name+"]", i)...)
+		}
+		for _, a := range step.OnFailure {
+			issues = append(issues, checkAction(a.Type, a.StepID, a.WorkflowID, a.Criteria, wf, workflowIDs, sourceNames, stepPath+".onFailure["+a.Name+"]", i)...)
+		}
+	}
+	return issues
+}
+
+// checkAction validates an action's transition target and criteria.
+// Per the spec, an action stepId MUST be within the current workflow;
+// a workflowId references a workflow of this document, or another
+// document via the $sourceDescriptions.<name>.<workflowId> form; both
+// are only relevant when the type is goto or retry.
+func checkAction(typ, stepID, workflowID string, criteria []model.SuccessCriterion, wf *model.Workflow, workflowIDs, sourceNames map[string]bool, path string, stepIndex int) []Issue {
+	var issues []Issue
+	targetRelevant := typ == "goto" || typ == "retry"
+	if stepID != "" {
+		if !targetRelevant {
+			issues = append(issues, Issue{
+				Severity: SeverityWarning,
+				Path:     path,
+				Message:  fmt.Sprintf("stepId has no effect when type is %q", typ),
+			})
+		} else if _, step := findStep(wf, stepID); step == nil {
+			issues = append(issues, Issue{
+				Severity: SeverityError,
+				Path:     path,
+				Message:  fmt.Sprintf("target step %q does not exist in this workflow", stepID),
+			})
+		}
+	}
+	if workflowID != "" {
+		switch {
+		case !targetRelevant:
+			issues = append(issues, Issue{
+				Severity: SeverityWarning,
+				Path:     path,
+				Message:  fmt.Sprintf("workflowId has no effect when type is %q", typ),
+			})
+		case strings.HasPrefix(workflowID, "$sourceDescriptions."):
+			rest := strings.TrimPrefix(workflowID, "$sourceDescriptions.")
+			name, target, found := strings.Cut(rest, ".")
+			if !found || name == "" || target == "" {
+				issues = append(issues, Issue{
+					Severity: SeverityError,
+					Path:     path,
+					Message:  fmt.Sprintf("malformed workflowId reference %q: expected $sourceDescriptions.<name>.<workflowId>", workflowID),
+				})
+			} else if !sourceNames[name] {
+				issues = append(issues, Issue{
+					Severity: SeverityError,
+					Path:     path,
+					Message:  fmt.Sprintf("workflowId reference %q: source description %q does not exist", workflowID, name),
+				})
+			}
+		case !workflowIDs[workflowID]:
+			issues = append(issues, Issue{
+				Severity: SeverityError,
+				Path:     path,
+				Message:  fmt.Sprintf("target workflow %q does not exist in this document", workflowID),
+			})
+		}
+	}
+	// Action criteria evaluate after the step has run, so the current
+	// step's outputs are in scope: only later steps are out of reach.
+	for _, c := range criteria {
+		issues = append(issues, checkStepsRef(c.Condition, wf, path+".criteria", stepIndex+1)...)
 	}
 	return issues
 }

@@ -491,49 +491,14 @@ func arazzoBaseName(path string) string {
 
 func loadArazzoSources(doc *model.ArazzoDocument, basePath string) (map[string]*oasresolver.Source, error) {
 	sources := make(map[string]*oasresolver.Source, len(doc.SourceDescriptions))
-	for _, src := range doc.SourceDescriptions {
-		// Only OpenAPI sources are resolvable today. Other types
-		// (e.g. 'arazzo' for nested workflows) are skipped.
-		if src.Type != "" && src.Type != "openapi" {
-			continue
-		}
-		path, err := resolveSourceURL(src.URL, basePath)
-		if err != nil {
-			return nil, fmt.Errorf("source %q: %w", src.Name, err)
-		}
-		loaded, err := oasresolver.Load(path)
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil, fmt.Errorf("source %q: file not found (resolved to %s)", src.Name, path)
+	for _, r := range oasresolver.LoadAll(doc.SourceDescriptions, basePath) {
+		if r.Err != nil {
+			if errors.Is(r.Err, fs.ErrNotExist) {
+				return nil, fmt.Errorf("source %q: file not found (resolved to %s)", r.Name, r.Path)
 			}
-			return nil, fmt.Errorf("source %q: %w", src.Name, err)
+			return nil, fmt.Errorf("source %q: %w", r.Name, r.Err)
 		}
-		sources[src.Name] = loaded
+		sources[r.Name] = r.Source
 	}
 	return sources, nil
-}
-
-// resolveSourceURL turns an Arazzo 'url:' field into an absolute local
-// path. HTTP/HTTPS schemes are rejected: the CLI stays offline and
-// deterministic, mirroring the linter's cross-file pass.
-func resolveSourceURL(rawURL, basePath string) (string, error) {
-	if rawURL == "" {
-		return "", errors.New("missing url")
-	}
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid url: %w", err)
-	}
-	switch strings.ToLower(u.Scheme) {
-	case "http", "https":
-		return "", fmt.Errorf("HTTP source URLs are not supported (use a local file or relative path)")
-	case "file":
-		return u.Path, nil
-	case "":
-		if filepath.IsAbs(rawURL) {
-			return rawURL, nil
-		}
-		return filepath.Join(basePath, rawURL), nil
-	}
-	return "", fmt.Errorf("unsupported url scheme %q", u.Scheme)
 }
