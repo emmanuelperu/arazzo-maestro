@@ -143,3 +143,20 @@ func TestListThemes(t *testing.T) {
 		t.Errorf("expected 'dark' in output, got %q", out)
 	}
 }
+
+func TestVersionStringPrefersInjectedValue(t *testing.T) {
+	old := version
+	defer func() { version = old }()
+
+	version = "0.3.0"
+	if got := versionString(); got != "0.3.0" {
+		t.Errorf("versionString() = %q, want the injected 0.3.0", got)
+	}
+
+	// In `go test` the build info reports "(devel)", so the dev
+	// default must survive the fallback.
+	version = "dev"
+	if got := versionString(); got != "dev" {
+		t.Errorf("versionString() = %q, want dev for source builds", got)
+	}
+}

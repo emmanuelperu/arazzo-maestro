@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -30,6 +31,19 @@ const defaultThemesFile = "themes.yml"
 // version is overridden at build time via -ldflags.
 var version = "dev"
 
+// versionString returns the goreleaser-injected version when set,
+// otherwise the Go module version recorded by `go install` (and "dev"
+// for source checkouts, where build info reports "(devel)").
+func versionString() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return strings.TrimPrefix(info.Main.Version, "v")
+	}
+	return version
+}
+
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
 		os.Exit(1)
@@ -41,7 +55,7 @@ func newRootCmd() *cobra.Command {
 		Use:          "arazzo-maestro",
 		Short:        "Inspect and render Arazzo workflow specifications",
 		SilenceUsage: true,
-		Version:      version,
+		Version:      versionString(),
 	}
 	root.AddCommand(newLintCmd(), newViewCmd(), newTestCmd())
 	return root
