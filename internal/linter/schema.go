@@ -68,7 +68,11 @@ func loadArazzoSchema() (*jsonschema.Schema, error) {
 }
 
 // patchSchemaVersionPattern relaxes the `arazzo` field pattern so 1.1.x
-// documents validate. See file header for rationale.
+// documents validate, and grafts the structural additions of spec 1.1.0
+// onto the 1.0 schema so spec-valid 1.1 documents stop failing lint:
+// `$self` (root), `channelPath` (step), `in: querystring` (parameter),
+// `type: asyncapi` (source description), and the 1.1 criterion
+// expression types/versions. See file header for rationale.
 func patchSchemaVersionPattern(raw []byte) ([]byte, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -80,7 +84,78 @@ func patchSchemaVersionPattern(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("schema is missing properties.arazzo")
 	}
 	arazzo["pattern"] = patchedArazzoVersionPattern
+
+	// $self, spec 1.1 L202: URI-reference, no fragment.
+	props["$self"] = map[string]any{"type": "string", "format": "uri-reference"}
+
+	defs, _ := doc["$defs"].(map[string]any)
+	if defs == nil {
+		return nil, fmt.Errorf("schema is missing $defs")
+	}
+
+	// Source description type, spec 1.1 L344: openapi | asyncapi | arazzo.
+	if err := patchEnum(defs, "source-description-object", "type", "asyncapi"); err != nil {
+		return nil, err
+	}
+
+	// Parameter location, spec 1.1 L583/L592: adds querystring.
+	if err := patchEnum(defs, "parameter-object", "in", "querystring"); err != nil {
+		return nil, err
+	}
+
+	// Step channelPath, spec 1.1 L427: a fourth mutually-exclusive way
+	// to reference an operation.
+	step, _ := defs["step-object"].(map[string]any)
+	stepProps, _ := step["properties"].(map[string]any)
+	if stepProps == nil {
+		return nil, fmt.Errorf("schema is missing step-object.properties")
+	}
+	stepProps["channelPath"] = map[string]any{"type": "string"}
+	oneOf, _ := step["oneOf"].([]any)
+	step["oneOf"] = append(oneOf, map[string]any{"required": []any{"channelPath"}})
+
+	// Criterion expression types, spec 1.1 L1105-1106: jsonpointer added,
+	// jsonpath gains rfc9535.
+	if err := patchEnum(defs, "criterion-expression-type-object", "type", "jsonpointer"); err != nil {
+		return nil, err
+	}
+	expr, _ := defs["criterion-expression-type-object"].(map[string]any)
+	allOf, _ := expr["allOf"].([]any)
+	for _, branch := range allOf {
+		b, _ := branch.(map[string]any)
+		ifProps, _ := b["if"].(map[string]any)["properties"].(map[string]any)
+		typ, _ := ifProps["type"].(map[string]any)
+		if typ["const"] == "jsonpath" {
+			thenProps, _ := b["then"].(map[string]any)["properties"].(map[string]any)
+			thenProps["version"] = map[string]any{
+				"enum": []any{"draft-goessner-dispatch-jsonpath-00", "rfc9535"},
+			}
+		}
+	}
+	expr["allOf"] = append(allOf, map[string]any{
+		"if": map[string]any{
+			"required":   []any{"type"},
+			"properties": map[string]any{"type": map[string]any{"const": "jsonpointer"}},
+		},
+		"then": map[string]any{
+			"properties": map[string]any{"version": map[string]any{"const": "rfc6901"}},
+		},
+	})
+
 	return json.Marshal(doc)
+}
+
+// patchEnum appends a value to the enum of $defs.<def>.properties.<prop>.
+func patchEnum(defs map[string]any, def, prop, value string) error {
+	d, _ := defs[def].(map[string]any)
+	p, _ := d["properties"].(map[string]any)
+	field, _ := p[prop].(map[string]any)
+	enum, _ := field["enum"].([]any)
+	if enum == nil {
+		return fmt.Errorf("schema is missing %s.properties.%s.enum", def, prop)
+	}
+	field["enum"] = append(enum, value)
+	return nil
 }
 
 func lintSchema(raw []byte) []Issue {
