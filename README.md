@@ -96,10 +96,11 @@ open dist/shop/light/index.html
 
 ## Visual preview
 
-The repo ships with two demo Arazzo files in [`examples/`](./examples):
+The repo ships with three demo Arazzo files in [`examples/`](./examples):
 
 - [`shop.arazzo.yaml`](./examples/shop.arazzo.yaml), happy-path checkout + a retry-on-failure path (showcases `onFailure: retry`). References [`shop-openapi.yaml`](./examples/shop-openapi.yaml) (scored 100/100 by [Vacuum](https://quobix.com/vacuum/)).
 - [`checkout-branching.arazzo.yaml`](./examples/checkout-branching.arazzo.yaml), single payment step that branches via `onSuccess: goto` / `onFailure: goto` to a confirm or cancel step. References [`checkout-branching-api.yaml`](./examples/checkout-branching-api.yaml).
+- [`auth.arazzo.yaml`](./examples/auth.arazzo.yaml), authenticated scenario showing where test data comes from: credentials as run-time inputs, token captured from the login step, order id self-provisioned from the listing. References [`auth-api.yaml`](./examples/auth-api.yaml) (scored 100/100 by Vacuum).
 
 The `happy-path-checkout` workflow rendered by `view`, in the two built-in themes (click to enlarge):
 
@@ -267,6 +268,22 @@ k6 run -e BASE_URL=https://staging.example.com -e productId=p-001 \
 Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are substituted too (`"$inputs.productId"` becomes the `productId` constant; the e2e generator emits `{{productId}}`, unquoted when the input's declared type is numeric or boolean), as is the spec's embedded form: `"Bearer {$inputs.token}"` becomes a JS template literal in k6 and `"Bearer {{token}}"` in Hurl. Only whole-string expressions and braced `{$expr}` occurrences resolving to a declared input or earlier step output are substituted; anything else stays a literal. Drill is a planned lighter alternative.
 
 The perf-only flags (`--vus`, `--duration`, `--threshold`) live on `test gen perf` so `test gen perf --help` documents exactly what makes sense for load testing; `test gen e2e --help` stays focused on functional concerns. Both subcommands share the same underlying workflow IR, so adding a new format is a per-template change, not a CLI redesign.
+
+#### Where does test data come from?
+
+Three layers, demonstrated by [`auth.arazzo.yaml`](./examples/auth.arazzo.yaml):
+
+1. **Run-time inputs.** Workflow `inputs` become Hurl variables and k6 environment variables; secrets never live in the YAML, they come from your shell or CI secret store:
+
+   ```bash
+   arazzo-maestro test run e2e examples/auth.arazzo.yaml --base-url https://staging.example.com \
+     --variable username=demo --variable password="$ORDERS_PASSWORD"
+   k6 run -e BASE_URL=https://staging.example.com -e username=demo -e password="$ORDERS_PASSWORD" \
+     dist/perf/k6/auth/authenticated-order-lookup.k6.js
+   ```
+
+2. **Captured outputs.** Authentication is just a step: the login response token is captured and chained into later headers (`Bearer {$steps.login.outputs.token}` becomes `Bearer {{login_token}}` in Hurl and a JS template literal in k6).
+3. **Self-provisioned data.** Values that must exist server-side are derived from earlier responses (the order id comes from the listing step), so the scenario carries its own fixtures to any environment.
 
 ### 🌱 Eco-design and accessibility
 

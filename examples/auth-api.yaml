@@ -1,0 +1,152 @@
+openapi: "3.1.0"
+info:
+  title: Orders API
+  version: "1.0.0"
+  description: Minimal API where every order endpoint requires a bearer token obtained from the login endpoint.
+servers:
+  - url: https://orders.example.com/api/v1
+tags:
+  - name: auth
+    description: Obtaining and refreshing session tokens.
+  - name: orders
+    description: Reading the authenticated user's orders.
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      summary: Exchange credentials for a bearer token
+      tags: [auth]
+      requestBody:
+        description: Credentials of the account to authenticate.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+            example:
+              username: demo
+              password: demo-password
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+              example:
+                token: eyJhbGciOiJIUzI1NiJ9.demo.signature
+                expiresIn: 3600
+        "401":
+          description: Invalid credentials
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List the authenticated user's orders
+      tags: [orders]
+      parameters:
+        - name: page
+          in: query
+          description: Zero-based page index.
+          schema:
+            type: integer
+            default: 0
+            example: 0
+      responses:
+        "200":
+          description: A page of orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderList"
+              example:
+                items:
+                  - id: ord-001
+                    status: shipped
+                    total: 49.99
+        "401":
+          description: Missing or expired token on the listing call
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Fetch one order
+      tags: [orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: Identifier of the order to fetch.
+          schema:
+            type: string
+            example: ord-001
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+              example:
+                id: ord-001
+                status: shipped
+                total: 49.99
+        "401":
+          description: Missing or expired token
+        "404":
+          description: Unknown order
+components:
+  schemas:
+    Credentials:
+      type: object
+      description: Username and password exchanged for a session token.
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: Account name.
+          example: demo
+        password:
+          type: string
+          format: password
+          description: Account password, never logged.
+          example: demo-password
+    Session:
+      type: object
+      description: Bearer token returned by a successful login.
+      properties:
+        token:
+          type: string
+          description: Opaque bearer token for the Authorization header.
+          example: eyJhbGciOiJIUzI1NiJ9.demo.signature
+        expiresIn:
+          type: integer
+          description: Seconds before the token expires.
+          example: 3600
+    OrderList:
+      type: object
+      description: One page of the user's orders.
+      properties:
+        items:
+          type: array
+          description: Orders in this page.
+          example:
+            - id: ord-001
+              status: shipped
+              total: 49.99
+          items:
+            $ref: "#/components/schemas/Order"
+    Order:
+      type: object
+      description: A single order.
+      properties:
+        id:
+          type: string
+          description: Order identifier.
+          example: ord-001
+        status:
+          type: string
+          description: Lifecycle status, e.g. pending or shipped.
+          example: shipped
+        total:
+          type: number
+          description: Order total in the account currency.
+          example: 49.99
