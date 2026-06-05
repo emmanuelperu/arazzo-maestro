@@ -28,7 +28,7 @@
 <p align="center">
   <a href="https://go.dev/dl/"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/emmanuelperu/arazzo-maestro?logo=go"></a>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
-  <a href="https://spec.openapis.org/arazzo/latest.html"><img alt="Arazzo" src="https://img.shields.io/badge/arazzo-1.0%20%7C%201.1-7e22ce"></a>
+  <a href="./docs/SPEC_COMPLIANCE.md"><img alt="Arazzo" src="https://img.shields.io/badge/arazzo-1.0%20%7C%201.1%20partial-7e22ce"></a>
   <a href="./.agents/rules/accessibility.md"><img alt="WCAG 2.2 AA" src="https://img.shields.io/badge/WCAG-2.2%20AA-047857"></a>
   <a href="./.agents/rules/eco-design.md"><img alt="Eco-design" src="https://img.shields.io/badge/eco--design-by%20rule-2d5016"></a>
   <a href="https://www.bestpractices.dev/projects/12929"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/12929/badge"></a>
@@ -167,27 +167,29 @@ Custom themes that drop below WCAG AA contrast emit warnings at load time. See [
 
 ### 📋 Arazzo coverage
 
-What the tool **renders and validates** versus what is currently
-out of scope. The linter catches everything that fails the official
-JSON Schema; the table below tracks the visual rendering.
+What works, what degrades, and what is missing, audited field by field
+against the official Arazzo 1.1.0 spec: the full, honest matrix lives
+in [`docs/SPEC_COMPLIANCE.md`](./docs/SPEC_COMPLIANCE.md) (tracking
+issue [#58](https://github.com/emmanuelperu/arazzo-maestro/issues/58)).
+The short version:
 
-| Arazzo feature | Render | Notes |
-|---|---|---|
-| `info`, `sourceDescriptions`, `workflows[]` (top-level) | ✅ | Header frame + cross-file lint |
-| `workflow.inputs` (JSON-Schema properties: name, type, default) | ✅ | START block |
-| `step.operationId` + `parameters` (`name`/`in`/`value`) | ✅ | Numbered `01/02/03` step boxes |
-| `step.requestBody` (`contentType`, `payload` with runtime exprs) | ✅ | Dark JSON block |
-| `step.successCriteria` (`condition`) | ✅ | Yellow asserts block |
-| `step.outputs` | ✅ | `→ name = $expr` (ordered, spec vocabulary preserved) |
-| `step.onSuccess` (`end`, `goto`) and `step.onFailure` (`end`, `goto`, `retry`) | ✅ | ✅/❌ labelled sub-sections with action tag, retry meta (`× N`, `after Nms`), `when` criteria, and clickable anchor links to target steps |
-| `step.onFailure: retry` targeting self | ✅ | Plus a CSS-drawn curved arrow on the right of the step (mobile fallback: banner above the step marker) |
-| `workflow.outputs` | ✅ | END block |
-| Qualified `operationId` (`$sourceDescriptions.<name>.<op>`) for multi-API workflows | ✅ | Linter enforces qualification when multiple sources are declared |
-| `step.workflowId` (nested workflows) | ⏭️ | Future, would extend the rendering graph |
-| `step.dependsOn` (parallel branches) | ⏭️ | Future |
-| `components.parameters` / `components.{success,failure}Actions` (`$ref` reuse) | ⏭️ | Future |
-| `Criterion.type` (`simple`/`regex`/`jsonpath`/`xpath`) + `Criterion.context` | ⚠️ | Read by the linter, not yet surfaced in the render |
-| AsyncAPI sources | ❌ | Out of scope |
+- **Solid**: the core path: `info`/`sourceDescriptions`/`workflows`,
+  steps with `operationId` (short + qualified), parameters
+  (path/query/header), request bodies with whole-string and embedded
+  `{$expr}` substitution, success criteria conditions, outputs and
+  capture chaining, `onSuccess`/`onFailure` incl. self-retry rendering.
+- **Validated but dropped downstream**: workflow-level
+  actions/parameters, `dependsOn`, `components` + Reusable Objects,
+  `operationPath`, nested `step.workflowId`, `requestBody.replacements`,
+  `Criterion.type`/`context`: the official JSON Schema pass accepts
+  them, the renderer and generators do not act on them yet.
+- **Known non-compliances** (each tracked): the embedded schema is the
+  official **1.0** one (version-patched), so 1.1 structural additions
+  (`$self`, `channelPath`, `in: querystring`, AsyncAPI sources) are
+  currently rejected; `retryAfter` is mis-handled as integer
+  milliseconds (spec: decimal seconds); cookie parameters do not reach
+  generated tests; `#/json-pointer` suffixes on `$inputs`/`$steps`
+  expressions are not translated.
 
 ### 🧪 Test generation
 
@@ -473,6 +475,7 @@ manager. The binary is the entire userland.
 
 ## Documentation
 
+- [`docs/SPEC_COMPLIANCE.md`](./docs/SPEC_COMPLIANCE.md), field-by-field status against the official Arazzo spec, audited
 - [`AGENTS.md`](./AGENTS.md), entry point for any coding agent (humans too) working on this repo
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md), dev environment + PR checklist + conventions
 - [`SECURITY.md`](./SECURITY.md), vulnerability reporting policy (private GitHub Security Advisories)

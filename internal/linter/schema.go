@@ -6,13 +6,15 @@
 // The embedded schema is the official Arazzo 1.0 schema published by
 // the OAI at https://spec.openapis.org/arazzo/1.0/schema/2025-10-15.
 // At load time we loosen its `arazzo` version pattern so that both
-// 1.0.x and 1.1.x documents validate. Rationale:
-//   - The OAI has published spec 1.1.0 (May 2026) but no 1.1 JSON
-//     schema yet (the published schema is explicitly labelled
-//     "non-authoritative").
-//   - The 1.1 release is documentation-focused; the structure the
-//     schema validates is unchanged for the parts we care about.
-// When OAI publishes the 1.1 schema, we'll embed it and drop the patch.
+// 1.0.x and 1.1.x documents validate, because the OAI has published
+// spec 1.1.0 but no 1.1 JSON schema yet (the published schema is
+// explicitly labelled "non-authoritative").
+//
+// Caveat: 1.1 added structural features the 1.0 schema does not know
+// ($self, channelPath, in: querystring, asyncapi sources, new criterion
+// expression versions), so spec-valid 1.1 documents using them are
+// currently rejected; see docs/SPEC_COMPLIANCE.md. When OAI publishes
+// the 1.1 schema, we'll embed it and drop the patch.
 
 package linter
 
