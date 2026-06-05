@@ -225,6 +225,7 @@ Arazzo step features translated:
 | `step.outputs`             | `[Captures]` with `jsonpath` / `status`       |
 | `step.successCriteria`     | comments inside `[Asserts]`                   |
 | `$inputs.foo`              | `{{foo}}` (Hurl variable)                     |
+| `{$inputs.foo}` embedded in text | `{{foo}}` inside the string             |
 | `$steps.s.outputs.o`       | `{{s_o}}` (capture-chained)                   |
 | `$response.body#/x/y`      | `jsonpath "$.x.y"`                            |
 | `$statusCode`              | `status`                                      |
@@ -263,7 +264,7 @@ k6 run -e BASE_URL=https://staging.example.com -e productId=p-001 \
   dist/perf/k6/shop/happy-path-checkout.k6.js
 ```
 
-Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are substituted too (`"$inputs.productId"` becomes the `productId` constant; the e2e generator emits `{{productId}}`, unquoted when the input's declared type is numeric or boolean). Only whole-string expressions resolving to a declared input or earlier step output are substituted; anything else stays a literal. Drill is a planned lighter alternative.
+Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are substituted too (`"$inputs.productId"` becomes the `productId` constant; the e2e generator emits `{{productId}}`, unquoted when the input's declared type is numeric or boolean), as is the spec's embedded form: `"Bearer {$inputs.token}"` becomes a JS template literal in k6 and `"Bearer {{token}}"` in Hurl. Only whole-string expressions and braced `{$expr}` occurrences resolving to a declared input or earlier step output are substituted; anything else stays a literal. Drill is a planned lighter alternative.
 
 The perf-only flags (`--vus`, `--duration`, `--threshold`) live on `test gen perf` so `test gen perf --help` documents exactly what makes sense for load testing; `test gen e2e --help` stays focused on functional concerns. Both subcommands share the same underlying workflow IR, so adding a new format is a per-template change, not a CLI redesign.
 

@@ -23,7 +23,8 @@
 //
 // Arazzo runtime expressions are translated: $inputs.foo becomes
 // {{foo}}, $steps.s.outputs.o becomes {{s_o}}, $response.body#/x/y
-// becomes `jsonpath "$.x.y"`. Unknown forms pass through unchanged.
+// becomes `jsonpath "$.x.y"`, and the spec's embedded {$expr} form is
+// interpolated in place. Unknown forms pass through unchanged.
 //
 // The request host is never hard-coded: every request line is prefixed
 // with the {{baseUrl}} Hurl variable, so the same .hurl file can run
@@ -35,6 +36,7 @@ package hurlgen
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
@@ -170,14 +172,40 @@ func writeBody(b *strings.Builder, body *model.RequestBody, unquoted map[string]
 		return
 	}
 	fmt.Fprintf(b, "# requestBody content-type: %s\n", body.ContentType)
+	if payloadHasLiteralBraces(body.Payload) {
+		b.WriteString("# warning: literal '{{' in the body is interpreted by Hurl templating at run time\n")
+	}
 	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(body, unquoted))
+}
+
+// payloadHasLiteralBraces reports whether any string in the payload
+// contains '{{' before translation: Hurl has no escape for literal
+// moustaches, so such data collides with templating at run time.
+func payloadHasLiteralBraces(v any) bool {
+	switch t := v.(type) {
+	case string:
+		return strings.Contains(t, "{{")
+	case map[string]any:
+		for _, val := range t {
+			if payloadHasLiteralBraces(val) {
+				return true
+			}
+		}
+	case []any:
+		for _, val := range t {
+			if payloadHasLiteralBraces(val) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // serialiseBody turns the requestBody payload into the text of the Hurl
 // body block, with runtime expressions translated to Hurl templates.
 func serialiseBody(body *model.RequestBody, unquoted map[string]bool) string {
 	if s, ok := body.Payload.(string); ok {
-		return translateInlineExpr(s)
+		return renderValue(s)
 	}
 	if strings.Contains(body.ContentType, "json") {
 		if out, err := jsonBodyWithTemplates(body.Payload, unquoted); err == nil {
@@ -217,7 +245,11 @@ func swapBodyExprs(v any, unquoted map[string]bool, base string, repls *[]string
 	case string:
 		tpl := translateInlineExpr(t)
 		if tpl == t {
-			return t
+			// Not a whole-string expression: translate the spec's
+			// embedded {$expr} occurrences in place; the result stays
+			// a plain string.
+			out, _ := translateEmbedded(t)
+			return out
 		}
 		repl := `"` + tpl + `"`
 		if e := strings.TrimSpace(t); strings.HasPrefix(e, "$inputs.") && unquoted[strings.TrimPrefix(e, "$inputs.")] {
@@ -245,7 +277,7 @@ func swapBodyExprs(v any, unquoted map[string]bool, base string, repls *[]string
 func translateBodyExprs(v any) any {
 	switch t := v.(type) {
 	case string:
-		return translateInlineExpr(t)
+		return renderValue(t)
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
@@ -350,7 +382,30 @@ func renderValue(v any) string {
 	if !ok {
 		return fmt.Sprintf("%v", v)
 	}
-	return translateInlineExpr(s)
+	if tpl := translateInlineExpr(s); tpl != s {
+		return tpl
+	}
+	out, _ := translateEmbedded(s)
+	return out
+}
+
+// embeddedExprRe matches the spec's embedded form: a runtime expression
+// wrapped in {} curly braces inside a string value.
+var embeddedExprRe = regexp.MustCompile(`\{(\$[^{}]+)\}`)
+
+// translateEmbedded replaces every embedded {$expr} whose expression is
+// recognised with its Hurl template; unrecognised ones pass through.
+func translateEmbedded(s string) (string, bool) {
+	changed := false
+	out := embeddedExprRe.ReplaceAllStringFunc(s, func(m string) string {
+		expr := m[1 : len(m)-1]
+		if tpl := translateInlineExpr(expr); tpl != expr {
+			changed = true
+			return tpl
+		}
+		return m
+	})
+	return out, changed
 }
 
 // translateInlineExpr maps an inline runtime expression to a Hurl

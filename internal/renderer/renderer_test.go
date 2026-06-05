@@ -171,6 +171,34 @@ func TestRenderWorkflowContainsExpectedSections(t *testing.T) {
 	}
 }
 
+func TestRenderPayloadHighlightsAlignWithGenerators(t *testing.T) {
+	// Whole-string expressions and the spec's braced {$expr} form are
+	// highlighted; a bare expression inside surrounding text is data
+	// and must NOT be highlighted, since the test generators ship it
+	// verbatim.
+	html := string(renderPayload(map[string]any{
+		"whole":    "$inputs.productId",
+		"embedded": "Total: {$inputs.total}",
+		"bare":     "Bearer $inputs.token",
+	}))
+	if !strings.Contains(html, `<span class="runtime">$inputs.productId</span>`) {
+		t.Errorf("whole-string expression not highlighted:\n%s", html)
+	}
+	if !strings.Contains(html, `<span class="runtime">{$inputs.total}</span>`) {
+		t.Errorf("braced embedded expression not highlighted:\n%s", html)
+	}
+	if strings.Contains(html, `<span class="runtime">$inputs.token</span>`) {
+		t.Errorf("bare embedded expression must not be highlighted:\n%s", html)
+	}
+}
+
+func TestRenderValueHighlightsBracedExpression(t *testing.T) {
+	html := string(renderValue("Bearer {$inputs.token}"))
+	if !strings.Contains(html, `<span class="runtime">{$inputs.token}</span>`) {
+		t.Errorf("braced expression not highlighted in value: %s", html)
+	}
+}
+
 func TestRenderWorkflowShowsRetryLoopWhenStepIDOmitted(t *testing.T) {
 	// Per the Arazzo spec a retry action without stepId retries the
 	// current step, so the loop curve must render exactly as if the
