@@ -551,8 +551,8 @@
               <span class="step-loop-curve"></span>
               <span class="step-loop-label">
                 <span class="loop-tag">retry</span>
-                {{ if $retry.RetryLimit }}× {{ $retry.RetryLimit }}{{ end }}
-                {{ if $retry.RetryAfter }}<br>after {{ $retry.RetryAfter }}ms{{ end }}
+                × {{ if $retry.RetryLimitSet }}{{ $retry.RetryLimit }}{{ else }}1{{ end }}
+                {{ if $retry.RetryAfter }}<br>after {{ $retry.RetryAfter }}s{{ end }}
               </span>
             </div>
           {{ end }}
@@ -670,11 +670,9 @@
                       <a class="action-target" href="{{ .WorkflowID }}.html">{{ .WorkflowID }}</a>
                     {{ end }}
                     {{ if eq .Type "retry" }}
-                      {{ if .RetryLimit }}
-                        <span class="action-meta">× {{ .RetryLimit }}</span>
-                      {{ end }}
+                      <span class="action-meta">× {{ if .RetryLimitSet }}{{ .RetryLimit }}{{ else }}1{{ end }}</span>
                       {{ if .RetryAfter }}
-                        <span class="action-meta">after {{ .RetryAfter }}ms</span>
+                        <span class="action-meta">after {{ .RetryAfter }}s</span>
                       {{ end }}
                     {{ end }}
                     {{ if .Criteria }}

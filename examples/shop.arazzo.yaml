@@ -183,7 +183,7 @@ workflows:
           - name: retry-on-transient-failure
             type: retry
             stepId: pay-refused
-            retryAfter: 2000
+            retryAfter: 2
             retryLimit: 2
             criteria:
               - condition: $statusCode >= 500

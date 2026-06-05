@@ -211,8 +211,7 @@ func TestRenderWorkflowShowsRetryLoopWhenStepIDOmitted(t *testing.T) {
 			OnFailure: []model.FailureAction{{
 				Name:       "retry-pay",
 				Type:       "retry",
-				RetryAfter: 1000,
-				RetryLimit: 2,
+				RetryAfter: 1.5,
 			}},
 		}},
 	}
@@ -220,7 +219,9 @@ func TestRenderWorkflowShowsRetryLoopWhenStepIDOmitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderWorkflow: %v", err)
 	}
-	for _, want := range []string{`class="step-loop"`, `class="step-loop-curve"`} {
+	// An unspecified retryLimit means a single retry per the spec, and
+	// retryAfter is a decimal number of seconds.
+	for _, want := range []string{`class="step-loop"`, `class="step-loop-curve"`, "× 1", "after 1.5s"} {
 		if !strings.Contains(html, want) {
 			t.Errorf("output missing %q", want)
 		}
@@ -252,7 +253,7 @@ func TestRenderWorkflowShowsRetryAction(t *testing.T) {
 		"On Failure",
 		"retry",                    // action-tag
 		"× 2",                      // retry limit
-		"2000ms",                   // retry after
+		"after 2s",                 // retry after, spec unit: seconds
 		"$statusCode &gt;= 500",    // criterion, HTML-escaped
 		"end",                      // second action
 		`class="step-loop"`,        // visible loop curve container

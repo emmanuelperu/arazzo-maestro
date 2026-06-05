@@ -307,9 +307,10 @@ func parseFailureActions(n *yaml.Node) []model.FailureAction {
 			case "workflowId":
 				a.WorkflowID = scalarString(kv.Value)
 			case "retryAfter":
-				a.RetryAfter = scalarInt(kv.Value)
+				a.RetryAfter = scalarFloat(kv.Value)
 			case "retryLimit":
 				a.RetryLimit = scalarInt(kv.Value)
+				a.RetryLimitSet = true
 			case "criteria":
 				a.Criteria = parseSuccessCriteria(kv.Value)
 			}
@@ -317,6 +318,20 @@ func parseFailureActions(n *yaml.Node) []model.FailureAction {
 		out = append(out, a)
 	}
 	return out
+}
+
+// scalarFloat returns the numeric value of a scalar node, or 0 if the
+// node is missing or not parseable as a number.
+func scalarFloat(n *yaml.Node) float64 {
+	s := scalarString(n)
+	if s == "" {
+		return 0
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 // scalarInt returns the integer value of a scalar node, or 0 if the
