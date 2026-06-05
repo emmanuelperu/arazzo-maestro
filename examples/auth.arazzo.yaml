@@ -1,0 +1,74 @@
+arazzo: "1.1.0"
+info:
+  title: Authenticated orders
+  version: "1.0.0"
+  summary: Login step, captured token, self-provisioned data
+  description: >
+    Shows where test data comes from when a scenario needs to
+    authenticate: credentials are workflow inputs supplied at run time
+    (never stored here), the session token is captured from the login
+    step and chained into every Authorization header, and the order id
+    is self-provisioned from the listing step.
+sourceDescriptions:
+  - name: orders-api
+    url: ./auth-api.yaml
+    type: openapi
+workflows:
+  - workflowId: authenticated-order-lookup
+    summary: Log in, list orders, read the first one
+    description: >
+      A three-step authenticated scenario. No concrete value lives in
+      this file: credentials arrive as inputs, everything else is
+      captured from responses.
+    inputs:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Account to authenticate with, supplied at run time.
+        password:
+          type: string
+          description: Supplied per environment (CI secret store, shell); deliberately no default.
+    steps:
+      - stepId: login
+        description: Exchange the credentials for a bearer token.
+        operationId: login
+        requestBody:
+          contentType: application/json
+          payload:
+            username: $inputs.username
+            password: $inputs.password
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          token: $response.body#/token
+      - stepId: list-orders
+        description: Authenticated call, the token comes from the login step.
+        operationId: listOrders
+        parameters:
+          - name: Authorization
+            in: header
+            value: Bearer {$steps.login.outputs.token}
+          - name: page
+            in: query
+            value: 0
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          firstOrderId: $response.body#/items/0/id
+      - stepId: get-order
+        description: The order id is self-provisioned from the listing step.
+        operationId: getOrder
+        parameters:
+          - name: Authorization
+            in: header
+            value: Bearer {$steps.login.outputs.token}
+          - name: orderId
+            in: path
+            value: $steps.list-orders.outputs.firstOrderId
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          orderStatus: $response.body#/status
+    outputs:
+      orderStatus: $steps.get-order.outputs.orderStatus
