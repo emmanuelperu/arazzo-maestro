@@ -54,13 +54,14 @@ type SuccessAction struct {
 // FailureAction is one entry of a step's `onFailure` array. Per the
 // Arazzo spec, `Type` is one of "end", "goto", or "retry".
 type FailureAction struct {
-	Name       string
-	Type       string // "end" | "goto" | "retry"
-	StepID     string
-	WorkflowID string
-	RetryAfter int // milliseconds, only when Type == "retry"
-	RetryLimit int // count, only when Type == "retry"
-	Criteria   []SuccessCriterion
+	Name          string
+	Type          string // "end" | "goto" | "retry"
+	StepID        string
+	WorkflowID    string
+	RetryAfter    float64 // seconds (spec: non-negative decimal), only when Type == "retry"
+	RetryLimit    int     // count, only when Type == "retry"
+	RetryLimitSet bool    // distinguishes an explicit 0 from the spec default (a single retry)
+	Criteria      []SuccessCriterion
 }
 
 // SourceDescription is one entry of the top-level `sourceDescriptions` array.

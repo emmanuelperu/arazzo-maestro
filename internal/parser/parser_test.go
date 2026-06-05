@@ -224,6 +224,31 @@ workflows:
 	}
 }
 
+func TestParseRetryAfterDecimalSeconds(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: pay
+        onFailure:
+          - name: retry-pay
+            type: retry
+            retryAfter: 1.5
+`
+	doc, err := ParseBytes([]byte(src))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	a := doc.Workflows[0].Steps[0].OnFailure[0]
+	if a.RetryAfter != 1.5 {
+		t.Errorf("RetryAfter = %v, want 1.5 (spec: decimal seconds)", a.RetryAfter)
+	}
+	if a.RetryLimitSet {
+		t.Errorf("RetryLimitSet should be false when retryLimit is absent")
+	}
+}
+
 func TestParseRejectsNonMapping(t *testing.T) {
 	_, err := ParseBytes([]byte("- just-a-list\n- of-strings\n"))
 	var parseErr *ArazzoParseError
