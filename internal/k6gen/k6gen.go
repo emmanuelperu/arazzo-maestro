@@ -141,10 +141,8 @@ func writeOptions(b *strings.Builder, opts Options) {
 
 func writeDefaultFunc(b *strings.Builder, wf model.Workflow, sources map[string]*oasresolver.Source) {
 	b.WriteString("export default function () {\n")
-	// Identifiers declared so far: inputs first, then each step's
-	// captures as the steps are written. Body expressions are only
-	// translated to identifiers found here, so the script never
-	// references an undeclared constant.
+	// Inputs first, then each step's captures: body expressions only
+	// translate to identifiers in here, never to undeclared constants.
 	declared := make(map[string]bool, len(wf.Inputs))
 	for _, in := range wf.Inputs {
 		declared[jsIdent(in.Name)] = true
@@ -207,15 +205,13 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, decla
 	return name
 }
 
-// jsBodyValue renders a requestBody value as a JS expression: runtime
-// expressions resolving to a declared identifier are swapped for
-// sentinels, the payload is marshalled once (indented JSON is valid
-// JS), and the quoted sentinels are replaced by the bare identifiers
-// ("productId": productId). Undeclared or malformed expressions stay
-// literal strings.
+// jsBodyValue renders a requestBody value as a JS expression: declared
+// runtime expressions are swapped for sentinels before a single JSON
+// marshal (indented JSON is valid JS), then the quoted sentinels become
+// bare identifiers.
 func jsBodyValue(v any, declared map[string]bool) (string, error) {
-	// Derive a sentinel base absent from the payload itself, so a
-	// literal string can never be mistaken for a swapped expression.
+	// A sentinel base absent from the payload guarantees a literal can
+	// never be mistaken for a swapped expression.
 	probe, err := jsonMarshal(v, "", "")
 	if err != nil {
 		return "", err
@@ -236,10 +232,6 @@ func jsBodyValue(v any, declared map[string]bool) (string, error) {
 	return raw, nil
 }
 
-// swapBodyExprs walks the payload and replaces every string that is a
-// runtime expression resolving to a declared identifier with a
-// sentinel, recording the identifier; everything else passes through
-// unchanged.
 func swapBodyExprs(v any, declared map[string]bool, base string, idents *[]string) any {
 	switch t := v.(type) {
 	case string:
@@ -265,9 +257,8 @@ func swapBodyExprs(v any, declared map[string]bool, base string, idents *[]strin
 	}
 }
 
-// bodyExprSentinel returns the placeholder swapped in for the i-th
-// translated body expression; plain ASCII so its JSON encoding is the
-// quoted sentinel itself.
+// bodyExprSentinel is plain ASCII so its JSON encoding is the quoted
+// sentinel itself.
 func bodyExprSentinel(base string, i int) string {
 	return fmt.Sprintf("%s%d__", base, i)
 }
@@ -307,8 +298,7 @@ func writeChecks(b *strings.Builder, resVar, stepID string, crits []model.Succes
 
 // writeCaptures declares one constant per output, namespaced by step id
 // (<stepId>_<outputName>) so a later step's $steps.<stepId>.outputs.<o>
-// reference resolves to the same identifier, and registers it as
-// declared for the steps that follow.
+// reference resolves to the same identifier.
 func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.OutputEntry, declared map[string]bool) {
 	for _, o := range outs {
 		name := jsIdent(stepID) + "_" + jsIdent(o.Name)
@@ -333,10 +323,7 @@ func resolveRequestLine(operationID string, params []model.Parameter, sources ma
 	if err != nil {
 		return "", "", false
 	}
-	// The host is always the BASE_URL constant, never op.BaseURL: the
-	// OpenAPI servers URL is documented in the header as the default, but
-	// the request stays environment-agnostic so the target is picked with
-	// `k6 run -e BASE_URL=<endpoint>`.
+	// Always BASE_URL, never op.BaseURL: requests stay environment-agnostic.
 	return op.Method, "${BASE_URL}" + substitutePathParams(op.Path, params), true
 }
 
@@ -503,11 +490,9 @@ func exprIdent(s string) (string, bool) {
 	return out, out != s
 }
 
-// translateInlineExpr maps an inline Arazzo runtime expression to the JS
-// identifier holding its value. $inputs.foo -> foo, $steps.s.outputs.o ->
-// s_o. Names are sanitised so they match their declarations. Anything
-// unrecognised, including names that are not plain Arazzo names (dotted
-// sub-paths, free text after a matching prefix), is returned unchanged.
+// translateInlineExpr maps an inline runtime expression to the JS
+// identifier holding its value ($inputs.foo -> foo, $steps.s.outputs.o
+// -> s_o); anything else is returned unchanged.
 func translateInlineExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	switch {
@@ -543,8 +528,6 @@ func isExprName(s string) bool {
 	return true
 }
 
-// splitStepOutput splits "<stepId>.outputs.<outputName>" into its step
-// and output parts.
 func splitStepOutput(rest string) (step, out string, ok bool) {
 	const sep = ".outputs."
 	idx := strings.Index(rest, sep)
@@ -554,11 +537,8 @@ func splitStepOutput(rest string) (step, out string, ok bool) {
 	return rest[:idx], rest[idx+len(sep):], true
 }
 
-// jsonPointerToGJSON converts the body of a JSON Pointer (after '#/') to
-// a gjson selector, which is what k6's Response.json() expects: segments
-// are RFC 6901-unescaped (~1 -> /, ~0 -> ~), gjson syntax characters
-// backslash-escaped, then joined by dots; numeric segments keep working
-// as array indices.
+// jsonPointerToGJSON converts the body of a JSON Pointer (after '#/')
+// to the gjson selector k6's Response.json() expects.
 func jsonPointerToGJSON(ptr string) string {
 	segs := strings.Split(ptr, "/")
 	for i, seg := range segs {
@@ -604,8 +584,8 @@ func jsIdent(name string) string {
 	return b.String()
 }
 
-// jsString encodes v as a JS string literal. JSON string encoding
-// produces a valid, escaped double-quoted JS string.
+// jsString encodes v as a JS string literal (JSON string encoding is
+// valid JS).
 func jsString(v string) string {
 	raw, err := jsonMarshal(v, "", "")
 	if err != nil {
@@ -626,12 +606,9 @@ func jsDefault(v any) string {
 	return `''`
 }
 
-// jsonMarshal encodes v as JSON with HTML escaping disabled, so that JS
-// operators like '<' in k6 threshold expressions survive verbatim
-// instead of becoming <. With a non-empty indent the output is
-// pretty-printed (indented JSON is valid JS), each line after the first
-// carrying the given prefix. The trailing newline that json.Encoder
-// appends is trimmed.
+// jsonMarshal encodes v as JSON with HTML escaping disabled, so JS
+// operators like '<' in k6 threshold expressions survive verbatim; a
+// non-empty indent pretty-prints (indented JSON is valid JS).
 func jsonMarshal(v any, prefix, indent string) (string, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
