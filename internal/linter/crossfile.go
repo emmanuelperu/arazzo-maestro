@@ -13,8 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/url"
-	"path/filepath"
 	"strings"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
@@ -51,72 +49,28 @@ func lintCrossFile(doc *model.ArazzoDocument, basePath string) []Issue {
 func buildOperationIndex(doc *model.ArazzoDocument, basePath string) (operationIndex, []Issue) {
 	index := make(operationIndex, len(doc.SourceDescriptions))
 	var issues []Issue
-	for _, src := range doc.SourceDescriptions {
-		// Only `openapi` sources can be resolved today. Other types
-		// (`arazzo` for nested workflows) are out of scope for the
-		// first cross-file iteration.
-		if src.Type != "" && src.Type != "openapi" {
-			continue
-		}
-		path, err := resolveSourceURL(src.URL, basePath)
-		if err != nil {
+	for _, r := range oasresolver.LoadAll(doc.SourceDescriptions, basePath) {
+		if r.Err != nil {
 			issues = append(issues, Issue{
 				Severity: SeverityError,
-				Path:     "sourceDescriptions[" + src.Name + "]",
-				Message:  err.Error(),
+				Path:     "sourceDescriptions[" + r.Name + "]",
+				Message:  sourceErrMessage(r),
 			})
 			continue
 		}
-		loaded, err := oasresolver.Load(path)
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				issues = append(issues, Issue{
-					Severity: SeverityError,
-					Path:     "sourceDescriptions[" + src.Name + "]",
-					Message: fmt.Sprintf(
-						"file not found\n\turl: %s\n\tresolved to: %s",
-						src.URL, path,
-					),
-				})
-			} else {
-				issues = append(issues, Issue{
-					Severity: SeverityError,
-					Path:     "sourceDescriptions[" + src.Name + "]",
-					Message:  fmt.Sprintf("cannot load %s: %s", path, err),
-				})
-			}
-			continue
-		}
-		index[src.Name] = loaded
+		index[r.Name] = r.Source
 	}
 	return index, issues
 }
 
-// resolveSourceURL turns the YAML `url:` field into an absolute local
-// path, or returns an error if the URL is unsupported (HTTP/HTTPS).
-func resolveSourceURL(rawURL, basePath string) (string, error) {
-	if rawURL == "" {
-		return "", errors.New("missing url")
+func sourceErrMessage(r oasresolver.SourceResult) string {
+	if errors.Is(r.Err, fs.ErrNotExist) {
+		return fmt.Sprintf("file not found\n\turl: %s\n\tresolved to: %s", r.URL, r.Path)
 	}
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid url: %w", err)
+	if r.Path != "" {
+		return fmt.Sprintf("cannot load %s: %s", r.Path, r.Err)
 	}
-	switch strings.ToLower(u.Scheme) {
-	case "http", "https":
-		return "", fmt.Errorf(
-			"HTTP source URLs are not supported\n\turl: %s\n\thint: use a local file or a relative path",
-			rawURL,
-		)
-	case "file":
-		return u.Path, nil
-	case "":
-		if filepath.IsAbs(rawURL) {
-			return rawURL, nil
-		}
-		return filepath.Join(basePath, rawURL), nil
-	}
-	return "", fmt.Errorf("unsupported url scheme %q", u.Scheme)
+	return r.Err.Error()
 }
 
 // checkStepOperation validates a single step's `operationId` against

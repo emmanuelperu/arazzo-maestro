@@ -332,7 +332,7 @@ internal/
 cmd/arazzo-maestro/   Cobra CLI entry point
 ```
 
-Dependency graph: `model` → ∅, `parser` → `model`, `oasresolver` → ∅ (external: `pb33f/libopenapi`), `linter` → `parser` + `model` + `oasresolver`, `hurlgen` → `model` + `oasresolver`, `k6gen` → `model` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `cmd` → all. No cycles.
+Dependency graph: `model` → ∅, `parser` → `model`, `oasresolver` → `model` (external: `pb33f/libopenapi`), `linter` → `parser` + `model` + `oasresolver`, `hurlgen` → `model` + `oasresolver`, `k6gen` → `model` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `cmd` → all. No cycles.
 
 ## What makes us different
 
