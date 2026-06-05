@@ -223,19 +223,94 @@ func TestGenerateSubstitutesPathParameterFromRuntimeExpression(t *testing.T) {
 func TestGenerateEmitsQueryAndHeaderParameters(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",
-		Steps: []model.Step{{
-			StepID:      "list",
-			OperationID: "listProducts",
-			Parameters: []model.Parameter{
-				{Name: "Authorization", In: "header", Value: "Bearer x"},
-				{Name: "limit", In: "query", Value: 10},
-				{Name: "cursor", In: "query", Value: "$steps.prev.outputs.next"},
+		Steps: []model.Step{
+			{
+				StepID:      "prev",
+				OperationID: "createOrder",
+				Outputs:     []model.OutputEntry{{Name: "next", Expression: "$response.body#/next"}},
 			},
-		}},
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Parameters: []model.Parameter{
+					{Name: "Authorization", In: "header", Value: "Bearer x"},
+					{Name: "limit", In: "query", Value: 10},
+					{Name: "cursor", In: "query", Value: "$steps.prev.outputs.next"},
+				},
+			},
+		},
 	}
 	out := gen(t, wf, shopSources(t), defaultOpts())
 	assertContains(t, out, "${BASE_URL}/products?limit=10&cursor=${prev_next}")
 	assertContains(t, out, `headers: { "Authorization": "Bearer x" }`)
+}
+
+func TestGenerateTranslatesEmbeddedExprInParameters(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "token", Type: "string"}, {Name: "version", Type: "string"}},
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "Authorization", In: "header", Value: "Bearer {$inputs.token}"},
+				{Name: "v", In: "query", Value: "api-{$inputs.version}"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "\"Authorization\": `Bearer ${token}`")
+	assertContains(t, out, "v=api-${version}")
+}
+
+func TestGenerateLeavesUndeclaredParamExprsAsLiterals(t *testing.T) {
+	// Same rule as bodies: a parameter expression referencing nothing
+	// declared must not become an undefined JS identifier.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "cursor", In: "query", Value: "$steps.ghost.outputs.next"},
+				{Name: "X-Auth", In: "header", Value: "$inputs.ghost"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "cursor=$steps.ghost.outputs.next")
+	assertContains(t, out, `"X-Auth": "$inputs.ghost"`)
+}
+
+func TestGenerateLeavesUndeclaredEmbeddedURLExprAsLiteral(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "v", In: "query", Value: "api-{$inputs.ghost}"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "v=api-{$inputs.ghost}")
+}
+
+func TestGenerateEscapesURLParamTextInsideTemplateLiteral(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "version", Type: "string"}},
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "v", In: "query", Value: "a`b-{$inputs.version}"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "v=a\\`b-${version}")
 }
 
 func TestGenerateEmitsStringRequestBody(t *testing.T) {
@@ -411,6 +486,21 @@ func TestGenerateLeavesUndeclaredOrMalformedBodyExprsAsLiterals(t *testing.T) {
 			name:    "literal sentinel-looking string does not steal the swap",
 			payload: map[string]any{"a": "__arazzo_expr_0__", "z": "$inputs.user"},
 			want:    []string{`"a": "__arazzo_expr_0__"`, `"z": user`},
+		},
+		{
+			name:    "embedded braced expression becomes a template literal",
+			payload: map[string]any{"auth": "Bearer {$inputs.user}"},
+			want:    []string{"\"auth\": `Bearer ${user}`"},
+		},
+		{
+			name:    "undeclared braced expression stays a literal",
+			payload: map[string]any{"auth": "Bearer {$inputs.ghost}"},
+			want:    []string{`"auth": "Bearer {$inputs.ghost}"`},
+		},
+		{
+			name:    "template literal syntax in surrounding text is escaped",
+			payload: map[string]any{"v": "a`b${c} {$inputs.user}"},
+			want:    []string{"\"v\": `a\\`b\\${c} ${user}`"},
 		},
 	}
 	for _, tt := range tests {

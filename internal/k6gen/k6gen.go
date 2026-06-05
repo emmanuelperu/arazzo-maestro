@@ -21,9 +21,10 @@
 //
 // Arazzo runtime expressions are translated to JavaScript identifiers:
 // $inputs.foo becomes the foo constant (read from __ENV), and
-// $steps.s.outputs.o becomes the s_o capture from an earlier step.
-// Names that are not valid JS identifiers (hyphens, leading digits) are
-// sanitised consistently on both the declaration and the reference.
+// $steps.s.outputs.o becomes the s_o capture from an earlier step; the
+// spec's embedded {$expr} form becomes a template literal. Names that
+// are not valid JS identifiers (hyphens, leading digits) are sanitised
+// consistently on both the declaration and the reference.
 //
 // The host is never hard-coded: every request is prefixed with the
 // BASE_URL constant, read from `__ENV.BASE_URL` so the same script runs
@@ -39,6 +40,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -164,18 +166,18 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		}
 	}
 
-	method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources)
+	method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources, declared)
 	if !ok {
 		fmt.Fprintf(b, "  // unresolved operationId: %s\n", s.OperationID)
 		method = "GET"
 		url = "${BASE_URL}/__unresolved__/" + s.OperationID
 	}
-	url += queryString(s.Parameters)
+	url += queryString(s.Parameters, declared)
 
 	resVar := jsIdent(s.StepID) + "Res"
 	bodyArg := writeBody(b, s.StepID, s.RequestBody, declared)
 	fmt.Fprintf(b, "  const %s = http.request('%s', `%s`, %s, { headers: %s });\n",
-		resVar, method, url, bodyArg, headersObject(s.Parameters))
+		resVar, method, url, bodyArg, headersObject(s.Parameters, declared))
 
 	writeChecks(b, resVar, s.StepID, s.SuccessCriteria)
 	writeCaptures(b, resVar, s.StepID, s.Outputs, declared)
@@ -232,30 +234,74 @@ func jsBodyValue(v any, declared map[string]bool) (string, error) {
 	return raw, nil
 }
 
-func swapBodyExprs(v any, declared map[string]bool, base string, idents *[]string) any {
+func swapBodyExprs(v any, declared map[string]bool, base string, repls *[]string) any {
 	switch t := v.(type) {
 	case string:
 		if ident, isExpr := exprIdent(t); isExpr && declared[ident] {
-			*idents = append(*idents, ident)
-			return bodyExprSentinel(base, len(*idents)-1)
+			*repls = append(*repls, ident)
+			return bodyExprSentinel(base, len(*repls)-1)
+		}
+		if lit, ok := jsTemplateLiteral(t, declared); ok {
+			*repls = append(*repls, lit)
+			return bodyExprSentinel(base, len(*repls)-1)
 		}
 		return t
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			out[k] = swapBodyExprs(val, declared, base, idents)
+			out[k] = swapBodyExprs(val, declared, base, repls)
 		}
 		return out
 	case []any:
 		out := make([]any, len(t))
 		for i, val := range t {
-			out[i] = swapBodyExprs(val, declared, base, idents)
+			out[i] = swapBodyExprs(val, declared, base, repls)
 		}
 		return out
 	default:
 		return v
 	}
 }
+
+// embeddedExprRe matches the spec's embedded form: a runtime expression
+// wrapped in {} curly braces inside a string value.
+var embeddedExprRe = regexp.MustCompile(`\{(\$[^{}]+)\}`)
+
+// jsTemplateLiteral renders a string carrying embedded {$expr}
+// occurrences as a JS template literal (`Total: ${total}`). Only
+// expressions resolving to a declared identifier are interpolated;
+// ok is false when none does.
+func jsTemplateLiteral(s string, declared map[string]bool) (string, bool) {
+	locs := embeddedExprRe.FindAllStringSubmatchIndex(s, -1)
+	if len(locs) == 0 {
+		return "", false
+	}
+	var b strings.Builder
+	b.WriteString("`")
+	last := 0
+	interpolated := false
+	for _, loc := range locs {
+		expr := s[loc[2]:loc[3]]
+		ident, isExpr := exprIdent(expr)
+		if !isExpr || !declared[ident] {
+			continue
+		}
+		b.WriteString(jsTemplateEscaper.Replace(s[last:loc[0]]))
+		b.WriteString("${" + ident + "}")
+		last = loc[1]
+		interpolated = true
+	}
+	if !interpolated {
+		return "", false
+	}
+	b.WriteString(jsTemplateEscaper.Replace(s[last:]))
+	b.WriteString("`")
+	return b.String(), true
+}
+
+// jsTemplateEscaper protects the characters that JS template literals
+// treat as syntax.
+var jsTemplateEscaper = strings.NewReplacer("\\", "\\\\", "`", "\\`", "${", "\\${")
 
 // bodyExprSentinel is plain ASCII so its JSON encoding is the quoted
 // sentinel itself.
@@ -310,7 +356,7 @@ func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.Outpu
 // resolveRequestLine returns the HTTP method and URL template (a JS
 // backtick-literal body, BASE_URL-prefixed) for the step, or ok=false
 // when the operationId could not be resolved.
-func resolveRequestLine(operationID string, params []model.Parameter, sources map[string]*oasresolver.Source) (method, url string, ok bool) {
+func resolveRequestLine(operationID string, params []model.Parameter, sources map[string]*oasresolver.Source, declared map[string]bool) (method, url string, ok bool) {
 	srcName, opID := parseOpRef(operationID, sources)
 	if srcName == "" {
 		return "", "", false
@@ -324,7 +370,7 @@ func resolveRequestLine(operationID string, params []model.Parameter, sources ma
 		return "", "", false
 	}
 	// Always BASE_URL, never op.BaseURL: requests stay environment-agnostic.
-	return op.Method, "${BASE_URL}" + substitutePathParams(op.Path, params), true
+	return op.Method, "${BASE_URL}" + substitutePathParams(op.Path, params, declared), true
 }
 
 // defaultBaseURL returns the OpenAPI servers URL backing the workflow's
@@ -373,25 +419,25 @@ func parseOpRef(ref string, sources map[string]*oasresolver.Source) (srcName, op
 	return "", ""
 }
 
-func substitutePathParams(path string, params []model.Parameter) string {
+func substitutePathParams(path string, params []model.Parameter, declared map[string]bool) string {
 	for _, p := range params {
 		if p.In != "path" {
 			continue
 		}
-		path = strings.ReplaceAll(path, "{"+p.Name+"}", urlValue(p.Value))
+		path = strings.ReplaceAll(path, "{"+p.Name+"}", urlValue(p.Value, declared))
 	}
 	return path
 }
 
 // queryString builds the URL query suffix (?a=1&b=2) from the step's
 // query parameters, or "" when there are none.
-func queryString(params []model.Parameter) string {
+func queryString(params []model.Parameter, declared map[string]bool) string {
 	var parts []string
 	for _, p := range params {
 		if p.In != "query" {
 			continue
 		}
-		parts = append(parts, p.Name+"="+urlValue(p.Value))
+		parts = append(parts, p.Name+"="+urlValue(p.Value, declared))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -401,13 +447,13 @@ func queryString(params []model.Parameter) string {
 
 // headersObject renders the step's header parameters as a JS object
 // literal for the request params. An empty set yields "{}".
-func headersObject(params []model.Parameter) string {
+func headersObject(params []model.Parameter, declared map[string]bool) string {
 	var entries []string
 	for _, p := range params {
 		if p.In != "header" {
 			continue
 		}
-		entries = append(entries, fmt.Sprintf("%s: %s", jsString(p.Name), headerValue(p.Value)))
+		entries = append(entries, fmt.Sprintf("%s: %s", jsString(p.Name), headerValue(p.Value, declared)))
 	}
 	if len(entries) == 0 {
 		return "{}"
@@ -416,24 +462,37 @@ func headersObject(params []model.Parameter) string {
 }
 
 // urlValue renders a path or query parameter for interpolation inside a
-// backtick URL literal: runtime expressions become ${identifier}, plain
-// values are inlined verbatim.
-func urlValue(v any) string {
+// backtick URL literal: declared runtime expressions become
+// ${identifier} (whole-string or embedded {$expr}), anything else is
+// inlined verbatim.
+func urlValue(v any, declared map[string]bool) string {
 	if s, ok := v.(string); ok {
-		if ident, isExpr := exprIdent(s); isExpr {
+		if ident, isExpr := exprIdent(s); isExpr && declared[ident] {
 			return "${" + ident + "}"
 		}
-		return s
+		// The value lands inside the request's backtick URL literal, so
+		// literal text must be escaped; the {$expr} pattern survives the
+		// escaper untouched.
+		return embeddedExprRe.ReplaceAllStringFunc(jsTemplateEscaper.Replace(s), func(m string) string {
+			if ident, isExpr := exprIdent(m[1 : len(m)-1]); isExpr && declared[ident] {
+				return "${" + ident + "}"
+			}
+			return m
+		})
 	}
 	return fmt.Sprintf("%v", v)
 }
 
-// headerValue renders a header parameter as a JS expression: runtime
-// expressions become the bare identifier, plain strings are quoted.
-func headerValue(v any) string {
+// headerValue renders a header parameter as a JS expression: declared
+// runtime expressions become the bare identifier (whole-string) or a
+// template literal (embedded {$expr}), plain strings are quoted.
+func headerValue(v any, declared map[string]bool) string {
 	if s, ok := v.(string); ok {
-		if ident, isExpr := exprIdent(s); isExpr {
+		if ident, isExpr := exprIdent(s); isExpr && declared[ident] {
 			return ident
+		}
+		if lit, ok := jsTemplateLiteral(s, declared); ok {
+			return lit
 		}
 		return jsString(s)
 	}

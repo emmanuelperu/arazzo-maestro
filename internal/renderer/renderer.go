@@ -25,9 +25,9 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
-// runtimeExprRe matches Arazzo runtime expressions like $inputs.X,
-// $response.body#/foo, $steps.add-to-cart.outputs.cartTotal, $statusCode.
-var runtimeExprRe = regexp.MustCompile(`\$[A-Za-z][A-Za-z0-9_]*(?:[.#/\-][A-Za-z0-9_\-]+)*`)
+// embeddedExprRe matches the spec's embedded form: a runtime expression
+// wrapped in {} curly braces inside a string value.
+var embeddedExprRe = regexp.MustCompile(`\{\$[^{}]+\}`)
 
 func isRuntimeExpression(v any) bool {
 	s, ok := v.(string)
@@ -46,7 +46,12 @@ func renderValue(v any) template.HTML {
 		if isRuntimeExpression(t) {
 			return template.HTML(fmt.Sprintf(`<code class="runtime">%s</code>`, html.EscapeString(t)))
 		}
-		return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">"%s"</code>`, html.EscapeString(t)))
+		// html.EscapeString leaves braces and '$' intact, so the
+		// embedded {$expr} form can be highlighted on the escaped text.
+		h := embeddedExprRe.ReplaceAllStringFunc(html.EscapeString(t), func(m string) string {
+			return `<span class="runtime">` + m + `</span>`
+		})
+		return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">"%s"</code>`, h))
 	case bool:
 		return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">%t</code>`, t))
 	case int, int64, int32, float32, float64:
@@ -76,21 +81,67 @@ func formatNumber(v any) string {
 	return fmt.Sprint(v)
 }
 
-// renderPayload pretty-prints a request body payload as JSON, highlighting
-// any runtime expressions found inside string values.
+// renderPayload pretty-prints a request body payload as JSON,
+// highlighting whole-string runtime expressions and the spec's embedded
+// {$expr} form. A bare expression inside surrounding text is literal
+// data and stays unhighlighted, matching what the test generators
+// substitute.
 func renderPayload(v any) template.HTML {
 	if v == nil {
 		return `<span class="text-muted italic">empty</span>`
 	}
-	raw, err := json.MarshalIndent(v, "", "  ")
+	probe, err := json.Marshal(v)
 	if err != nil {
 		return template.HTML(html.EscapeString(fmt.Sprint(v)))
 	}
-	escaped := html.EscapeString(string(raw))
-	highlighted := runtimeExprRe.ReplaceAllStringFunc(escaped, func(m string) string {
-		return `<span class="runtime">` + m + `</span>`
-	})
-	return template.HTML(highlighted)
+	// A sentinel base absent from the payload guarantees a literal can
+	// never be mistaken for a highlight marker.
+	base := "__arazzo_hl_"
+	for strings.Contains(string(probe), base) {
+		base = "_" + base
+	}
+	var repls []string
+	swapped := swapHighlights(v, base, &repls)
+	raw, err := json.MarshalIndent(swapped, "", "  ")
+	if err != nil {
+		return template.HTML(html.EscapeString(fmt.Sprint(v)))
+	}
+	out := html.EscapeString(string(raw))
+	for i, r := range repls {
+		out = strings.Replace(out, fmt.Sprintf("%s%d__", base, i), r, 1)
+	}
+	return template.HTML(out)
+}
+
+// swapHighlights walks the payload and replaces highlightable
+// expressions with sentinels, recording the trusted HTML to inject
+// after marshalling and escaping.
+func swapHighlights(v any, base string, repls *[]string) any {
+	mark := func(text string) string {
+		*repls = append(*repls, `<span class="runtime">`+html.EscapeString(text)+`</span>`)
+		return fmt.Sprintf("%s%d__", base, len(*repls)-1)
+	}
+	switch t := v.(type) {
+	case string:
+		if isRuntimeExpression(t) {
+			return mark(t)
+		}
+		return embeddedExprRe.ReplaceAllStringFunc(t, mark)
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = swapHighlights(val, base, repls)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = swapHighlights(val, base, repls)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 // renderDefault prints a default value as a bare scalar.

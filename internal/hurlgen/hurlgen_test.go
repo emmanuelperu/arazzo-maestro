@@ -408,6 +408,16 @@ func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
 			payload: map[string]any{"a": "__arazzo_tpl_0__", "b": "$inputs.productId"},
 			want:    []string{`"a": "__arazzo_tpl_0__"`, `"b": "{{productId}}"`},
 		},
+		{
+			name:    "embedded braced expression is interpolated",
+			payload: map[string]any{"auth": "Bearer {$inputs.token}", "ref": "order-{$steps.prev.outputs.id}"},
+			want:    []string{`"auth": "Bearer {{token}}"`, `"ref": "order-{{prev_id}}"`},
+		},
+		{
+			name:    "unrecognised braced expression stays a literal",
+			payload: map[string]any{"note": "see {$response.body#/x}"},
+			want:    []string{`"note": "see {$response.body#/x}"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -472,6 +482,55 @@ func TestGenerateKeepsLiteralTemplateLookingBodyStrings(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
 	assertContains(t, out, `"label": "{{qty}}"`)
 	assertContains(t, out, `"quantity": {{qty}}`)
+}
+
+func TestGenerateTranslatesEmbeddedExprInParameters(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "Authorization", In: "header", Value: "Bearer {$inputs.token}"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "Authorization: Bearer {{token}}")
+}
+
+func TestGenerateTranslatesEmbeddedExprInRawAndNonJSONBodies(t *testing.T) {
+	mkwf := func(payload any) model.Workflow {
+		return model.Workflow{
+			WorkflowID: "wf",
+			Steps: []model.Step{{
+				StepID:      "create",
+				OperationID: "createOrder",
+				RequestBody: &model.RequestBody{ContentType: "text/plain", Payload: payload},
+			}},
+		}
+	}
+	out, _ := Generate(mkwf("Bearer {$inputs.token}"), map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "Bearer {{token}}")
+
+	out, _ = Generate(mkwf(map[string]any{"auth": "Bearer {$inputs.token}"}), map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "Bearer {{token}}")
+}
+
+func TestGenerateWarnsOnLiteralBracesInBody(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				Payload:     map[string]any{"tpls": []any{"use {{count}} items"}},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "# warning: literal '{{' in the body is interpreted by Hurl templating at run time")
 }
 
 func TestGenerateFallsBackWhenJSONBodyUnmarshalable(t *testing.T) {
