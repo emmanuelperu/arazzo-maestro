@@ -131,6 +131,46 @@ func TestViewUnknownWorkflowFails(t *testing.T) {
 	}
 }
 
+func TestViewLandscapeLayoutAddsClass(t *testing.T) {
+	tmp := t.TempDir()
+	if _, _, err := runCmd(t, "view", filepath.Join(examplesDir(t), "shop.arazzo.yaml"), "-o", tmp, "--layout", "landscape"); err != nil {
+		t.Fatalf("view --layout landscape failed: %v", err)
+	}
+	html, err := os.ReadFile(filepath.Join(tmp, "happy-path-checkout.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(html), "layout-landscape") {
+		t.Errorf("expected landscape layout class in output")
+	}
+}
+
+func TestViewPortraitIsTheDefault(t *testing.T) {
+	tmp := t.TempDir()
+	if _, _, err := runCmd(t, "view", filepath.Join(examplesDir(t), "shop.arazzo.yaml"), "-o", tmp); err != nil {
+		t.Fatalf("view failed: %v", err)
+	}
+	html, err := os.ReadFile(filepath.Join(tmp, "happy-path-checkout.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The landscape CSS rules are always present; only the body class is
+	// conditional, so assert on the class token rather than the substring.
+	if strings.Contains(string(html), "min-h-screen layout-landscape") {
+		t.Errorf("default output must stay portrait, found landscape body class")
+	}
+}
+
+func TestViewInvalidLayoutFails(t *testing.T) {
+	_, _, err := runCmd(t, "view", filepath.Join(examplesDir(t), "shop.arazzo.yaml"), "--layout", "diagonal", "-o", t.TempDir())
+	if err == nil {
+		t.Fatal("expected error for invalid layout")
+	}
+	if !strings.Contains(err.Error(), "invalid --layout") {
+		t.Errorf("expected 'invalid --layout' in error, got %v", err)
+	}
+}
+
 func TestListThemes(t *testing.T) {
 	out, _, err := runCmd(t, "view", "--list-themes")
 	if err != nil {

@@ -134,7 +134,7 @@ func TestRenderWorkflowContainsExpectedSections(t *testing.T) {
 	var html string
 	for _, w := range doc.Workflows {
 		if w.WorkflowID == "happy-path-checkout" {
-			h, err := RenderWorkflow(w, loadTheme(t, "light"))
+			h, err := RenderWorkflow(w, loadTheme(t, "light"), LayoutPortrait)
 			if err != nil {
 				t.Fatalf("RenderWorkflow: %v", err)
 			}
@@ -215,7 +215,7 @@ func TestRenderWorkflowShowsRetryLoopWhenStepIDOmitted(t *testing.T) {
 			}},
 		}},
 	}
-	html, err := RenderWorkflow(w, loadTheme(t, "light"))
+	html, err := RenderWorkflow(w, loadTheme(t, "light"), LayoutPortrait)
 	if err != nil {
 		t.Fatalf("RenderWorkflow: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestRenderWorkflowShowsRetryAction(t *testing.T) {
 	var html string
 	for _, w := range doc.Workflows {
 		if w.WorkflowID == "payment-refused-path" {
-			html, err = RenderWorkflow(w, loadTheme(t, "light"))
+			html, err = RenderWorkflow(w, loadTheme(t, "light"), LayoutPortrait)
 			if err != nil {
 				t.Fatalf("RenderWorkflow: %v", err)
 			}
@@ -273,7 +273,7 @@ func TestRenderWorkflowShowsRetryAction(t *testing.T) {
 // return as template.CSS; this test guards against the regression.
 func TestRenderWorkflowFontStackNotEscaped(t *testing.T) {
 	doc, _ := parser.ParseFile(examplesShopYAML(t))
-	html, err := RenderWorkflow(doc.Workflows[0], loadTheme(t, "light"))
+	html, err := RenderWorkflow(doc.Workflows[0], loadTheme(t, "light"), LayoutPortrait)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestRenderWorkflowDarkThemeInjectsDarkColors(t *testing.T) {
 		t.Fatalf("ParseFile: %v", err)
 	}
 	dark := loadTheme(t, "dark")
-	html, err := RenderWorkflow(doc.Workflows[0], dark)
+	html, err := RenderWorkflow(doc.Workflows[0], dark, LayoutPortrait)
 	if err != nil {
 		t.Fatalf("RenderWorkflow: %v", err)
 	}
@@ -307,12 +307,38 @@ func TestRenderWorkflowDarkThemeInjectsDarkColors(t *testing.T) {
 
 func TestRenderWorkflowNilThemeFallsBackToLight(t *testing.T) {
 	doc, _ := parser.ParseFile(examplesShopYAML(t))
-	html, err := RenderWorkflow(doc.Workflows[0], nil)
+	html, err := RenderWorkflow(doc.Workflows[0], nil, LayoutPortrait)
 	if err != nil {
 		t.Fatalf("RenderWorkflow(nil): %v", err)
 	}
 	if !strings.Contains(html, "--bg:") {
 		t.Errorf("fallback theme did not produce CSS vars")
+	}
+}
+
+func TestRenderWorkflowLandscapeTogglesLayoutClass(t *testing.T) {
+	doc, err := parser.ParseFile(examplesShopYAML(t))
+	if err != nil {
+		t.Fatalf("ParseFile: %v", err)
+	}
+	wf := doc.Workflows[0]
+
+	portrait, err := RenderWorkflow(wf, loadTheme(t, "light"), LayoutPortrait)
+	if err != nil {
+		t.Fatalf("RenderWorkflow(portrait): %v", err)
+	}
+	// The landscape CSS rules ship in both modes; only the body class
+	// is conditional, so assert on the class token, not the substring.
+	if strings.Contains(portrait, "min-h-screen layout-landscape") {
+		t.Errorf("portrait output must not carry the landscape body class")
+	}
+
+	landscape, err := RenderWorkflow(wf, loadTheme(t, "light"), LayoutLandscape)
+	if err != nil {
+		t.Fatalf("RenderWorkflow(landscape): %v", err)
+	}
+	if !strings.Contains(landscape, `class="min-h-screen layout-landscape"`) {
+		t.Errorf("landscape output must add the layout-landscape body class")
 	}
 }
 
@@ -322,7 +348,7 @@ func TestWriteWorkflowWritesFile(t *testing.T) {
 		t.Fatalf("ParseFile: %v", err)
 	}
 	tmp := t.TempDir()
-	path, err := WriteWorkflow(doc.Workflows[0], tmp, loadTheme(t, "light"))
+	path, err := WriteWorkflow(doc.Workflows[0], tmp, loadTheme(t, "light"), LayoutPortrait)
 	if err != nil {
 		t.Fatalf("WriteWorkflow: %v", err)
 	}

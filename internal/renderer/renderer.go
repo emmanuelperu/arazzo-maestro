@@ -158,9 +158,19 @@ func renderDefault(v any) string {
 	return formatNumber(v)
 }
 
+// Layout selects the workflow diagram orientation. The zero value is
+// portrait, the default vertical-rail layout that predates this option.
+type Layout string
+
+const (
+	LayoutPortrait  Layout = "portrait"
+	LayoutLandscape Layout = "landscape"
+)
+
 type workflowView struct {
-	Workflow model.Workflow
-	Theme    *theme.Theme
+	Workflow  model.Workflow
+	Theme     *theme.Theme
+	Landscape bool
 }
 
 type indexView struct {
@@ -238,8 +248,9 @@ func resolveTheme(t *theme.Theme) (*theme.Theme, error) {
 }
 
 // RenderWorkflow renders a single workflow to a standalone HTML string.
-// A nil theme falls back to the built-in default.
-func RenderWorkflow(wf model.Workflow, th *theme.Theme) (string, error) {
+// A nil theme falls back to the built-in default. The layout selects the
+// diagram orientation; an empty value renders portrait.
+func RenderWorkflow(wf model.Workflow, th *theme.Theme, layout Layout) (string, error) {
 	th, err := resolveTheme(th)
 	if err != nil {
 		return "", err
@@ -249,7 +260,8 @@ func RenderWorkflow(wf model.Workflow, th *theme.Theme) (string, error) {
 		return "", err
 	}
 	var buf bytes.Buffer
-	if err := tpl.ExecuteTemplate(&buf, "workflow.html", workflowView{Workflow: wf, Theme: th}); err != nil {
+	view := workflowView{Workflow: wf, Theme: th, Landscape: layout == LayoutLandscape}
+	if err := tpl.ExecuteTemplate(&buf, "workflow.html", view); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -257,11 +269,11 @@ func RenderWorkflow(wf model.Workflow, th *theme.Theme) (string, error) {
 
 // WriteWorkflow renders a workflow and writes it to
 // `<outputDir>/<workflowId>.html`, creating the directory if needed.
-func WriteWorkflow(wf model.Workflow, outputDir string, th *theme.Theme) (string, error) {
+func WriteWorkflow(wf model.Workflow, outputDir string, th *theme.Theme, layout Layout) (string, error) {
 	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return "", err
 	}
-	content, err := RenderWorkflow(wf, th)
+	content, err := RenderWorkflow(wf, th, layout)
 	if err != nil {
 		return "", err
 	}

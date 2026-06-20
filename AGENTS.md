@@ -201,7 +201,10 @@ go mod tidy                                                 # keep go.mod clean
   decision)
 - ❌ **Don't break the rule that `--theme light` (or no flag) renders
   identically to the current `examples/shop.arazzo.yaml` output**: golden
-  expectation in `internal/renderer/renderer_test.go`
+  expectation in `internal/renderer/renderer_test.go`. The same applies to
+  `--layout`: portrait is the default and its output must stay
+  byte-identical; `landscape` is strictly opt-in (adds a body class +
+  scoped CSS, no portrait change)
 
 ## When in doubt
 

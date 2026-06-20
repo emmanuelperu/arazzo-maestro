@@ -108,6 +108,10 @@ The `happy-path-checkout` workflow rendered by `view`, in the two built-in theme
 |---|---|
 | [![happy-path-checkout workflow rendered by arazzo-maestro, light theme](./docs/screenshots/happy-light.webp)](./docs/screenshots/happy-light.webp) | [![happy-path-checkout workflow rendered by arazzo-maestro, dark theme](./docs/screenshots/happy-dark.webp)](./docs/screenshots/happy-dark.webp) |
 
+Portrait is the default. `--layout landscape` lays the same workflow out as a horizontal, sideways-scrolling row (START left, steps in between, END right), handy for wide screens and single-slide screenshots:
+
+[![happy-path-checkout workflow rendered by arazzo-maestro in landscape layout](./docs/screenshots/happy-landscape.webp)](./docs/screenshots/happy-landscape.webp)
+
 ```bash
 # Render every examples/*.arazzo.yaml into dist/<workflow>/{light,dark}/
 make dist
@@ -312,6 +316,7 @@ view flags:
       --theme <name>          Theme (default: light, or themes.yml's default:)
       --themes <path>         Path to a themes YAML (bypasses ./themes.yml)
       --list-themes           List available themes and exit
+      --layout <orientation>  Diagram orientation: portrait (default) or landscape
 
 test gen e2e flags:
   -o, --output <dir>          Output directory (default: dist)
