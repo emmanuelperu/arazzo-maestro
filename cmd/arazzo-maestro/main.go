@@ -101,6 +101,7 @@ type viewOptions struct {
 	themeName  string
 	themesFile string
 	listThemes bool
+	layout     string
 }
 
 func newViewCmd() *cobra.Command {
@@ -128,6 +129,7 @@ func newViewCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.themeName, "theme", "", "Theme name (default: built-in 'light', or 'default:' from ./themes.yml)")
 	cmd.Flags().StringVar(&opts.themesFile, "themes", "", "Path to a themes YAML file (bypasses ./themes.yml auto-discovery)")
 	cmd.Flags().BoolVar(&opts.listThemes, "list-themes", false, "List available themes and exit")
+	cmd.Flags().StringVar(&opts.layout, "layout", "portrait", "Workflow diagram orientation: portrait or landscape")
 	return cmd
 }
 
@@ -177,6 +179,11 @@ func runView(cmd *cobra.Command, path string, opts *viewOptions) error {
 		return fmt.Errorf("failed to parse %s: %w", path, err)
 	}
 
+	layout, err := parseLayout(opts.layout)
+	if err != nil {
+		return err
+	}
+
 	registry, err := loadThemes(cmd, opts)
 	if err != nil {
 		return err
@@ -206,7 +213,7 @@ func runView(cmd *cobra.Command, path string, opts *viewOptions) error {
 	}
 
 	for _, wf := range workflows {
-		out, err := renderer.WriteWorkflow(wf, opts.output, selected)
+		out, err := renderer.WriteWorkflow(wf, opts.output, selected, layout)
 		if err != nil {
 			return fmt.Errorf("failed to write workflow %q: %w", wf.WorkflowID, err)
 		}
@@ -221,6 +228,17 @@ func runView(cmd *cobra.Command, path string, opts *viewOptions) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", out)
 	}
 	return nil
+}
+
+func parseLayout(name string) (renderer.Layout, error) {
+	switch name {
+	case "", string(renderer.LayoutPortrait):
+		return renderer.LayoutPortrait, nil
+	case string(renderer.LayoutLandscape):
+		return renderer.LayoutLandscape, nil
+	default:
+		return "", fmt.Errorf("invalid --layout %q: want portrait or landscape", name)
+	}
 }
 
 func availableWorkflows(doc *model.ArazzoDocument) string {
