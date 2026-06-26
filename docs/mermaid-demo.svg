@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 348" width="100%" role="img" aria-labelledby="mmd-title mmd-desc" font-family="var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace)">
+  <title id="mmd-title">payment-refused-path workflow as a Mermaid flowchart</title>
+  <desc id="mmd-desc">Start, then step 01 add-to-cart (addToCart), then step 02 pay-refused (processPayment) which retries twice after 2s and branches to End on failure, then End.</desc>
+
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 z" fill="var(--rail, #1e293b)"/>
+    </marker>
+    <marker id="ara" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 z" fill="var(--accent, #92400e)"/>
+    </marker>
+    <marker id="arm" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 z" fill="var(--text-muted, #475569)"/>
+    </marker>
+  </defs>
+
+  <!-- ── edges (solid rail: Start -> 01 -> 02 -> End) ─────────── -->
+  <g fill="none" stroke="var(--rail, #1e293b)" stroke-width="1.5">
+    <line x1="180" y1="58"  x2="180" y2="90"  marker-end="url(#ar)"/>
+    <line x1="180" y1="148" x2="180" y2="180" marker-end="url(#ar)"/>
+    <line x1="180" y1="238" x2="180" y2="270" marker-end="url(#ar)"/>
+  </g>
+
+  <!-- retry self-loop on step 02 (amber, highlights the control logic) -->
+  <path d="M280,197 C 350,189 350,231 282,223" fill="none"
+        stroke="var(--accent, #92400e)" stroke-width="1.5"
+        stroke-dasharray="4 3" marker-end="url(#ara)"/>
+  <rect x="356" y="203" width="118" height="16" rx="2" fill="var(--surface, #f5f5f0)"/>
+  <text x="358" y="215" font-size="11" fill="var(--accent, #92400e)">retry &#215;2 after 2s</text>
+
+  <!-- on-failure branch from step 02 to End (dashed, muted) -->
+  <path d="M80,224 C 28,244 28,280 116,288" fill="none"
+        stroke="var(--text-muted, #475569)" stroke-width="1.5"
+        stroke-dasharray="4 3" marker-end="url(#arm)"/>
+  <rect x="6" y="255" width="64" height="16" rx="2" fill="var(--surface, #f5f5f0)"/>
+  <text x="8" y="267" font-size="11" fill="var(--text-muted, #475569)">on failure</text>
+
+  <!-- ── nodes ───────────────────────────────────────────────── -->
+  <!-- Start terminus -->
+  <rect x="120" y="24" width="120" height="34" rx="17"
+        fill="var(--surface, #f5f5f0)" stroke="var(--rail, #1e293b)" stroke-width="1.5"/>
+  <text x="180" y="46" text-anchor="middle" font-size="12" letter-spacing="0.14em"
+        fill="var(--text, #1e293b)">START</text>
+
+  <!-- Step 01 -->
+  <rect x="80" y="92" width="200" height="56" rx="6"
+        fill="var(--surface, #f5f5f0)" stroke="var(--border, #74819a)" stroke-width="1.5"/>
+  <text x="100" y="117" font-size="13" fill="var(--text, #1e293b)"><tspan font-weight="700">01</tspan>&#160;&#160;add-to-cart</text>
+  <text x="100" y="135" font-size="11" fill="var(--text-muted, #475569)">addToCart</text>
+
+  <!-- Step 02 (the one that retries) -->
+  <rect x="80" y="182" width="200" height="56" rx="6"
+        fill="var(--surface, #f5f5f0)" stroke="var(--border, #74819a)" stroke-width="1.5"/>
+  <text x="100" y="207" font-size="13" fill="var(--text, #1e293b)"><tspan font-weight="700">02</tspan>&#160;&#160;pay-refused</text>
+  <text x="100" y="225" font-size="11" fill="var(--text-muted, #475569)">processPayment</text>
+
+  <!-- End terminus (filled / inverted) -->
+  <rect x="120" y="270" width="120" height="34" rx="17"
+        fill="var(--invert-bg, #1e293b)" stroke="var(--invert-bg, #1e293b)" stroke-width="1.5"/>
+  <text x="180" y="292" text-anchor="middle" font-size="12" letter-spacing="0.14em"
+        fill="var(--invert-text, #f5f5f0)">END</text>
+</svg>
