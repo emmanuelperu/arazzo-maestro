@@ -384,9 +384,39 @@ func parseRequestBody(n *yaml.Node) *model.RequestBody {
 			body.ContentType = scalarString(kv.Value)
 		case "payload":
 			body.Payload = nodeToAny(kv.Value)
+		case "replacements":
+			body.Replacements = parseReplacements(kv.Value)
 		}
 	}
 	return body
+}
+
+// parseReplacements reads the `replacements` array of Payload Replacement
+// Objects. Entries missing the required `target` are skipped (the schema
+// pass reports them upstream).
+func parseReplacements(n *yaml.Node) []model.Replacement {
+	if n == nil || n.Kind != yaml.SequenceNode {
+		return nil
+	}
+	out := make([]model.Replacement, 0, len(n.Content))
+	for _, item := range n.Content {
+		if item.Kind != yaml.MappingNode {
+			continue
+		}
+		var r model.Replacement
+		for _, kv := range mappingPairs(item) {
+			switch kv.Key {
+			case "target":
+				r.Target = scalarString(kv.Value)
+			case "value":
+				r.Value = nodeToAny(kv.Value)
+			}
+		}
+		if r.Target != "" {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 func parseSuccessCriteria(n *yaml.Node) []model.SuccessCriterion {

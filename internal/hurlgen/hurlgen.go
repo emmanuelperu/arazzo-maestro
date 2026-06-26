@@ -44,6 +44,7 @@ import (
 	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
+	"github.com/emmanuelperu/arazzo-maestro/internal/payload"
 )
 
 // Generate renders the workflow as a Hurl test file.
@@ -134,7 +135,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		fmt.Fprintf(b, "# unsupported expression (not translated): %s\n", e)
 	}
 
-	method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources)
+	op, method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources)
 	if !ok {
 		fmt.Fprintf(b, "# unresolved operationId: %s\n", s.OperationID)
 		method = "GET"
@@ -149,10 +150,20 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	}
 	fmt.Fprintf(b, "%s %s\n", method, url)
 
+	// Effective content type for the body: explicit Arazzo value, else the
+	// targeted operation's declared type (Arazzo defers to it when omitted).
+	ct, ctKnown := "", false
+	if s.RequestBody != nil {
+		ct, ctKnown = oasresolver.EffectiveContentType(s.RequestBody.ContentType, op.RequestContentTypes())
+	}
+
 	writeHeaders(b, s.Parameters)
+	if ctKnown && !hasHeaderParam(s.Parameters, "content-type") {
+		fmt.Fprintf(b, "Content-Type: %s\n", ct)
+	}
 	writeQuery(b, s.Parameters)
 	writeCookies(b, s.Parameters)
-	writeBody(b, s.RequestBody, unquoted)
+	writeBody(b, s.RequestBody, ct, ctKnown, unquoted)
 
 	b.WriteString("\nHTTP *\n")
 	writeAsserts(b, s.SuccessCriteria)
@@ -207,15 +218,48 @@ func querystringValue(params []model.Parameter) string {
 	return ""
 }
 
-func writeBody(b *strings.Builder, body *model.RequestBody, unquoted map[string]bool) {
+func writeBody(b *strings.Builder, body *model.RequestBody, ct string, ctKnown bool, unquoted map[string]bool) {
 	if body == nil {
 		return
 	}
-	fmt.Fprintf(b, "# requestBody content-type: %s\n", body.ContentType)
-	if payloadHasLiteralBraces(body.Payload) {
+	if ctKnown {
+		fmt.Fprintf(b, "# requestBody content-type: %s\n", ct)
+	} else {
+		b.WriteString("# requestBody content-type: unknown (omitted by Arazzo; the operation declares none or several non-JSON types)\n")
+	}
+	effective, unresolved := payload.Apply(body.Payload, body.Replacements)
+	for _, r := range body.Replacements {
+		fmt.Fprintf(b, "# replacement: %s = %s\n", r.Target, compactValue(r.Value))
+	}
+	for _, u := range unresolved {
+		fmt.Fprintf(b, "# warning: replacement target %q did not resolve in the payload\n", u)
+	}
+	if payloadHasLiteralBraces(effective) {
 		b.WriteString("# warning: literal '{{' in the body is interpreted by Hurl templating at run time\n")
 	}
-	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(body, unquoted))
+	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(effective, ct, unquoted))
+}
+
+// compactValue renders a replacement value for a comment: JSON when it
+// marshals (so objects, arrays and quoted strings read naturally),
+// otherwise Go's default formatting.
+func compactValue(v any) string {
+	if raw, err := json.Marshal(v); err == nil {
+		return string(raw)
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+// hasHeaderParam reports whether the step already declares a header
+// parameter with this name (case-insensitive), so a derived Content-Type
+// never duplicates an explicit one.
+func hasHeaderParam(params []model.Parameter, name string) bool {
+	for _, p := range params {
+		if p.In == "header" && strings.EqualFold(p.Name, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // payloadHasLiteralBraces reports whether any string in the payload
@@ -243,16 +287,16 @@ func payloadHasLiteralBraces(v any) bool {
 
 // serialiseBody turns the requestBody payload into the text of the Hurl
 // body block, with runtime expressions translated to Hurl templates.
-func serialiseBody(body *model.RequestBody, unquoted map[string]bool) string {
-	if s, ok := body.Payload.(string); ok {
+func serialiseBody(payload any, ct string, unquoted map[string]bool) string {
+	if s, ok := payload.(string); ok {
 		return renderValue(s)
 	}
-	if strings.Contains(body.ContentType, "json") {
-		if out, err := jsonBodyWithTemplates(body.Payload, unquoted); err == nil {
+	if strings.Contains(ct, "json") {
+		if out, err := jsonBodyWithTemplates(payload, unquoted); err == nil {
 			return out
 		}
 	}
-	return fmt.Sprintf("%v", translateBodyExprs(body.Payload))
+	return fmt.Sprintf("%v", translateBodyExprs(payload))
 }
 
 // jsonBodyWithTemplates marshals the payload with expressions swapped
@@ -362,22 +406,22 @@ func writeCaptures(b *strings.Builder, stepID string, outs []model.OutputEntry) 
 // resolveRequestLine returns the HTTP method and full URL for the
 // step, or ok=false when the operationId could not be resolved against
 // the configured sources.
-func resolveRequestLine(operationID string, params []model.Parameter, sources map[string]*oasresolver.Source) (method, url string, ok bool) {
+func resolveRequestLine(operationID string, params []model.Parameter, sources map[string]*oasresolver.Source) (op oasresolver.Operation, method, url string, ok bool) {
 	srcName, opID := parseOpRef(operationID, sources)
 	if srcName == "" {
-		return "", "", false
+		return oasresolver.Operation{}, "", "", false
 	}
 	src, exists := sources[srcName]
 	if !exists {
-		return "", "", false
+		return oasresolver.Operation{}, "", "", false
 	}
 	op, err := src.Resolve(opID)
 	if err != nil {
-		return "", "", false
+		return oasresolver.Operation{}, "", "", false
 	}
 	// Always {{baseUrl}}, never op.BaseURL: requests stay environment-agnostic.
 	path := substitutePathParams(op.Path, params)
-	return op.Method, "{{baseUrl}}" + path, true
+	return op, op.Method, "{{baseUrl}}" + path, true
 }
 
 // parseOpRef recognises the two accepted forms of operationId:

@@ -309,3 +309,38 @@ func equalStringMap(a, b map[string]string) bool {
 	}
 	return true
 }
+
+func TestParseRequestBodyReplacements(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: create
+        operationId: createThing
+        requestBody:
+          contentType: application/json
+          payload:
+            name: original
+          replacements:
+            - target: /name
+              value: $inputs.token
+            - value: orphan
+`
+	doc, err := ParseBytes([]byte(src))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	body := doc.Workflows[0].Steps[0].RequestBody
+	if body == nil {
+		t.Fatal("RequestBody is nil")
+	}
+	// The entry missing a target is dropped; only the valid one survives.
+	if len(body.Replacements) != 1 {
+		t.Fatalf("Replacements length = %d, want 1 (%+v)", len(body.Replacements), body.Replacements)
+	}
+	r := body.Replacements[0]
+	if r.Target != "/name" || r.Value != "$inputs.token" {
+		t.Errorf("replacement = %+v, want {/name $inputs.token}", r)
+	}
+}

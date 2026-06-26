@@ -401,3 +401,27 @@ func TestWriteIndexWritesFile(t *testing.T) {
 		t.Errorf("stat: %v", err)
 	}
 }
+
+func TestRenderWorkflowShowsRequestBodyReplacements(t *testing.T) {
+	w := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createThing",
+			RequestBody: &model.RequestBody{
+				ContentType:  "application/json",
+				Payload:      map[string]any{"name": "original"},
+				Replacements: []model.Replacement{{Target: "/name", Value: "$inputs.token"}},
+			},
+		}},
+	}
+	html, err := RenderWorkflow(w, loadTheme(t, "light"), LayoutPortrait)
+	if err != nil {
+		t.Fatalf("RenderWorkflow: %v", err)
+	}
+	for _, want := range []string{"Replacements", "/name", `class="runtime"`, "$inputs.token"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+}

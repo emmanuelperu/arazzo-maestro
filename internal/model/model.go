@@ -19,8 +19,17 @@ type Parameter struct {
 
 // RequestBody mirrors the optional `requestBody` block of a step.
 type RequestBody struct {
-	ContentType string
-	Payload     any
+	ContentType  string
+	Payload      any
+	Replacements []Replacement
+}
+
+// Replacement is one entry of a request body's `replacements` array (a
+// Payload Replacement Object): the value at the `target` JSON pointer is
+// set to `Value` before the body is sent. Both fields are required.
+type Replacement struct {
+	Target string
+	Value  any
 }
 
 // SuccessCriterion is one assertion checked after a step.

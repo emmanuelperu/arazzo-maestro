@@ -30,7 +30,7 @@ export default function () {
     "password": password,
     "username": username
   };
-  const loginRes = http.request('POST', `${BASE_URL}/auth/login`, JSON.stringify(loginBody), { headers: {} });
+  const loginRes = http.request('POST', `${BASE_URL}/auth/login`, JSON.stringify(loginBody), { headers: { "Content-Type": "application/json" } });
   check(loginRes, {
     "login: $statusCode == 200": (r) => r.status === 200,
   });

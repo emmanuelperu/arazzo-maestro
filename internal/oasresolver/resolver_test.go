@@ -472,3 +472,28 @@ components:
 		t.Errorf("Spec.Responses[201].Description = %q, want %q (ref not resolved?)", created.Description, "created")
 	}
 }
+
+func TestEffectiveContentType(t *testing.T) {
+	cases := []struct {
+		name     string
+		explicit string
+		declared []string
+		want     string
+		wantOK   bool
+	}{
+		{"explicit wins", "application/xml", []string{"application/json"}, "application/xml", true},
+		{"single declared", "", []string{"application/json"}, "application/json", true},
+		{"json among several", "", []string{"text/plain", "application/json"}, "application/json", true},
+		{"ambiguous non-json", "", []string{"text/plain", "application/xml"}, "", false},
+		{"none declared", "", nil, "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := EffectiveContentType(c.explicit, c.declared)
+			if got != c.want || ok != c.wantOK {
+				t.Errorf("EffectiveContentType(%q, %v) = (%q, %v), want (%q, %v)",
+					c.explicit, c.declared, got, ok, c.want, c.wantOK)
+			}
+		})
+	}
+}

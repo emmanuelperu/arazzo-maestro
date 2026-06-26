@@ -34,7 +34,7 @@ export default function () {
     "expiryDate": "12/26",
     "method": "card"
   };
-  const payRes = http.request('POST', `${BASE_URL}/orders/${orderId}/payment`, JSON.stringify(payBody), { headers: { "Accept-Language": acceptLanguage } });
+  const payRes = http.request('POST', `${BASE_URL}/orders/${orderId}/payment`, JSON.stringify(payBody), { headers: { "Content-Type": "application/json", "Accept-Language": acceptLanguage } });
   // successCriteria (not translated): $response.body#/status == "OK"
   check(payRes, {
     "pay: $statusCode == 200": (r) => r.status === 200,

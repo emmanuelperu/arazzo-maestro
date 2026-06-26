@@ -49,6 +49,7 @@ import (
 	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
+	"github.com/emmanuelperu/arazzo-maestro/internal/payload"
 )
 
 // Options carries the load profile and thresholds that Arazzo does not
@@ -173,7 +174,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		fmt.Fprintf(b, "  // unsupported expression (not translated): %s\n", e)
 	}
 
-	method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources, declared)
+	op, method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources, declared)
 	if !ok {
 		fmt.Fprintf(b, "  // unresolved operationId: %s\n", s.OperationID)
 		method = "GET"
@@ -188,9 +189,17 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		url += sep + qs
 	}
 
+	// Effective content type: explicit Arazzo value, else the targeted
+	// operation's declared type. k6 sends a string body as text/plain by
+	// default, so a JSON body needs the header set explicitly.
+	ct, ctKnown := "", false
+	if s.RequestBody != nil {
+		ct, ctKnown = oasresolver.EffectiveContentType(s.RequestBody.ContentType, op.RequestContentTypes())
+	}
+
 	resVar := jsIdent(s.StepID) + "Res"
-	bodyArg := writeBody(b, s.StepID, s.RequestBody, declared)
-	reqParams := "{ headers: " + headersObject(s.Parameters, declared)
+	bodyArg := writeBody(b, s.StepID, s.RequestBody, ct, ctKnown, declared)
+	reqParams := "{ headers: " + headersObject(s.Parameters, ct, ctKnown, declared)
 	if c := cookiesObject(s.Parameters, declared); c != "" {
 		reqParams += ", cookies: " + c
 	}
@@ -207,22 +216,34 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 // name for a raw string, JSON.stringify(...) for a structured payload,
 // or "null" when there is no body). Runtime expressions inside the
 // payload are translated to the JS identifiers holding their values.
-func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, declared map[string]bool) string {
+func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, ct string, ctKnown bool, declared map[string]bool) string {
 	if body == nil {
 		return "null"
 	}
-	fmt.Fprintf(b, "  // requestBody content-type: %s\n", body.ContentType)
+	if ctKnown {
+		fmt.Fprintf(b, "  // requestBody content-type: %s\n", ct)
+	} else {
+		b.WriteString("  // requestBody content-type: unknown (omitted by Arazzo; the operation declares none or several non-JSON types)\n")
+	}
+	effective, unresolved := payload.Apply(body.Payload, body.Replacements)
+	for _, r := range body.Replacements {
+		val, _ := jsonMarshal(r.Value, "", "")
+		fmt.Fprintf(b, "  // replacement: %s = %s\n", r.Target, val)
+	}
+	for _, u := range unresolved {
+		fmt.Fprintf(b, "  // warning: replacement target %q did not resolve in the payload\n", u)
+	}
 	name := jsIdent(stepID) + "Body"
-	if s, ok := body.Payload.(string); ok {
+	if s, ok := effective.(string); ok {
 		value, _ := jsBodyValue(s, declared) // a string value never errors
 		fmt.Fprintf(b, "  const %s = %s;\n", name, value)
 		return name
 	}
-	if raw, err := jsBodyValue(body.Payload, declared); err == nil {
+	if raw, err := jsBodyValue(effective, declared); err == nil {
 		fmt.Fprintf(b, "  const %s = %s;\n", name, raw)
 		return "JSON.stringify(" + name + ")"
 	}
-	fmt.Fprintf(b, "  const %s = %s;\n", name, jsString(fmt.Sprintf("%v", body.Payload)))
+	fmt.Fprintf(b, "  const %s = %s;\n", name, jsString(fmt.Sprintf("%v", effective)))
 	return name
 }
 
@@ -375,21 +396,21 @@ func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.Outpu
 // resolveRequestLine returns the HTTP method and URL template (a JS
 // backtick-literal body, BASE_URL-prefixed) for the step, or ok=false
 // when the operationId could not be resolved.
-func resolveRequestLine(operationID string, params []model.Parameter, sources map[string]*oasresolver.Source, declared map[string]bool) (method, url string, ok bool) {
+func resolveRequestLine(operationID string, params []model.Parameter, sources map[string]*oasresolver.Source, declared map[string]bool) (op oasresolver.Operation, method, url string, ok bool) {
 	srcName, opID := parseOpRef(operationID, sources)
 	if srcName == "" {
-		return "", "", false
+		return oasresolver.Operation{}, "", "", false
 	}
 	src, exists := sources[srcName]
 	if !exists {
-		return "", "", false
+		return oasresolver.Operation{}, "", "", false
 	}
 	op, err := src.Resolve(opID)
 	if err != nil {
-		return "", "", false
+		return oasresolver.Operation{}, "", "", false
 	}
 	// Always BASE_URL, never op.BaseURL: requests stay environment-agnostic.
-	return op.Method, "${BASE_URL}" + substitutePathParams(op.Path, params, declared), true
+	return op, op.Method, "${BASE_URL}" + substitutePathParams(op.Path, params, declared), true
 }
 
 // defaultBaseURL returns the OpenAPI servers URL backing the workflow's
@@ -465,14 +486,24 @@ func queryString(params []model.Parameter, declared map[string]bool) string {
 }
 
 // headersObject renders the step's header parameters as a JS object
-// literal for the request params. An empty set yields "{}".
-func headersObject(params []model.Parameter, declared map[string]bool) string {
+// literal for the request params. When the effective content type is
+// known and the step declares no explicit Content-Type header, it is
+// added so k6 does not fall back to text/plain for a string body. An
+// empty set yields "{}".
+func headersObject(params []model.Parameter, contentType string, ctKnown bool, declared map[string]bool) string {
 	var entries []string
+	hasCT := false
 	for _, p := range params {
 		if p.In != "header" {
 			continue
 		}
+		if strings.EqualFold(p.Name, "content-type") {
+			hasCT = true
+		}
 		entries = append(entries, fmt.Sprintf("%s: %s", jsString(p.Name), headerValue(p.Value, declared)))
+	}
+	if ctKnown && !hasCT {
+		entries = append([]string{fmt.Sprintf("%s: %s", jsString("Content-Type"), jsString(contentType))}, entries...)
 	}
 	if len(entries) == 0 {
 		return "{}"
