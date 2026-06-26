@@ -81,3 +81,17 @@ func TestApplyDoesNotMutateInput(t *testing.T) {
 		t.Errorf("input mutated: a.b = %v, want 1", inner["b"])
 	}
 }
+
+func TestApplyRejectsNonCanonicalIndex(t *testing.T) {
+	for _, target := range []string{"/items/01", "/items/+1"} {
+		root := map[string]any{"items": []any{10, 20, 30}}
+		got, unres := Apply(root, []model.Replacement{{Target: target, Value: 99}})
+		if len(unres) != 1 || unres[0] != target {
+			t.Errorf("target %q: unresolved = %v, want [%q]", target, unres, target)
+		}
+		items := got.(map[string]any)["items"].([]any)
+		if items[1] != 20 {
+			t.Errorf("target %q: items[1] = %v, want 20 (unchanged)", target, items[1])
+		}
+	}
+}

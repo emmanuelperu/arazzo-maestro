@@ -497,3 +497,15 @@ func TestEffectiveContentType(t *testing.T) {
 		})
 	}
 }
+
+func TestEffectiveContentTypeJSONSuffixAmongSeveral(t *testing.T) {
+	for _, declared := range [][]string{
+		{"text/plain", "application/vnd.api+json"},
+		{"multipart/form-data", "application/json; charset=utf-8"},
+	} {
+		got, ok := EffectiveContentType("", declared)
+		if !ok || !isJSONMediaType(got) {
+			t.Errorf("EffectiveContentType(\"\", %v) = (%q, %v), want a JSON media type", declared, got, ok)
+		}
+	}
+}
