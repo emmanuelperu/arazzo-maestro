@@ -24,11 +24,13 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 
 | Gap | Issue |
 |---|---|
-| `#/json-pointer` suffixes on `$inputs`/`$steps...outputs`, whole-body `$response.body`, and dotted names (legal per ABNF) are not translated by the generators | [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
+| `#/json-pointer` suffixes on `$inputs`/`$steps...outputs` references are flagged but their sub-access is not yet translated; dotted names translate in k6 but are declined in Hurl (no dotted variable) | [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
 
 Resolved non-compliances: 1.1 structural schema rejections (#47),
 `retryAfter` unit and `retryLimit` default (#41), cookie and
-querystring parameters omitted from generated tests (#48).
+querystring parameters omitted from generated tests (#48), whole-body
+`$response.body` capture (#49), untranslatable inline expressions now
+flagged with a named comment instead of shipping verbatim (#56).
 
 ## Document-level objects
 
@@ -85,14 +87,14 @@ querystring parameters omitted from generated tests (#48).
 | Form | Linter | Renderer | TestGen | Verdict |
 |---|---|---|---|---|
 | `$inputs.name`, `$steps.id.outputs.name` | ✅ existence + ordering | ✅ | ✅ | ✅ |
-| `$inputs.name#/ptr`, `$steps...outputs.name#/ptr` | 🟡 suffix ignored | ✅ highlighted | ⛔ verbatim | ⛔ [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
+| `$inputs.name#/ptr`, `$steps...outputs.name#/ptr` | 🟡 suffix ignored | ✅ highlighted | 🟡 flagged, sub-access deferred | 🟡 [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
 | `$response.body#/ptr` (captures) | n/a | ✅ | ✅ | ✅ |
-| `$response.body` (whole body) | n/a | ✅ | ⛔ unsupported | ⛔ [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
+| `$response.body` (whole body) | n/a | ✅ | ✅ `jsonpath "$"` / `res.json()` | ✅ |
 | `$statusCode` | n/a | ✅ | ✅ captures + k6 checks | ✅ |
 | Embedded `{$expr}` in strings | n/a | ✅ | ✅ (declared `$inputs`/`$steps` only) | 🟡 |
 | `$response.header/...`, `$request.*` (captures) | n/a | ✅ | 🟡 explicit `unsupported` marker | 🟡 |
-| `$url`, `$method`, `$request.*`, `$message.*`, `$outputs.*`, `$workflows.*`, `$components.*`, `$self` (inline) | ❌ | 🟡 highlighted if `$`-prefixed | 😶 verbatim, no marker | 😶 [#56](https://github.com/emmanuelperu/arazzo-maestro/issues/56) |
-| Names containing dots (legal per ABNF `identifier`) | ❌ | ✅ | ⛔ not translated | ⛔ [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
+| `$url`, `$method`, `$request.*`, `$message.*`, `$outputs.*`, `$workflows.*`, `$components.*`, `$self` (inline) | ❌ | 🟡 highlighted if `$`-prefixed | ✅ named `unsupported` comment by the request | ✅ #56 |
+| Names containing dots (legal per ABNF `identifier`) | ❌ | ✅ | 🟡 k6 translates, Hurl flags (no dotted var) | 🟡 [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
 | Expression grammar validation | ❌ | n/a | n/a | ❌ no ABNF validation pass exists |
 
 ## Out of scope by design
