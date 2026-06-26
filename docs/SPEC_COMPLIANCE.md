@@ -8,8 +8,9 @@ audited section by section on 2026-06-05. Tracking issue:
 How to read the columns: **Parse** is the typed model the renderer and
 the test generators consume; **Lint** distinguishes the embedded
 official JSON Schema pass (1.0, version-patched) from the hand-rolled
-semantic passes; **Render** is the `view` HTML; **TestGen** covers both
-the Hurl and k6 generators. Verdicts:
+semantic passes; **Render** is the `view` output, primarily the HTML
+pages (the `--format mermaid` flowchart is a second, theme-agnostic
+target); **TestGen** covers both the Hurl and k6 generators. Verdicts:
 
 - ✅ full: behaves as the spec requires
 - 🟡 partial: the common cases work, documented limits remain

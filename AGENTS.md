@@ -54,7 +54,7 @@ templates, themes, or external dependencies.
 specifications into:
 
 - structured validation findings (`lint` subcommand)
-- standalone HTML pages per workflow (`view` subcommand)
+- standalone HTML pages, or Mermaid flowcharts, per workflow (`view` subcommand, `--format html|mermaid`)
 - runnable tests: end-to-end (`test gen e2e` / `test run e2e`, Hurl)
   and load/performance (`test gen perf`, k6)
 
@@ -62,7 +62,7 @@ Originally a Python POC (now removed), migrated to Go in May 2026.
 
 ### Stack
 
-- **Go 1.23+** (no cgo)
+- **Go 1.25+** (no cgo; see `go.mod` for the exact version)
 - [`spf13/cobra`](https://github.com/spf13/cobra), CLI framework
 - [`gopkg.in/yaml.v3`](https://pkg.go.dev/gopkg.in/yaml.v3), YAML parsing
   with `yaml.Node` (we walk the tree manually to preserve insertion
@@ -100,9 +100,10 @@ internal/
 ├── k6gen/                   model.Workflow + oasresolver → .k6.js perf
 │                            tests (http.request, check, BASE_URL env)
 ├── theme/                   Theme registry, validation, WCAG audit
-│   └── themes/builtin.yml   Built-in light + dark themes
-└── renderer/                model + theme → standalone HTML
-    └── templates/           workflow.html + index.html (embedded)
+│   └── themes/builtin.yml   Built-in light, dark, pb33f themes
+├── renderer/                model + theme → standalone HTML
+│   └── templates/           workflow.html + index.html (embedded)
+└── mermaidgen/              model.Workflow → Mermaid flowchart (.mmd)
 examples/                    Naming convention:
 ├── *.arazzo.yaml            Arazzo workflow files (auto-picked by `make dist` / `make lint`)
 ├── *.yaml                   OpenAPI contracts referenced by sourceDescriptions[].url
@@ -125,14 +126,16 @@ and pick it up automatically, no changes needed elsewhere.
 Dependency graph (no cycles): `model` → ∅, `parser` → `model`,
 `oasresolver` → libopenapi, `linter` → `parser` + `model` + `oasresolver`,
 `hurlgen` → `model` + `oasresolver`, `k6gen` → `model` + `oasresolver`,
-`theme` → ∅, `renderer` → `model` + `theme`, `cmd` → all.
+`theme` → ∅, `renderer` → `model` + `theme`, `mermaidgen` → `model`,
+`cmd` → all.
 
-### State as of 2026-06-02
+### State as of 2026-06-26
 
 | Area | Status | Where |
 |---|---|---|
 | Parser (YAML → model, ordered outputs) | ✅ done | `internal/parser/` |
 | Renderer (HTML output) | ✅ done | `internal/renderer/` |
+| Mermaid output (`view --format mermaid`) | ✅ done | `internal/mermaidgen/` |
 | CLI (`lint`, `view`, `test`) | ✅ done | `cmd/arazzo-maestro/` |
 | Theme system (light, dark, user `themes.yml`, WCAG audit) | ✅ done | `internal/theme/` |
 | Linter pass 1: JSON Schema | ✅ done | `internal/linter/schema.go` |
@@ -140,11 +143,11 @@ Dependency graph (no cycles): `model` → ∅, `parser` → `model`,
 | Linter pass 3: cross-file (operationId in OpenAPI) | ✅ done | `internal/linter/crossfile.go` |
 | OpenAPI source resolution (libopenapi) | ✅ done (#28) | `internal/oasresolver/` |
 | Test gen: e2e → Hurl (`test gen/run e2e`) | ✅ done (#21, merged) | `internal/hurlgen/` |
-| Test gen: perf → k6 (`test gen perf`) | ✅ done (#22, on `feat/k6-gen-22`) | `internal/k6gen/` |
+| Test gen: perf → k6 (`test gen perf`) | ✅ done (#22, merged) | `internal/k6gen/` |
 | Test coverage | ✅ ≥80 % all packages | `*_test.go` |
 | README | ✅ structurally done, ⏭️ visual hero pending | `README.md` |
 | CI (GitHub Actions) | ✅ done | `.github/workflows/ci.yml` |
-| Releases (goreleaser, cosign-signed, SBOM) | ✅ v0.1.0 shipped | `.github/workflows/release.yml` |
+| Releases (goreleaser, cosign-signed, SBOM) | ✅ shipped (latest v0.3.0) | `.github/workflows/release.yml` |
 | OpenSSF Best Practices badge | ✅ Phases 1-2 done; registered on bestpractices.dev | see Plan.md |
 | Logo / demo GIF / screenshots | ❌ pending | see Plan.md README polish |
 

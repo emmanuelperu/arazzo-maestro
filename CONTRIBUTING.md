@@ -27,7 +27,7 @@ For high-level project context, decisions, and roadmap:
 
 Requirements:
 
-- **Go 1.23+** (see `go.mod` for the exact version we test against).
+- **Go 1.25+** (see `go.mod` for the exact version we test against).
 - **GNU Make** for the `make` targets — any recent macOS or Linux
   shell ships one.
 - *(Optional)* [`golangci-lint`](https://golangci-lint.run/) for local
