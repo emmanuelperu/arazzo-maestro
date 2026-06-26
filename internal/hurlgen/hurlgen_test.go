@@ -854,3 +854,41 @@ func TestGenerateDoesNotFlagTranslatableInlineExpr(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
 	assertNotContains(t, out, "# unsupported expression")
 }
+
+func TestGenerateCapturesWholeResponseBody(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Outputs: []model.OutputEntry{
+					{Name: "all", Expression: "$response.body"},
+				},
+			},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "[Captures]\nlist_all: jsonpath \"$\"\n")
+}
+
+func TestGenerateFlagsDottedInputNameInHurl(t *testing.T) {
+	// Hurl reads {{user.id}} as member access on variable "user", so a
+	// dotted name cannot be a Hurl variable: it is declined and flagged
+	// rather than emitted as a template that resolves to the wrong var.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Parameters: []model.Parameter{
+					{Name: "u", In: "query", Value: "$inputs.user.id"},
+				},
+			},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "# unsupported expression (not translated): $inputs.user.id")
+	assertNotContains(t, out, "{{user.id}}")
+}

@@ -548,6 +548,7 @@ func headerValue(v any, declared map[string]bool) string {
 // translateCaptureExpr maps an Arazzo output expression to the JS that
 // reads it from the response. Recognised forms:
 //
+//	$response.body        ->  res.json()         (whole parsed body)
 //	$response.body#/path  ->  res.json('path')   (gjson selector)
 //	$statusCode           ->  res.status
 //
@@ -559,7 +560,7 @@ func translateCaptureExpr(resVar, s string) string {
 		if e.HasPointer {
 			return fmt.Sprintf("%s.json(%s)", resVar, jsString(jsonPointerToGJSON(e.Pointer)))
 		}
-		return "null; // unsupported: " + s
+		return resVar + ".json()"
 	case expr.KindStatusCode:
 		return resVar + ".status"
 	default:

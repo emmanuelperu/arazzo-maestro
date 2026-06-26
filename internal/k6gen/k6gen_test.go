@@ -867,3 +867,43 @@ func TestGenerateDoesNotFlagTranslatableInlineExpr(t *testing.T) {
 	out := gen(t, wf, shopSources(t), defaultOpts())
 	assertNotContains(t, out, "// unsupported expression")
 }
+
+func TestGenerateCapturesWholeResponseBody(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Outputs: []model.OutputEntry{
+					{Name: "all", Expression: "$response.body"},
+				},
+			},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "const list_all = listRes.json();")
+}
+
+func TestGenerateTranslatesDottedInputName(t *testing.T) {
+	// jsIdent sanitises "user.id" to user_id consistently on both the
+	// declaration (read from __ENV["user.id"]) and the reference, so a
+	// dotted input name is translatable in k6 without a marker.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "user.id", Type: "string"}},
+		Steps: []model.Step{
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Parameters: []model.Parameter{
+					{Name: "u", In: "query", Value: "$inputs.user.id"},
+				},
+			},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, `const user_id = __ENV["user.id"]`)
+	assertContains(t, out, "u=${user_id}")
+	assertNotContains(t, out, "// unsupported expression")
+}

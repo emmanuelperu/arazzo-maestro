@@ -480,17 +480,34 @@ func unsupportedInlineExprs(s model.Step) []string {
 func translateInlineExpr(s string) string {
 	switch e := expr.Parse(s); e.Kind {
 	case expr.KindInput:
-		return "{{" + e.Name + "}}"
+		if hurlVarSafe(e.Name) {
+			return "{{" + e.Name + "}}"
+		}
+		return s
 	case expr.KindStepOutput:
-		return "{{" + e.Name + "_" + e.OutputName + "}}"
+		if hurlVarSafe(e.Name) && hurlVarSafe(e.OutputName) {
+			return "{{" + e.Name + "_" + e.OutputName + "}}"
+		}
+		return s
 	default:
 		return s
 	}
 }
 
+// hurlVarSafe reports whether an Arazzo name maps to a usable Hurl
+// variable. Hurl reads the '.' in {{a.b}} as member access on a variable
+// named "a", not as a variable literally named "a.b" (verified against
+// hurl 8.0.1), so a dotted name cannot become a Hurl variable. Declining
+// it leaves the expression for the inline scan to flag rather than
+// emitting a template Hurl would resolve to the wrong variable.
+func hurlVarSafe(name string) bool {
+	return !strings.ContainsRune(name, '.')
+}
+
 // translateCaptureExpr maps an Arazzo output expression to a Hurl
 // capture right-hand side. Recognised forms:
 //
+//	$response.body        ->  jsonpath "$"
 //	$response.body#/path  ->  jsonpath "$.path"
 //	$statusCode           ->  status
 //
@@ -499,10 +516,11 @@ func translateInlineExpr(s string) string {
 func translateCaptureExpr(s string) string {
 	switch e := expr.Parse(s); e.Kind {
 	case expr.KindResponseBody:
-		if e.HasPointer {
-			if path, ok := jsonPointerToJSONPath(e.Pointer); ok {
-				return `jsonpath "` + path + `"`
-			}
+		if !e.HasPointer {
+			return `jsonpath "$"`
+		}
+		if path, ok := jsonPointerToJSONPath(e.Pointer); ok {
+			return `jsonpath "` + path + `"`
 		}
 		return "# unsupported: " + s
 	case expr.KindStatusCode:

@@ -28,7 +28,8 @@ const (
 	KindStepOutput
 	// KindStatusCode is $statusCode.
 	KindStatusCode
-	// KindResponseBody is $response.body, with a #/<pointer> suffix.
+	// KindResponseBody is $response.body, with or without a #/<pointer>
+	// suffix (the pointer is optional per the ABNF).
 	KindResponseBody
 )
 
@@ -50,6 +51,8 @@ func Parse(s string) Expr {
 	switch {
 	case e == "$statusCode":
 		return Expr{Kind: KindStatusCode, Raw: s}
+	case e == "$response.body":
+		return Expr{Kind: KindResponseBody, Raw: s}
 	case strings.HasPrefix(e, "$response.body#/"):
 		return Expr{
 			Kind:       KindResponseBody,
@@ -78,15 +81,18 @@ func IsRuntimeExpression(s string) bool {
 	return strings.HasPrefix(strings.TrimSpace(s), "$")
 }
 
-// IsName reports whether s is a plain Arazzo name the generators can map
-// to a variable: letters, digits, '_' or '-'.
+// IsName reports whether s is an Arazzo name. The runtime-expression
+// ABNF allows letters, digits, '_', '-' and '.' in a name; a sub-access
+// into a value uses the separate #/<json-pointer> suffix, so a '.' here
+// is part of the name itself (e.g. an input literally named "user.id"),
+// not a member access.
 func IsName(s string) bool {
 	if s == "" {
 		return false
 	}
 	for _, r := range s {
 		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-', r == '.':
 		default:
 			return false
 		}
