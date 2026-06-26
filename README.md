@@ -319,7 +319,7 @@ These are **engineering constraints**, not afterthoughts. The rules are formalis
 ```text
 arazzo-maestro --version                         Print version and exit
 arazzo-maestro lint <file>                       Validate against schema + rules + cross-file
-arazzo-maestro view <file> [flags]               Render to HTML
+arazzo-maestro view <file> [flags]               Render to HTML or Mermaid
 arazzo-maestro test gen e2e  <file> [flags]      Generate e2e tests (hurl)
 arazzo-maestro test run e2e  <file> [flags]      Generate + run e2e tests, optional HTML report
 arazzo-maestro test gen perf <file> [flags]      Generate perf tests (k6)
@@ -370,11 +370,12 @@ internal/
 ├── hurlgen/       model.Workflow + oasresolver → Hurl (.hurl) e2e test text
 ├── k6gen/         model.Workflow + oasresolver → k6 (.k6.js) perf test script
 ├── theme/         Loads built-in + user themes, validates, audits WCAG contrast
-└── renderer/      model + theme → standalone HTML (html/template + embedded assets)
+├── renderer/      model + theme → standalone HTML (html/template + embedded assets)
+└── mermaidgen/    model.Workflow → Mermaid flowchart (.mmd) text (no theme, no deps)
 cmd/arazzo-maestro/   Cobra CLI entry point
 ```
 
-Dependency graph: `model` → ∅, `parser` → `model`, `oasresolver` → `model` (external: `pb33f/libopenapi`), `linter` → `parser` + `model` + `oasresolver`, `hurlgen` → `model` + `oasresolver`, `k6gen` → `model` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `cmd` → all. No cycles.
+Dependency graph: `model` → ∅, `parser` → `model`, `oasresolver` → `model` (external: `pb33f/libopenapi`), `linter` → `parser` + `model` + `oasresolver`, `hurlgen` → `model` + `oasresolver`, `k6gen` → `model` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `mermaidgen` → `model`, `cmd` → all. No cycles.
 
 ## What makes us different
 
