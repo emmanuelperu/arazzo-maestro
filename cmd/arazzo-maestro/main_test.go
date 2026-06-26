@@ -171,6 +171,37 @@ func TestViewInvalidLayoutFails(t *testing.T) {
 	}
 }
 
+func TestViewMermaidFormatWritesMmdFiles(t *testing.T) {
+	tmp := t.TempDir()
+	if _, _, err := runCmd(t, "view", filepath.Join(examplesDir(t), "shop.arazzo.yaml"), "-o", tmp, "--format", "mermaid"); err != nil {
+		t.Fatalf("view --format mermaid failed: %v", err)
+	}
+	mmd, err := os.ReadFile(filepath.Join(tmp, "happy-path-checkout.mmd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(mmd), "flowchart TD") {
+		t.Errorf("expected a Mermaid flowchart, got:\n%s", mmd)
+	}
+	// Mermaid output is per-workflow text: no index, no .html.
+	if _, err := os.Stat(filepath.Join(tmp, "index.html")); !os.IsNotExist(err) {
+		t.Errorf("expected no index.html for the mermaid format, stat err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "happy-path-checkout.html")); !os.IsNotExist(err) {
+		t.Errorf("expected no .html for the mermaid format, stat err = %v", err)
+	}
+}
+
+func TestViewInvalidFormatFails(t *testing.T) {
+	_, _, err := runCmd(t, "view", filepath.Join(examplesDir(t), "shop.arazzo.yaml"), "--format", "svg", "-o", t.TempDir())
+	if err == nil {
+		t.Fatal("expected error for invalid format")
+	}
+	if !strings.Contains(err.Error(), "invalid --format") {
+		t.Errorf("expected 'invalid --format' in error, got %v", err)
+	}
+}
+
 func TestListThemes(t *testing.T) {
 	out, _, err := runCmd(t, "view", "--list-themes")
 	if err != nil {

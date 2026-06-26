@@ -12,12 +12,14 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/linter"
+	"github.com/emmanuelperu/arazzo-maestro/internal/mermaidgen"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
 	"github.com/emmanuelperu/arazzo-maestro/internal/renderer"
@@ -102,6 +104,7 @@ type viewOptions struct {
 	themesFile string
 	listThemes bool
 	layout     string
+	format     string
 }
 
 func newViewCmd() *cobra.Command {
@@ -130,6 +133,7 @@ func newViewCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.themesFile, "themes", "", "Path to a themes YAML file (bypasses ./themes.yml auto-discovery)")
 	cmd.Flags().BoolVar(&opts.listThemes, "list-themes", false, "List available themes and exit")
 	cmd.Flags().StringVar(&opts.layout, "layout", "portrait", "Workflow diagram orientation: portrait or landscape")
+	cmd.Flags().StringVar(&opts.format, "format", "html", "Output format: html or mermaid")
 	return cmd
 }
 
@@ -173,17 +177,44 @@ func runListThemes(cmd *cobra.Command, opts *viewOptions) error {
 	return nil
 }
 
+// Output formats accepted by `view --format`.
+const (
+	formatHTML    = "html"
+	formatMermaid = "mermaid"
+)
+
 func runView(cmd *cobra.Command, path string, opts *viewOptions) error {
+	format, err := parseFormat(opts.format)
+	if err != nil {
+		return err
+	}
+
 	doc, err := parser.ParseFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to parse %s: %w", path, err)
 	}
 
+	workflows, err := selectWorkflows(doc, opts.workflowID)
+	if err != nil {
+		return err
+	}
+	if len(workflows) == 0 {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: no workflows found in %s\n", path)
+		return nil
+	}
+
+	if format == formatMermaid {
+		return writeMermaid(cmd, workflows, opts.output)
+	}
+	return writeHTML(cmd, doc, workflows, opts)
+}
+
+// writeHTML renders the themed Blueprint pages plus the index.
+func writeHTML(cmd *cobra.Command, doc *model.ArazzoDocument, workflows []model.Workflow, opts *viewOptions) error {
 	layout, err := parseLayout(opts.layout)
 	if err != nil {
 		return err
 	}
-
 	registry, err := loadThemes(cmd, opts)
 	if err != nil {
 		return err
@@ -191,25 +222,6 @@ func runView(cmd *cobra.Command, path string, opts *viewOptions) error {
 	selected, err := registry.Resolve(opts.themeName)
 	if err != nil {
 		return err
-	}
-
-	workflows := doc.Workflows
-	if opts.workflowID != "" {
-		filtered := workflows[:0:0]
-		for _, w := range workflows {
-			if w.WorkflowID == opts.workflowID {
-				filtered = append(filtered, w)
-			}
-		}
-		if len(filtered) == 0 {
-			return fmt.Errorf("workflow %q not found. Available: %s", opts.workflowID, availableWorkflows(doc))
-		}
-		workflows = filtered
-	}
-
-	if len(workflows) == 0 {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: no workflows found in %s\n", path)
-		return nil
 	}
 
 	for _, wf := range workflows {
@@ -230,6 +242,23 @@ func runView(cmd *cobra.Command, path string, opts *viewOptions) error {
 	return nil
 }
 
+// writeMermaid writes one .mmd flowchart per workflow. Mermaid is a
+// theme-agnostic text format, so --theme / --layout do not apply and no
+// index is produced.
+func writeMermaid(cmd *cobra.Command, workflows []model.Workflow, outputDir string) error {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
+		return err
+	}
+	for _, wf := range workflows {
+		out := filepath.Join(outputDir, wf.WorkflowID+".mmd")
+		if err := os.WriteFile(out, []byte(mermaidgen.Generate(wf)), 0o644); err != nil {
+			return fmt.Errorf("failed to write workflow %q: %w", wf.WorkflowID, err)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", out)
+	}
+	return nil
+}
+
 func parseLayout(name string) (renderer.Layout, error) {
 	switch name {
 	case "", string(renderer.LayoutPortrait):
@@ -238,6 +267,17 @@ func parseLayout(name string) (renderer.Layout, error) {
 		return renderer.LayoutLandscape, nil
 	default:
 		return "", fmt.Errorf("invalid --layout %q: want portrait or landscape", name)
+	}
+}
+
+func parseFormat(name string) (string, error) {
+	switch name {
+	case "", formatHTML:
+		return formatHTML, nil
+	case formatMermaid:
+		return formatMermaid, nil
+	default:
+		return "", fmt.Errorf("invalid --format %q: want html or mermaid", name)
 	}
 }
 
