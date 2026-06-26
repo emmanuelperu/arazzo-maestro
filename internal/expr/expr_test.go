@@ -71,6 +71,53 @@ func TestIsName(t *testing.T) {
 	}
 }
 
+func TestRefs(t *testing.T) {
+	tests := []struct {
+		in   string
+		want []string
+	}{
+		{"$inputs.foo", []string{"$inputs.foo"}},
+		{"  $statusCode ", []string{"$statusCode"}},
+		{"Bearer {$inputs.token}", []string{"$inputs.token"}},
+		{"a {$x} b {$y}", []string{"$x", "$y"}},
+		{"plain literal", nil},
+	}
+	for _, tt := range tests {
+		got := Refs(tt.in)
+		if len(got) != len(tt.want) {
+			t.Errorf("Refs(%q) = %v, want %v", tt.in, got, tt.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tt.want[i] {
+				t.Errorf("Refs(%q)[%d] = %q, want %q", tt.in, i, got[i], tt.want[i])
+			}
+		}
+	}
+}
+
+func TestCollectRefs(t *testing.T) {
+	v := map[string]any{
+		"b": "$method",
+		"a": "$inputs.id",
+		"nested": map[string]any{
+			"z": []any{"$inputs.id", "literal", "Bearer {$inputs.token}"},
+		},
+	}
+	// Deterministic: map keys visited sorted ("a" before "b" before "nested"),
+	// duplicates removed ($inputs.id appears twice).
+	got := CollectRefs(v)
+	want := []string{"$inputs.id", "$method", "$inputs.token"}
+	if len(got) != len(want) {
+		t.Fatalf("CollectRefs = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("CollectRefs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestIsRuntimeExpression(t *testing.T) {
 	tests := []struct {
 		in   string

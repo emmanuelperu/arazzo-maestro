@@ -825,3 +825,45 @@ func TestGenerateSeparatesMultipleSteps(t *testing.T) {
 	assertContains(t, out, "// Step: first")
 	assertContains(t, out, "// Step: second")
 }
+
+func TestGenerateFlagsUntranslatableInlineExpr(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Parameters: []model.Parameter{
+					{Name: "X-Method", In: "header", Value: "$method"},
+					{Name: "trace", In: "query", Value: "id-{$request.header.x-id}"},
+				},
+				RequestBody: &model.RequestBody{
+					ContentType: "application/json",
+					Payload:     map[string]any{"self": "$self"},
+				},
+			},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "// unsupported expression (not translated): $method")
+	assertContains(t, out, "// unsupported expression (not translated): $request.header.x-id")
+	assertContains(t, out, "// unsupported expression (not translated): $self")
+}
+
+func TestGenerateDoesNotFlagTranslatableInlineExpr(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "cursor", Type: "string"}},
+		Steps: []model.Step{
+			{
+				StepID:      "list",
+				OperationID: "listProducts",
+				Parameters: []model.Parameter{
+					{Name: "cursor", In: "query", Value: "$inputs.cursor"},
+				},
+			},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertNotContains(t, out, "// unsupported expression")
+}

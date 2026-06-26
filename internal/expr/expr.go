@@ -9,7 +9,11 @@
 // KindUnknown so callers can decide how to surface it.
 package expr
 
-import "strings"
+import (
+	"regexp"
+	"sort"
+	"strings"
+)
 
 // Kind classifies a runtime expression.
 type Kind int
@@ -97,4 +101,63 @@ func splitStepOutput(rest string) (step, out string, ok bool) {
 		return "", "", false
 	}
 	return rest[:idx], rest[idx+len(sep):], true
+}
+
+// embeddedRe matches the spec's embedded form: a runtime expression
+// wrapped in {} curly braces inside a string value.
+var embeddedRe = regexp.MustCompile(`\{(\$[^{}]+)\}`)
+
+// Refs returns the runtime expressions referenced by s: the whole trimmed
+// string when it is itself an expression, otherwise the inner $expr of
+// each embedded {$expr} occurrence. A plain literal yields nothing.
+func Refs(s string) []string {
+	if IsRuntimeExpression(s) {
+		return []string{strings.TrimSpace(s)}
+	}
+	matches := embeddedRe.FindAllStringSubmatch(s, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+// CollectRefs walks a JSON-like value (string, map, slice) and returns
+// every runtime expression it references, deduplicated and in
+// deterministic order (map keys are visited sorted). It lets a generator
+// scan a step's parameters and request body for expressions to translate
+// or flag, without depending on map iteration order.
+func CollectRefs(v any) []string {
+	var out []string
+	seen := make(map[string]bool)
+	var walk func(any)
+	walk = func(v any) {
+		switch t := v.(type) {
+		case string:
+			for _, r := range Refs(t) {
+				if !seen[r] {
+					seen[r] = true
+					out = append(out, r)
+				}
+			}
+		case map[string]any:
+			keys := make([]string, 0, len(t))
+			for k := range t {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				walk(t[k])
+			}
+		case []any:
+			for _, e := range t {
+				walk(e)
+			}
+		}
+	}
+	walk(v)
+	return out
 }

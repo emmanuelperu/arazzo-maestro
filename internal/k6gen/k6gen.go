@@ -169,6 +169,10 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		}
 	}
 
+	for _, e := range unsupportedInlineExprs(s) {
+		fmt.Fprintf(b, "  // unsupported expression (not translated): %s\n", e)
+	}
+
 	method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources, declared)
 	if !ok {
 		fmt.Fprintf(b, "  // unresolved operationId: %s\n", s.OperationID)
@@ -591,6 +595,33 @@ func translateCondition(cond string) (string, bool) {
 func exprIdent(s string) (string, bool) {
 	out := translateInlineExpr(s)
 	return out, out != s
+}
+
+// unsupportedInlineExprs returns the runtime expressions used in the
+// step's inline values (parameters and request body) whose form the
+// generator cannot translate to an identifier. Without this they would
+// be emitted as literal strings with no signal; writeStep flags each as
+// a comment, mirroring the marker the capture side already produces.
+// A recognised form that merely references an undeclared step is not
+// flagged here: that is a linter concern, not an untranslatable form.
+func unsupportedInlineExprs(s model.Step) []string {
+	var refs []string
+	for _, p := range s.Parameters {
+		refs = append(refs, expr.CollectRefs(p.Value)...)
+	}
+	if s.RequestBody != nil {
+		refs = append(refs, expr.CollectRefs(s.RequestBody.Payload)...)
+	}
+	var out []string
+	seen := make(map[string]bool)
+	for _, r := range refs {
+		if seen[r] || translateInlineExpr(r) != r {
+			continue
+		}
+		seen[r] = true
+		out = append(out, r)
+	}
+	return out
 }
 
 // translateInlineExpr maps an inline runtime expression to the JS

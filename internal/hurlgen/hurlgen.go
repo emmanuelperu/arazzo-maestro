@@ -130,6 +130,10 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		}
 	}
 
+	for _, e := range unsupportedInlineExprs(s) {
+		fmt.Fprintf(b, "# unsupported expression (not translated): %s\n", e)
+	}
+
 	method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources)
 	if !ok {
 		fmt.Fprintf(b, "# unresolved operationId: %s\n", s.OperationID)
@@ -442,6 +446,32 @@ func translateEmbedded(s string) (string, bool) {
 		return m
 	})
 	return out, changed
+}
+
+// unsupportedInlineExprs returns the runtime expressions used in the
+// step's inline values (parameters and request body) that the generator
+// cannot translate to a Hurl template. Without this they would ship
+// verbatim into the request with no signal; writeStep emits each as a
+// comment so the gap is visible, matching the explicit marker the
+// capture side already produces.
+func unsupportedInlineExprs(s model.Step) []string {
+	var refs []string
+	for _, p := range s.Parameters {
+		refs = append(refs, expr.CollectRefs(p.Value)...)
+	}
+	if s.RequestBody != nil {
+		refs = append(refs, expr.CollectRefs(s.RequestBody.Payload)...)
+	}
+	var out []string
+	seen := make(map[string]bool)
+	for _, r := range refs {
+		if seen[r] || translateInlineExpr(r) != r {
+			continue
+		}
+		seen[r] = true
+		out = append(out, r)
+	}
+	return out
 }
 
 // translateInlineExpr maps an inline runtime expression to a Hurl
