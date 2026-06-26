@@ -50,7 +50,7 @@
 `arazzo-maestro` is a CLI that turns [Arazzo](https://spec.openapis.org/arazzo/latest.html) workflow specifications into something useful for the rest of your team:
 
 - **`lint`**: validate Arazzo files against the official JSON Schema, internal semantic rules (unique IDs, `$steps` references), and cross-file checks against the referenced OpenAPI contracts.
-- **`view`**: generate a standalone HTML page per workflow, no server, no build, no JavaScript framework. Open in any browser, commit to a docs folder, ship to GitHub Pages.
+- **`view`**: generate a standalone HTML page per workflow (or a Mermaid flowchart with `--format mermaid`), no server, no build, no JavaScript framework. Open in any browser, commit to a docs folder, ship to GitHub Pages.
 - **`test`**: generate runnable tests from a workflow. End-to-end with `test gen e2e` (Hurl), or generate and run them against an endpoint with an optional HTML report (`test run e2e`); load/performance with `test gen perf` (k6).
 
 ```text
@@ -224,7 +224,7 @@ arazzo-maestro test gen perf <file> [flags]      Load / performance tests (k6)
 
 Parameters, outputs, success criteria and runtime expressions (including the embedded `{$expr}` form) are translated per format; unresolvable parts degrade to comments rather than guesses, and secrets stay out of the YAML (run-time inputs, captured outputs, self-provisioned data).
 
-📖 Full guide, the Arazzo→Hurl translation table and the test-data model: [`docs/TEST_GENERATION.md`](./docs/TEST_GENERATION.md).
+📖 Full guide, the Arazzo→Hurl translation table and the test-data model: [`TEST_GENERATION`](./docs/TEST_GENERATION.md).
 
 ### 🌱 Eco-design and accessibility
 
@@ -304,7 +304,7 @@ There are already Arazzo plugins for VS Code and a Node-based validator from Jen
 |---|---|---|
 | Validate in CI / GitHub Actions / pre-commit | ❌ | ✅ |
 | Share rendering with non-devs | ❌ Needs the IDE | ✅ Standalone HTML, any browser |
-| Versionable artifact (commit, deploy to Pages) | ❌ Nothing to commit | ✅ HTML files |
+| Versionable artifact (commit, deploy to Pages) | ❌ Nothing to commit | ✅ HTML pages or Mermaid `.mmd` (renders on GitHub) |
 | Zero runtime dependency | ❌ Needs IDE | ✅ Single Go binary, `FROM scratch` Docker |
 | Cross-editor (vim, emacs, Zed, Cursor…) | ❌ Lock-in | ✅ Any editor or none |
 | Explicit eco-design + accessibility contract | ❌ | ✅ Enforced by rules + tests |
@@ -321,10 +321,10 @@ Core (parse, lint, render, themes, e2e + perf test generation, landscape and Mer
 
 ## Documentation
 
-- [`docs/TEST_GENERATION.md`](./docs/TEST_GENERATION.md), the full e2e (Hurl) + perf (k6) generation guide, translation tables and test-data model
-- [`docs/RECIPES.md`](./docs/RECIPES.md), CI, pre-commit and Docker integrations
-- [`docs/ROADMAP.md`](./docs/ROADMAP.md), shipped milestones and what's planned next
-- [`docs/SPEC_COMPLIANCE.md`](./docs/SPEC_COMPLIANCE.md), field-by-field status against the official Arazzo spec, audited
+- [`TEST_GENERATION.md`](./docs/TEST_GENERATION.md), the full e2e (Hurl) + perf (k6) generation guide, translation tables and test-data model
+- [`RECIPES.md`](./docs/RECIPES.md), CI, pre-commit and Docker integrations
+- [`ROADMAP.md`](./docs/ROADMAP.md), shipped milestones and what's planned next
+- [`SPEC_COMPLIANCE.md`](./docs/SPEC_COMPLIANCE.md), field-by-field status against the official Arazzo spec, audited
 - [`AGENTS.md`](./AGENTS.md), entry point for any coding agent (humans too) working on this repo
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md), dev environment + PR checklist + conventions
 - [`SECURITY.md`](./SECURITY.md), vulnerability reporting policy (private GitHub Security Advisories)
