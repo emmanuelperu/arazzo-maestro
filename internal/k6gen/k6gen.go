@@ -170,7 +170,14 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		}
 	}
 
-	for _, e := range unsupportedInlineExprs(s) {
+	// Apply payload replacements once, up front: the unsupported-expression
+	// scan and the serialised body must agree on the same payload.
+	var effective any
+	var unresolved []string
+	if s.RequestBody != nil {
+		effective, unresolved = payload.Apply(s.RequestBody.Payload, s.RequestBody.Replacements)
+	}
+	for _, e := range expr.UnsupportedInline(inlineValues(s, effective), translateInlineExpr) {
 		fmt.Fprintf(b, "  // unsupported expression (not translated): %s\n", e)
 	}
 
@@ -198,7 +205,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	}
 
 	resVar := jsIdent(s.StepID) + "Res"
-	bodyArg := writeBody(b, s.StepID, s.RequestBody, ct, ctKnown, declared)
+	bodyArg := writeBody(b, s.StepID, s.RequestBody, effective, unresolved, ct, ctKnown, declared)
 	reqParams := "{ headers: " + headersObject(s.Parameters, ct, ctKnown, declared)
 	if c := cookiesObject(s.Parameters, declared); c != "" {
 		reqParams += ", cookies: " + c
@@ -216,7 +223,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 // name for a raw string, JSON.stringify(...) for a structured payload,
 // or "null" when there is no body). Runtime expressions inside the
 // payload are translated to the JS identifiers holding their values.
-func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, ct string, ctKnown bool, declared map[string]bool) string {
+func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, effective any, unresolved []string, ct string, ctKnown bool, declared map[string]bool) string {
 	if body == nil {
 		return "null"
 	}
@@ -225,7 +232,6 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, ct st
 	} else {
 		b.WriteString("  // requestBody content-type: unknown (omitted by Arazzo; the operation declares none or several non-JSON types)\n")
 	}
-	effective, unresolved := payload.Apply(body.Payload, body.Replacements)
 	for _, r := range body.Replacements {
 		val, _ := jsonMarshal(r.Value, "", "")
 		fmt.Fprintf(b, "  // replacement: %s = %s\n", r.Target, val)
@@ -629,31 +635,20 @@ func exprIdent(s string) (string, bool) {
 	return out, out != s
 }
 
-// unsupportedInlineExprs returns the runtime expressions used in the
-// step's inline values (parameters and request body) whose form the
-// generator cannot translate to an identifier. Without this they would
-// be emitted as literal strings with no signal; writeStep flags each as
-// a comment, mirroring the marker the capture side already produces.
-// A recognised form that merely references an undeclared step is not
-// flagged here: that is a linter concern, not an untranslatable form.
-func unsupportedInlineExprs(s model.Step) []string {
-	var refs []string
+// inlineValues lists the values a step emits inline (parameter values and
+// the request body after replacements) for the unsupported-expression
+// scan, so the scan sees exactly what gets serialised. A recognised form
+// that merely references an undeclared step is not flagged: that is a
+// linter concern, not an untranslatable form.
+func inlineValues(s model.Step, effectiveBody any) []any {
+	values := make([]any, 0, len(s.Parameters)+1)
 	for _, p := range s.Parameters {
-		refs = append(refs, expr.CollectRefs(p.Value)...)
+		values = append(values, p.Value)
 	}
 	if s.RequestBody != nil {
-		refs = append(refs, expr.CollectRefs(s.RequestBody.Payload)...)
+		values = append(values, effectiveBody)
 	}
-	var out []string
-	seen := make(map[string]bool)
-	for _, r := range refs {
-		if seen[r] || translateInlineExpr(r) != r {
-			continue
-		}
-		seen[r] = true
-		out = append(out, r)
-	}
-	return out
+	return values
 }
 
 // translateInlineExpr maps an inline runtime expression to the JS
