@@ -46,6 +46,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 )
@@ -166,6 +167,10 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		for _, line := range strings.Split(strings.TrimSpace(s.Description), "\n") {
 			fmt.Fprintf(b, "  // %s\n", line)
 		}
+	}
+
+	for _, e := range unsupportedInlineExprs(s) {
+		fmt.Fprintf(b, "  // unsupported expression (not translated): %s\n", e)
 	}
 
 	method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources, declared)
@@ -543,21 +548,24 @@ func headerValue(v any, declared map[string]bool) string {
 // translateCaptureExpr maps an Arazzo output expression to the JS that
 // reads it from the response. Recognised forms:
 //
+//	$response.body        ->  res.json()         (whole parsed body)
 //	$response.body#/path  ->  res.json('path')   (gjson selector)
 //	$statusCode           ->  res.status
 //
 // Anything else yields null with a trailing comment so the unsupported
 // expression is visible in the script.
-func translateCaptureExpr(resVar, expr string) string {
-	e := strings.TrimSpace(expr)
-	if strings.HasPrefix(e, "$response.body#/") {
-		ptr := strings.TrimPrefix(e, "$response.body#/")
-		return fmt.Sprintf("%s.json(%s)", resVar, jsString(jsonPointerToGJSON(ptr)))
-	}
-	if e == "$statusCode" {
+func translateCaptureExpr(resVar, s string) string {
+	switch e := expr.Parse(s); e.Kind {
+	case expr.KindResponseBody:
+		if e.HasPointer {
+			return fmt.Sprintf("%s.json(%s)", resVar, jsString(jsonPointerToGJSON(e.Pointer)))
+		}
+		return resVar + ".json()"
+	case expr.KindStatusCode:
 		return resVar + ".status"
+	default:
+		return "null; // unsupported: " + s
 	}
-	return "null; // unsupported: " + expr
 }
 
 // translateCondition maps the status-code subset of the Arazzo success
@@ -590,51 +598,45 @@ func exprIdent(s string) (string, bool) {
 	return out, out != s
 }
 
+// unsupportedInlineExprs returns the runtime expressions used in the
+// step's inline values (parameters and request body) whose form the
+// generator cannot translate to an identifier. Without this they would
+// be emitted as literal strings with no signal; writeStep flags each as
+// a comment, mirroring the marker the capture side already produces.
+// A recognised form that merely references an undeclared step is not
+// flagged here: that is a linter concern, not an untranslatable form.
+func unsupportedInlineExprs(s model.Step) []string {
+	var refs []string
+	for _, p := range s.Parameters {
+		refs = append(refs, expr.CollectRefs(p.Value)...)
+	}
+	if s.RequestBody != nil {
+		refs = append(refs, expr.CollectRefs(s.RequestBody.Payload)...)
+	}
+	var out []string
+	seen := make(map[string]bool)
+	for _, r := range refs {
+		if seen[r] || translateInlineExpr(r) != r {
+			continue
+		}
+		seen[r] = true
+		out = append(out, r)
+	}
+	return out
+}
+
 // translateInlineExpr maps an inline runtime expression to the JS
 // identifier holding its value ($inputs.foo -> foo, $steps.s.outputs.o
 // -> s_o); anything else is returned unchanged.
-func translateInlineExpr(expr string) string {
-	e := strings.TrimSpace(expr)
-	switch {
-	case strings.HasPrefix(e, "$inputs."):
-		if name := strings.TrimPrefix(e, "$inputs."); isExprName(name) {
-			return jsIdent(name)
-		}
-		return expr
-	case strings.HasPrefix(e, "$steps."):
-		rest := strings.TrimPrefix(e, "$steps.")
-		if step, out, ok := splitStepOutput(rest); ok && isExprName(step) && isExprName(out) {
-			return jsIdent(step) + "_" + jsIdent(out)
-		}
-		return expr
+func translateInlineExpr(s string) string {
+	switch e := expr.Parse(s); e.Kind {
+	case expr.KindInput:
+		return jsIdent(e.Name)
+	case expr.KindStepOutput:
+		return jsIdent(e.Name) + "_" + jsIdent(e.OutputName)
 	default:
-		return expr
+		return s
 	}
-}
-
-// isExprName reports whether s is a plain Arazzo name (letters, digits,
-// '_' or '-'), the only form the generator can map to an identifier.
-func isExprName(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func splitStepOutput(rest string) (step, out string, ok bool) {
-	const sep = ".outputs."
-	idx := strings.Index(rest, sep)
-	if idx < 0 {
-		return "", "", false
-	}
-	return rest[:idx], rest[idx+len(sep):], true
 }
 
 // jsonPointerToGJSON converts the body of a JSON Pointer (after '#/')

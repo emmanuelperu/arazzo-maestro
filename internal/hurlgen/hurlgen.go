@@ -41,6 +41,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 )
@@ -127,6 +128,10 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		for _, line := range strings.Split(strings.TrimSpace(s.Description), "\n") {
 			fmt.Fprintf(b, "# %s\n", line)
 		}
+	}
+
+	for _, e := range unsupportedInlineExprs(s) {
+		fmt.Fprintf(b, "# unsupported expression (not translated): %s\n", e)
 	}
 
 	method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources)
@@ -443,73 +448,86 @@ func translateEmbedded(s string) (string, bool) {
 	return out, changed
 }
 
+// unsupportedInlineExprs returns the runtime expressions used in the
+// step's inline values (parameters and request body) that the generator
+// cannot translate to a Hurl template. Without this they would ship
+// verbatim into the request with no signal; writeStep emits each as a
+// comment so the gap is visible, matching the explicit marker the
+// capture side already produces.
+func unsupportedInlineExprs(s model.Step) []string {
+	var refs []string
+	for _, p := range s.Parameters {
+		refs = append(refs, expr.CollectRefs(p.Value)...)
+	}
+	if s.RequestBody != nil {
+		refs = append(refs, expr.CollectRefs(s.RequestBody.Payload)...)
+	}
+	var out []string
+	seen := make(map[string]bool)
+	for _, r := range refs {
+		if seen[r] || translateInlineExpr(r) != r {
+			continue
+		}
+		seen[r] = true
+		out = append(out, r)
+	}
+	return out
+}
+
 // translateInlineExpr maps an inline runtime expression to a Hurl
 // template ($inputs.foo -> {{foo}}, $steps.s.outputs.o -> {{s_o}});
 // anything else is returned unchanged so the user can spot it.
-func translateInlineExpr(expr string) string {
-	e := strings.TrimSpace(expr)
-	switch {
-	case strings.HasPrefix(e, "$inputs."):
-		if name := strings.TrimPrefix(e, "$inputs."); isExprName(name) {
-			return "{{" + name + "}}"
+func translateInlineExpr(s string) string {
+	switch e := expr.Parse(s); e.Kind {
+	case expr.KindInput:
+		if hurlVarSafe(e.Name) {
+			return "{{" + e.Name + "}}"
 		}
-		return expr
-	case strings.HasPrefix(e, "$steps."):
-		rest := strings.TrimPrefix(e, "$steps.")
-		if step, out, ok := splitStepOutput(rest); ok && isExprName(step) && isExprName(out) {
-			return "{{" + step + "_" + out + "}}"
+		return s
+	case expr.KindStepOutput:
+		if hurlVarSafe(e.Name) && hurlVarSafe(e.OutputName) {
+			return "{{" + e.Name + "_" + e.OutputName + "}}"
 		}
-		return expr
+		return s
 	default:
-		return expr
+		return s
 	}
 }
 
-func splitStepOutput(rest string) (step, out string, ok bool) {
-	const sep = ".outputs."
-	idx := strings.Index(rest, sep)
-	if idx < 0 {
-		return "", "", false
-	}
-	return rest[:idx], rest[idx+len(sep):], true
-}
-
-// isExprName reports whether s is a plain Arazzo name (letters, digits,
-// '_' or '-'), the only form the generator can map to a Hurl variable.
-func isExprName(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
-		default:
-			return false
-		}
-	}
-	return true
+// hurlVarSafe reports whether an Arazzo name maps to a usable Hurl
+// variable. Hurl reads the '.' in {{a.b}} as member access on a variable
+// named "a", not as a variable literally named "a.b" (verified against
+// hurl 8.0.1), so a dotted name cannot become a Hurl variable. Declining
+// it leaves the expression for the inline scan to flag rather than
+// emitting a template Hurl would resolve to the wrong variable.
+func hurlVarSafe(name string) bool {
+	return !strings.ContainsRune(name, '.')
 }
 
 // translateCaptureExpr maps an Arazzo output expression to a Hurl
 // capture right-hand side. Recognised forms:
 //
+//	$response.body        ->  jsonpath "$"
 //	$response.body#/path  ->  jsonpath "$.path"
 //	$statusCode           ->  status
 //
 // Anything else is returned as a Hurl comment so the user spots that
 // the capture was not understood.
-func translateCaptureExpr(expr string) string {
-	e := strings.TrimSpace(expr)
-	if strings.HasPrefix(e, "$response.body#/") {
-		if path, ok := jsonPointerToJSONPath(strings.TrimPrefix(e, "$response.body#/")); ok {
+func translateCaptureExpr(s string) string {
+	switch e := expr.Parse(s); e.Kind {
+	case expr.KindResponseBody:
+		if !e.HasPointer {
+			return `jsonpath "$"`
+		}
+		if path, ok := jsonPointerToJSONPath(e.Pointer); ok {
 			return `jsonpath "` + path + `"`
 		}
-		return "# unsupported: " + expr
-	}
-	if e == "$statusCode" {
+		return "# unsupported: " + s
+	case expr.KindStatusCode:
 		return "status"
+	default:
+		return "# unsupported: " + s
 	}
-	return "# unsupported: " + expr
 }
 
 // jsonPointerToJSONPath converts the body of a JSON Pointer (after
