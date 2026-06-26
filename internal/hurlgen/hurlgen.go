@@ -44,6 +44,7 @@ import (
 	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
+	"github.com/emmanuelperu/arazzo-maestro/internal/payload"
 )
 
 // Generate renders the workflow as a Hurl test file.
@@ -226,10 +227,27 @@ func writeBody(b *strings.Builder, body *model.RequestBody, ct string, ctKnown b
 	} else {
 		b.WriteString("# requestBody content-type: unknown (omitted by Arazzo; the operation declares none or several non-JSON types)\n")
 	}
-	if payloadHasLiteralBraces(body.Payload) {
+	effective, unresolved := payload.Apply(body.Payload, body.Replacements)
+	for _, r := range body.Replacements {
+		fmt.Fprintf(b, "# replacement: %s = %s\n", r.Target, compactValue(r.Value))
+	}
+	for _, u := range unresolved {
+		fmt.Fprintf(b, "# warning: replacement target %q did not resolve in the payload\n", u)
+	}
+	if payloadHasLiteralBraces(effective) {
 		b.WriteString("# warning: literal '{{' in the body is interpreted by Hurl templating at run time\n")
 	}
-	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(body, ct, unquoted))
+	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(effective, ct, unquoted))
+}
+
+// compactValue renders a replacement value for a comment: JSON when it
+// marshals (so objects, arrays and quoted strings read naturally),
+// otherwise Go's default formatting.
+func compactValue(v any) string {
+	if raw, err := json.Marshal(v); err == nil {
+		return string(raw)
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 // hasHeaderParam reports whether the step already declares a header
@@ -269,16 +287,16 @@ func payloadHasLiteralBraces(v any) bool {
 
 // serialiseBody turns the requestBody payload into the text of the Hurl
 // body block, with runtime expressions translated to Hurl templates.
-func serialiseBody(body *model.RequestBody, ct string, unquoted map[string]bool) string {
-	if s, ok := body.Payload.(string); ok {
+func serialiseBody(payload any, ct string, unquoted map[string]bool) string {
+	if s, ok := payload.(string); ok {
 		return renderValue(s)
 	}
 	if strings.Contains(ct, "json") {
-		if out, err := jsonBodyWithTemplates(body.Payload, unquoted); err == nil {
+		if out, err := jsonBodyWithTemplates(payload, unquoted); err == nil {
 			return out
 		}
 	}
-	return fmt.Sprintf("%v", translateBodyExprs(body.Payload))
+	return fmt.Sprintf("%v", translateBodyExprs(payload))
 }
 
 // jsonBodyWithTemplates marshals the payload with expressions swapped

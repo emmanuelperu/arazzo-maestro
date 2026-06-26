@@ -939,3 +939,22 @@ func TestGenerateInjectsContentTypeHeaderWhenOmitted(t *testing.T) {
 	assertContains(t, out, `"Content-Type": "application/json"`)
 	assertContains(t, out, "// requestBody content-type: application/json")
 }
+
+func TestGenerateAppliesRequestBodyReplacements(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createThing",
+			RequestBody: &model.RequestBody{
+				ContentType:  "application/json",
+				Payload:      map[string]any{"name": "original"},
+				Replacements: []model.Replacement{{Target: "/name", Value: "INJECTED"}},
+			},
+		}},
+	}
+	out := gen(t, wf, map[string]*oasresolver.Source{"b": loadSource(t, bodySpec)}, defaultOpts())
+	assertContains(t, out, `"name": "INJECTED"`)
+	assertNotContains(t, out, "original")
+	assertContains(t, out, `// replacement: /name = "INJECTED"`)
+}

@@ -49,6 +49,7 @@ import (
 	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
+	"github.com/emmanuelperu/arazzo-maestro/internal/payload"
 )
 
 // Options carries the load profile and thresholds that Arazzo does not
@@ -224,17 +225,25 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, ct st
 	} else {
 		b.WriteString("  // requestBody content-type: unknown (omitted by Arazzo; the operation declares none or several non-JSON types)\n")
 	}
+	effective, unresolved := payload.Apply(body.Payload, body.Replacements)
+	for _, r := range body.Replacements {
+		val, _ := jsonMarshal(r.Value, "", "")
+		fmt.Fprintf(b, "  // replacement: %s = %s\n", r.Target, val)
+	}
+	for _, u := range unresolved {
+		fmt.Fprintf(b, "  // warning: replacement target %q did not resolve in the payload\n", u)
+	}
 	name := jsIdent(stepID) + "Body"
-	if s, ok := body.Payload.(string); ok {
+	if s, ok := effective.(string); ok {
 		value, _ := jsBodyValue(s, declared) // a string value never errors
 		fmt.Fprintf(b, "  const %s = %s;\n", name, value)
 		return name
 	}
-	if raw, err := jsBodyValue(body.Payload, declared); err == nil {
+	if raw, err := jsBodyValue(effective, declared); err == nil {
 		fmt.Fprintf(b, "  const %s = %s;\n", name, raw)
 		return "JSON.stringify(" + name + ")"
 	}
-	fmt.Fprintf(b, "  const %s = %s;\n", name, jsString(fmt.Sprintf("%v", body.Payload)))
+	fmt.Fprintf(b, "  const %s = %s;\n", name, jsString(fmt.Sprintf("%v", effective)))
 	return name
 }
 

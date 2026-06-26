@@ -66,8 +66,8 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `workflowId` (nested workflow) | ❌ | 😶 schema-only | ❌ "API" tag | ❌ misleading placeholder | ❌ | [#54](https://github.com/emmanuelperu/arazzo-maestro/issues/54) |
 | `channelPath` (1.1, AsyncAPI) | ❌ | 😶 accepted | ❌ placeholder | ❌ | 😶 | Accepted structurally since #47; resolution out of scope (AsyncAPI) |
 | `parameters` | ✅ | ✅ schema | ✅ | ✅ | 🟡 | All five `in` locations emitted (cookie as `[Cookies]`/`cookies:`, querystring appended to the URL); Reusable entries parse empty ([#52](https://github.com/emmanuelperu/arazzo-maestro/issues/52)); `in` conditional rule unvalidated |
-| `requestBody.contentType` / `payload` | ✅ | ✅ | ✅ | ✅ | ✅ | Whole-string and embedded `{$expr}` substitution |
-| `requestBody.replacements` | ❌ | 😶 schema-only | ❌ | ❌ | ❌ | Generated bodies omit injected values ([#55](https://github.com/emmanuelperu/arazzo-maestro/issues/55)) |
+| `requestBody.contentType` / `payload` | ✅ | ✅ | ✅ | ✅ | ✅ | Whole-string and embedded `{$expr}` substitution; an omitted `contentType` defers to the operation's declared type, and a real `Content-Type` header reaches the request (#66) |
+| `requestBody.replacements` | ✅ | 😶 schema-only | ✅ shown | ✅ applied | ✅ | JSON-pointer target applied to the payload before expression substitution; unresolved targets flagged (#55) |
 | `successCriteria` | 🟡 | ✅ | 🟡 | 🟡 | 🟡 | Only `condition` survives the parser ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
 | `onSuccess` / `onFailure` | ✅ | ✅ targets + criteria | ✅ | n/a | 🟡 | Mutual exclusivity stepId/workflowId only schema-checked; generators do not emit retry/goto logic |
 | `outputs` | ✅ | ✅ | ✅ | ✅ | ✅ | |
