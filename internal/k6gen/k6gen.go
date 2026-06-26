@@ -46,6 +46,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 )
@@ -548,16 +549,18 @@ func headerValue(v any, declared map[string]bool) string {
 //
 // Anything else yields null with a trailing comment so the unsupported
 // expression is visible in the script.
-func translateCaptureExpr(resVar, expr string) string {
-	e := strings.TrimSpace(expr)
-	if strings.HasPrefix(e, "$response.body#/") {
-		ptr := strings.TrimPrefix(e, "$response.body#/")
-		return fmt.Sprintf("%s.json(%s)", resVar, jsString(jsonPointerToGJSON(ptr)))
-	}
-	if e == "$statusCode" {
+func translateCaptureExpr(resVar, s string) string {
+	switch e := expr.Parse(s); e.Kind {
+	case expr.KindResponseBody:
+		if e.HasPointer {
+			return fmt.Sprintf("%s.json(%s)", resVar, jsString(jsonPointerToGJSON(e.Pointer)))
+		}
+		return "null; // unsupported: " + s
+	case expr.KindStatusCode:
 		return resVar + ".status"
+	default:
+		return "null; // unsupported: " + s
 	}
-	return "null; // unsupported: " + expr
 }
 
 // translateCondition maps the status-code subset of the Arazzo success
@@ -593,48 +596,15 @@ func exprIdent(s string) (string, bool) {
 // translateInlineExpr maps an inline runtime expression to the JS
 // identifier holding its value ($inputs.foo -> foo, $steps.s.outputs.o
 // -> s_o); anything else is returned unchanged.
-func translateInlineExpr(expr string) string {
-	e := strings.TrimSpace(expr)
-	switch {
-	case strings.HasPrefix(e, "$inputs."):
-		if name := strings.TrimPrefix(e, "$inputs."); isExprName(name) {
-			return jsIdent(name)
-		}
-		return expr
-	case strings.HasPrefix(e, "$steps."):
-		rest := strings.TrimPrefix(e, "$steps.")
-		if step, out, ok := splitStepOutput(rest); ok && isExprName(step) && isExprName(out) {
-			return jsIdent(step) + "_" + jsIdent(out)
-		}
-		return expr
+func translateInlineExpr(s string) string {
+	switch e := expr.Parse(s); e.Kind {
+	case expr.KindInput:
+		return jsIdent(e.Name)
+	case expr.KindStepOutput:
+		return jsIdent(e.Name) + "_" + jsIdent(e.OutputName)
 	default:
-		return expr
+		return s
 	}
-}
-
-// isExprName reports whether s is a plain Arazzo name (letters, digits,
-// '_' or '-'), the only form the generator can map to an identifier.
-func isExprName(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func splitStepOutput(rest string) (step, out string, ok bool) {
-	const sep = ".outputs."
-	idx := strings.Index(rest, sep)
-	if idx < 0 {
-		return "", "", false
-	}
-	return rest[:idx], rest[idx+len(sep):], true
 }
 
 // jsonPointerToGJSON converts the body of a JSON Pointer (after '#/')
