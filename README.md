@@ -112,6 +112,21 @@ Portrait is the default. `--layout landscape` lays the same workflow out as a ho
 
 [![happy-path-checkout workflow rendered by arazzo-maestro in landscape layout](./docs/screenshots/happy-landscape.webp)](./docs/screenshots/happy-landscape.webp)
 
+`--format mermaid` writes one `.mmd` flowchart per workflow instead of HTML: theme-agnostic text that renders inline on GitHub and in IDEs. Success paths are solid, failure paths dotted, retries loop back. `payment-refused-path` from `shop.arazzo.yaml`:
+
+```mermaid
+flowchart TD
+  wfStart([Start])
+  s0["01 add-to-cart<br/>addToCart"]
+  s1["02 pay-refused<br/>processPayment"]
+  wfEnd([End])
+  wfStart --> s0
+  s0 --> s1
+  s1 --> wfEnd
+  s1 -. "retry x2 after 2s" .-> s1
+  s1 -. "on failure" .-> wfEnd
+```
+
 ```bash
 # Render every examples/*.arazzo.yaml into dist/<workflow>/{light,dark}/
 make dist
@@ -317,6 +332,7 @@ view flags:
       --themes <path>         Path to a themes YAML (bypasses ./themes.yml)
       --list-themes           List available themes and exit
       --layout <orientation>  Diagram orientation: portrait (default) or landscape
+      --format <name>         Output format: html (default) or mermaid (one .mmd flowchart per workflow)
 
 test gen e2e flags:
   -o, --output <dir>          Output directory (default: dist)
