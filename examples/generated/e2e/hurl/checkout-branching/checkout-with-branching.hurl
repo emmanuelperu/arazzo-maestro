@@ -12,6 +12,7 @@
 # Charge the customer's card for the order.
 POST {{baseUrl}}/orders/{{orderId}}/payment
 Accept-Language: {{acceptLanguage}}
+Content-Type: application/json
 # requestBody content-type: application/json
 ```
 {

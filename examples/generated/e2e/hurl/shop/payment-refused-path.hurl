@@ -12,6 +12,7 @@
 # Add a product to the cart
 POST {{baseUrl}}/cart/items
 Accept-Language: {{acceptLanguage}}
+Content-Type: application/json
 # requestBody content-type: application/json
 ```
 {
@@ -30,6 +31,7 @@ HTTP *
 # up to twice with 2 s back-off before accepting the failure.
 POST {{baseUrl}}/orders/{{orderId}}/payment
 Accept-Language: {{acceptLanguage}}
+Content-Type: application/json
 # requestBody content-type: application/json
 ```
 {

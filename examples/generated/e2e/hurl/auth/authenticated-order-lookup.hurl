@@ -11,6 +11,7 @@
 # Step: login
 # Exchange the credentials for a bearer token.
 POST {{baseUrl}}/auth/login
+Content-Type: application/json
 # requestBody content-type: application/json
 ```
 {

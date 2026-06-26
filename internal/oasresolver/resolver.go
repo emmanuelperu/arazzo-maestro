@@ -9,6 +9,7 @@ package oasresolver
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/pb33f/libopenapi"
 	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
@@ -24,6 +25,45 @@ type Operation struct {
 	Path    string
 	BaseURL string // op > path > document fallback chain, "" if none of the levels declares a server
 	Spec    *v3.Operation
+}
+
+// RequestContentTypes returns the media types declared on the
+// operation's request body, in declaration order. It is empty when the
+// operation declares no request body.
+func (o Operation) RequestContentTypes() []string {
+	if o.Spec == nil || o.Spec.RequestBody == nil || o.Spec.RequestBody.Content == nil {
+		return nil
+	}
+	var out []string
+	for e := o.Spec.RequestBody.Content.First(); e != nil; e = e.Next() {
+		out = append(out, e.Key())
+	}
+	return out
+}
+
+// EffectiveContentType picks the content type a generated request should
+// use, following the Arazzo rule that an omitted requestBody.contentType
+// defers to the targeted operation (Request Body Object, contentType).
+// It returns the explicit Arazzo type when set; otherwise the operation's
+// type when it declares exactly one; otherwise application/json when the
+// operation declares it among several; otherwise ("", false) when the
+// type cannot be determined.
+func EffectiveContentType(explicit string, declared []string) (string, bool) {
+	if strings.TrimSpace(explicit) != "" {
+		return explicit, true
+	}
+	switch len(declared) {
+	case 0:
+		return "", false
+	case 1:
+		return declared[0], true
+	}
+	for _, ct := range declared {
+		if ct == "application/json" {
+			return ct, true
+		}
+	}
+	return "", false
 }
 
 // Source is a loaded OpenAPI document, indexed by operationId.

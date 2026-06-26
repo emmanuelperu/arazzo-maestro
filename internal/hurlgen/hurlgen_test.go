@@ -892,3 +892,40 @@ func TestGenerateFlagsDottedInputNameInHurl(t *testing.T) {
 	assertContains(t, out, "# unsupported expression (not translated): $inputs.user.id")
 	assertNotContains(t, out, "{{user.id}}")
 }
+
+const bodySpec = `
+openapi: "3.1.0"
+info: { title: B, version: "1.0.0" }
+servers:
+  - url: https://api.body.test
+paths:
+  /things:
+    post:
+      operationId: createThing
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses: { "201": { description: created } }
+`
+
+func TestGenerateDerivesContentTypeFromOperationWhenOmitted(t *testing.T) {
+	// Arazzo omits contentType; the operation declares application/json only,
+	// so the body must serialise as JSON (not a Go map dump) and a real
+	// Content-Type header must reach the request.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createThing",
+			RequestBody: &model.RequestBody{
+				Payload: map[string]any{"name": "$inputs.n"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"b": loadSource(t, bodySpec)})
+	assertContains(t, out, "Content-Type: application/json")
+	assertContains(t, out, "# requestBody content-type: application/json")
+	assertContains(t, out, `"name": "{{n}}"`)
+	assertNotContains(t, out, "map[")
+}

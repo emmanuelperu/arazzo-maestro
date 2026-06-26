@@ -38,6 +38,7 @@ get-product_productName: jsonpath "$.name"
 # Add the product to the shopping cart
 POST {{baseUrl}}/cart/items
 Accept-Language: {{acceptLanguage}}
+Content-Type: application/json
 # requestBody content-type: application/json
 ```
 {
@@ -57,6 +58,7 @@ add-to-cart_cartTotal: jsonpath "$.totalPrice"
 # Pay the order with a valid card
 POST {{baseUrl}}/orders/{{orderId}}/payment
 Accept-Language: {{acceptLanguage}}
+Content-Type: application/json
 # requestBody content-type: application/json
 ```
 {

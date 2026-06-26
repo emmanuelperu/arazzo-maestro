@@ -30,7 +30,7 @@ export default function () {
     "productId": "prod-002",
     "quantity": 1
   };
-  const add_to_cartRes = http.request('POST', `${BASE_URL}/cart/items`, JSON.stringify(add_to_cartBody), { headers: { "Accept-Language": acceptLanguage } });
+  const add_to_cartRes = http.request('POST', `${BASE_URL}/cart/items`, JSON.stringify(add_to_cartBody), { headers: { "Content-Type": "application/json", "Accept-Language": acceptLanguage } });
   check(add_to_cartRes, {
     "add-to-cart: $statusCode == 201": (r) => r.status === 201,
   });
@@ -48,7 +48,7 @@ export default function () {
     "expiryDate": "06/25",
     "method": "card"
   };
-  const pay_refusedRes = http.request('POST', `${BASE_URL}/orders/${orderId}/payment`, JSON.stringify(pay_refusedBody), { headers: { "Accept-Language": acceptLanguage } });
+  const pay_refusedRes = http.request('POST', `${BASE_URL}/orders/${orderId}/payment`, JSON.stringify(pay_refusedBody), { headers: { "Content-Type": "application/json", "Accept-Language": acceptLanguage } });
   // successCriteria (not translated): $response.body#/status == "REFUSED"
   check(pay_refusedRes, {
     "pay-refused: $statusCode == 200": (r) => r.status === 200,
