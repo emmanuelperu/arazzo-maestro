@@ -62,7 +62,7 @@ Originally a Python POC (now removed), migrated to Go in May 2026.
 
 ### Stack
 
-- **Go 1.23+** (no cgo)
+- **Go 1.25+** (no cgo; see `go.mod` for the exact version)
 - [`spf13/cobra`](https://github.com/spf13/cobra), CLI framework
 - [`gopkg.in/yaml.v3`](https://pkg.go.dev/gopkg.in/yaml.v3), YAML parsing
   with `yaml.Node` (we walk the tree manually to preserve insertion
@@ -100,7 +100,7 @@ internal/
 ├── k6gen/                   model.Workflow + oasresolver → .k6.js perf
 │                            tests (http.request, check, BASE_URL env)
 ├── theme/                   Theme registry, validation, WCAG audit
-│   └── themes/builtin.yml   Built-in light + dark themes
+│   └── themes/builtin.yml   Built-in light, dark, pb33f themes
 ├── renderer/                model + theme → standalone HTML
 │   └── templates/           workflow.html + index.html (embedded)
 └── mermaidgen/              model.Workflow → Mermaid flowchart (.mmd)
@@ -147,7 +147,7 @@ Dependency graph (no cycles): `model` → ∅, `parser` → `model`,
 | Test coverage | ✅ ≥80 % all packages | `*_test.go` |
 | README | ✅ structurally done, ⏭️ visual hero pending | `README.md` |
 | CI (GitHub Actions) | ✅ done | `.github/workflows/ci.yml` |
-| Releases (goreleaser, cosign-signed, SBOM) | ✅ v0.1.0 shipped | `.github/workflows/release.yml` |
+| Releases (goreleaser, cosign-signed, SBOM) | ✅ shipped (latest v0.3.0) | `.github/workflows/release.yml` |
 | OpenSSF Best Practices badge | ✅ Phases 1-2 done; registered on bestpractices.dev | see Plan.md |
 | Logo / demo GIF / screenshots | ❌ pending | see Plan.md README polish |
 

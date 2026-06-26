@@ -12,7 +12,7 @@
 - [x] Step sub-section labels aligned to Arazzo spec vocabulary (`Parameters` / `Request Body` / `Success Criteria` / `Outputs`)
 - [x] Second worked example: `checkout-branching.arazzo.yaml` with `goto` branching
 - [x] OpenSSF Phase 1: CI (test + vet + golangci-lint + govulncheck), Scorecard, Dependabot, `SECURITY.md`, `CONTRIBUTING.md`
-- [x] `Dockerfile` (`FROM scratch`, ~5 MB) with `VERSION` build-arg
+- [x] `Dockerfile` (`FROM scratch`) with `VERSION` build-arg
 - [x] OpenSSF Phase 2: `goreleaser` (multi-OS binaries + Docker image), cosign-signed releases, first tag `v0.0.1`
 - [x] OpenSSF Phase 3: actions pinned to commit SHAs, CodeQL SAST workflow, `FuzzParseBytes` for the parser, `repo_token` plumbed for a `SCORECARD_TOKEN` PAT (unlocks Branch-Protection check once the secret is set)
 - [x] OpenAPI source parsing via `pb33f/libopenapi` (`internal/oasresolver`, replaces the hand-rolled YAML walk)

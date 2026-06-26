@@ -3,7 +3,7 @@
 
   Some badges may resolve only after one-time setup:
   - Codecov / Go Report Card: need a one-time sign-in on those services.
-  - Docker image: published at `ghcr.io/emmanuelperu/arazzo-maestro:0.0.1` since the v0.0.1 release; can also be built locally via `docker build --build-arg VERSION=0.0.1 -t arazzo-maestro:0.0.1 .` (see Docker section below).
+  - Docker image: published at `ghcr.io/emmanuelperu/arazzo-maestro` (tagged per release, plus `:latest`); can also be built locally via `docker build --build-arg VERSION=<x.y.z> -t arazzo-maestro:<x.y.z> .` (see the Docker recipe in docs/RECIPES.md).
 -->
 
 <p align="center">
@@ -68,7 +68,7 @@ themes.yml (opt.)        ──┘                       └─►  test perf �
 | Share workflows with non-devs | ✅ Standalone HTML, no IDE, no auth | A live editor |
 | Cross-file integrity (operationId exists?) | ✅ Reads `sourceDescriptions.url`, indexes operations, validates references | A full OpenAPI validator |
 | Turn a workflow into runnable tests | ✅ `test gen/run e2e` emits Hurl files (`{{baseUrl}}`, captures, asserts), runs them, writes an HTML report; `test gen perf` emits k6 scripts | A workflow runtime/orchestrator |
-| Eco-designed output | ✅ 1 network request, system fonts, ~18 kB HTML | A pixel-perfect design system |
+| Eco-designed output | ✅ 1 network request, system fonts, ~23 kB HTML | A pixel-perfect design system |
 | Accessibility-first | ✅ WCAG 2.2 AA contrasts, semantic HTML, `aria-hidden` on decoratives | An a11y testing tool |
 
 See ["What makes us different"](#what-makes-us-different) below for the longer take.
@@ -102,7 +102,7 @@ The repo ships with three demo Arazzo files in [`examples/`](./examples):
 - [`checkout-branching.arazzo.yaml`](./examples/checkout-branching.arazzo.yaml), single payment step that branches via `onSuccess: goto` / `onFailure: goto` to a confirm or cancel step. References [`checkout-branching-api.yaml`](./examples/checkout-branching-api.yaml).
 - [`auth.arazzo.yaml`](./examples/auth.arazzo.yaml), authenticated scenario showing where test data comes from: credentials as run-time inputs, token captured from the login step, order id self-provisioned from the listing. References [`auth-api.yaml`](./examples/auth-api.yaml) (scored 100/100 by Vacuum).
 
-The `happy-path-checkout` workflow rendered by `view`, in the two built-in themes (click to enlarge):
+The `happy-path-checkout` workflow rendered by `view`, in the `light` and `dark` themes (click to enlarge):
 
 | Light | Dark |
 |---|---|
@@ -157,7 +157,7 @@ Error: 2 issue(s) found
 
 ### 🎨 Themes
 
-Two themes ship built-in (`light` default, `dark`). Both pass WCAG 2.2 AA on all critical colour pairs, verified in tests.
+Three themes ship built-in (`light` default, `dark`, and `pb33f`). All pass WCAG 2.2 AA on all critical colour pairs, verified in tests.
 
 Customise without rebuilding by dropping a `themes.yml` at the root of your project:
 

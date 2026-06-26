@@ -45,9 +45,9 @@ jobs:
 
 ## Docker
 
-The image at `ghcr.io/emmanuelperu/arazzo-maestro:latest` is published
-once the first release is tagged (`v0.0.1`+). Until then, build it
-locally from the in-repo [`Dockerfile`](../Dockerfile):
+Pull the published image `ghcr.io/emmanuelperu/arazzo-maestro:latest`
+(tagged per release), or build it locally from the in-repo
+[`Dockerfile`](../Dockerfile):
 
 ```bash
 # Build locally
