@@ -59,11 +59,23 @@ func EffectiveContentType(explicit string, declared []string) (string, bool) {
 		return declared[0], true
 	}
 	for _, ct := range declared {
-		if ct == "application/json" {
+		if isJSONMediaType(ct) {
 			return ct, true
 		}
 	}
 	return "", false
+}
+
+// isJSONMediaType reports whether a media type is JSON: application/json
+// or any structured +json suffix (e.g. application/vnd.api+json),
+// ignoring parameters like "; charset=utf-8".
+func isJSONMediaType(ct string) bool {
+	base := ct
+	if i := strings.IndexByte(base, ';'); i >= 0 {
+		base = base[:i]
+	}
+	base = strings.TrimSpace(strings.ToLower(base))
+	return base == "application/json" || strings.HasSuffix(base, "+json")
 }
 
 // Source is a loaded OpenAPI document, indexed by operationId.

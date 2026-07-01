@@ -72,7 +72,10 @@ func setTokens(node any, tokens []string, value any) (any, bool) {
 		return n, true
 	case []any:
 		idx, err := strconv.Atoi(token)
-		if err != nil || idx < 0 || idx >= len(n) {
+		// RFC 6901 array indices are canonical decimals: reject a leading
+		// '+' or leading zeros (Atoi accepts both) so "/items/01" does not
+		// silently address index 1.
+		if err != nil || idx < 0 || idx >= len(n) || token != strconv.Itoa(idx) {
 			return node, false
 		}
 		if last {

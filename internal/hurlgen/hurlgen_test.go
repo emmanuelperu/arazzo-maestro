@@ -948,3 +948,40 @@ func TestGenerateAppliesRequestBodyReplacements(t *testing.T) {
 	assertNotContains(t, out, "original")
 	assertContains(t, out, `# replacement: /name = "INJECTED"`)
 }
+
+func TestGenerateScansPostReplacementPayload(t *testing.T) {
+	src := loadSource(t, bodySpec)
+
+	// A replacement that INJECTS an untranslatable inline expression must be
+	// flagged: the scan runs on the post-replacement payload.
+	injected := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID: "c", OperationID: "createThing",
+			RequestBody: &model.RequestBody{
+				ContentType:  "application/json",
+				Payload:      map[string]any{"x": "literal"},
+				Replacements: []model.Replacement{{Target: "/x", Value: "$method"}},
+			},
+		}},
+	}
+	out, _ := Generate(injected, map[string]*oasresolver.Source{"b": src})
+	assertContains(t, out, "# unsupported expression (not translated): $method")
+
+	// A replacement that REMOVES an untranslatable expression must not leave
+	// a stale flag for an expression no longer in the body.
+	removed := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID: "c", OperationID: "createThing",
+			RequestBody: &model.RequestBody{
+				ContentType:  "application/json",
+				Payload:      map[string]any{"x": "$method"},
+				Replacements: []model.Replacement{{Target: "/x", Value: "plain"}},
+			},
+		}},
+	}
+	out2, _ := Generate(removed, map[string]*oasresolver.Source{"b": src})
+	assertNotContains(t, out2, "# unsupported expression")
+	assertContains(t, out2, `"x": "plain"`)
+}

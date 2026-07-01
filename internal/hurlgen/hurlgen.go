@@ -131,7 +131,15 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		}
 	}
 
-	for _, e := range unsupportedInlineExprs(s) {
+	// Apply payload replacements once, up front: the unsupported-expression
+	// scan and the serialised body must agree on the same (post-replacement)
+	// payload.
+	var effective any
+	var unresolved []string
+	if s.RequestBody != nil {
+		effective, unresolved = payload.Apply(s.RequestBody.Payload, s.RequestBody.Replacements)
+	}
+	for _, e := range expr.UnsupportedInline(inlineValues(s, effective), translateInlineExpr) {
 		fmt.Fprintf(b, "# unsupported expression (not translated): %s\n", e)
 	}
 
@@ -163,7 +171,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	}
 	writeQuery(b, s.Parameters)
 	writeCookies(b, s.Parameters)
-	writeBody(b, s.RequestBody, ct, ctKnown, unquoted)
+	writeBody(b, s.RequestBody, effective, unresolved, ct, ctKnown, unquoted)
 
 	b.WriteString("\nHTTP *\n")
 	writeAsserts(b, s.SuccessCriteria)
@@ -218,7 +226,11 @@ func querystringValue(params []model.Parameter) string {
 	return ""
 }
 
-func writeBody(b *strings.Builder, body *model.RequestBody, ct string, ctKnown bool, unquoted map[string]bool) {
+// writeBody emits the body block from the already-replacement-applied
+// payload (effective) and the unresolved replacement targets, both
+// computed once by writeStep so the inline scan and the serialised body
+// stay in sync.
+func writeBody(b *strings.Builder, body *model.RequestBody, effective any, unresolved []string, ct string, ctKnown bool, unquoted map[string]bool) {
 	if body == nil {
 		return
 	}
@@ -227,7 +239,6 @@ func writeBody(b *strings.Builder, body *model.RequestBody, ct string, ctKnown b
 	} else {
 		b.WriteString("# requestBody content-type: unknown (omitted by Arazzo; the operation declares none or several non-JSON types)\n")
 	}
-	effective, unresolved := payload.Apply(body.Payload, body.Replacements)
 	for _, r := range body.Replacements {
 		fmt.Fprintf(b, "# replacement: %s = %s\n", r.Target, compactValue(r.Value))
 	}
@@ -238,6 +249,20 @@ func writeBody(b *strings.Builder, body *model.RequestBody, ct string, ctKnown b
 		b.WriteString("# warning: literal '{{' in the body is interpreted by Hurl templating at run time\n")
 	}
 	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(effective, ct, unquoted))
+}
+
+// inlineValues lists the values a step emits inline (parameter values and
+// the request body after replacements) for the unsupported-expression
+// scan, so the scan sees exactly what gets serialised.
+func inlineValues(s model.Step, effectiveBody any) []any {
+	values := make([]any, 0, len(s.Parameters)+1)
+	for _, p := range s.Parameters {
+		values = append(values, p.Value)
+	}
+	if s.RequestBody != nil {
+		values = append(values, effectiveBody)
+	}
+	return values
 }
 
 // compactValue renders a replacement value for a comment: JSON when it
@@ -490,32 +515,6 @@ func translateEmbedded(s string) (string, bool) {
 		return m
 	})
 	return out, changed
-}
-
-// unsupportedInlineExprs returns the runtime expressions used in the
-// step's inline values (parameters and request body) that the generator
-// cannot translate to a Hurl template. Without this they would ship
-// verbatim into the request with no signal; writeStep emits each as a
-// comment so the gap is visible, matching the explicit marker the
-// capture side already produces.
-func unsupportedInlineExprs(s model.Step) []string {
-	var refs []string
-	for _, p := range s.Parameters {
-		refs = append(refs, expr.CollectRefs(p.Value)...)
-	}
-	if s.RequestBody != nil {
-		refs = append(refs, expr.CollectRefs(s.RequestBody.Payload)...)
-	}
-	var out []string
-	seen := make(map[string]bool)
-	for _, r := range refs {
-		if seen[r] || translateInlineExpr(r) != r {
-			continue
-		}
-		seen[r] = true
-		out = append(out, r)
-	}
-	return out
 }
 
 // translateInlineExpr maps an inline runtime expression to a Hurl

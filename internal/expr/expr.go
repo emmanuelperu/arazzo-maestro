@@ -131,6 +131,27 @@ func Refs(s string) []string {
 	return out
 }
 
+// UnsupportedInline returns the runtime expressions among the given
+// values that a generator cannot translate inline, deduplicated in
+// order. translate is the generator's inline translator: an expression
+// is unsupported when translating it returns it unchanged. Callers pass
+// the values a step emits inline (parameter values and the request body
+// after replacements) so the result matches what is actually serialised.
+func UnsupportedInline(values []any, translate func(string) string) []string {
+	var out []string
+	seen := make(map[string]bool)
+	for _, v := range values {
+		for _, r := range CollectRefs(v) {
+			if seen[r] || translate(r) != r {
+				continue
+			}
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // CollectRefs walks a JSON-like value (string, map, slice) and returns
 // every runtime expression it references, deduplicated and in
 // deterministic order (map keys are visited sorted). It lets a generator
