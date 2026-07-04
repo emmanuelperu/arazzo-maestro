@@ -9,7 +9,10 @@
 // paths are dotted, so the two read apart at a glance:
 //
 //	workflow start             -> a [Start] stadium node
-//	each step                  -> a box "NN stepId / operationId"
+//	each step                  -> a box "NN stepId" plus its target:
+//	                              operationId, the method+path decoded
+//	                              from operationPath, or the invoked
+//	                              workflow id
 //	step with no onSuccess      -> solid edge to the next step (last -> [End])
 //	onSuccess goto              -> solid edge to the target step
 //	onSuccess goto <workflow>   -> solid edge to a subroutine node
@@ -27,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
+	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 )
 
 // Reserved node ids for the workflow terminals. Step nodes are "s0",
@@ -71,8 +75,19 @@ func (f *flowchart) declareNodes(steps []model.Step) {
 	f.line("  " + startNode + "([Start])")
 	for i, step := range steps {
 		label := fmt.Sprintf("%02d %s", i+1, step.StepID)
-		if step.OperationID != "" {
+		switch {
+		case step.OperationID != "":
 			label += "<br/>" + step.OperationID
+		case step.OperationPath != "":
+			if method, path, ok := oasresolver.OperationPathTarget(step.OperationPath); ok {
+				label += "<br/>" + method + " " + path
+			} else {
+				// Undecodable reference: show it raw, like the HTML renderer,
+				// rather than hiding that the step targets an operation.
+				label += "<br/>" + step.OperationPath
+			}
+		case step.WorkflowID != "":
+			label += "<br/>workflow: " + step.WorkflowID
 		}
 		f.line(fmt.Sprintf("  s%d[%q]", i, escape(label)))
 	}

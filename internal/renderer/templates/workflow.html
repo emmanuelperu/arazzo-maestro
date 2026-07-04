@@ -665,7 +665,7 @@
           <header class="step-marker">
             <span class="step-number" aria-hidden="true">{{ printf "%02d" (add1 $i) }}</span>
             <h3 class="step-id">{{ $step.StepID }}</h3>
-            <span class="step-tag">API</span>
+            <span class="step-tag">{{ if $step.WorkflowID }}workflow{{ else }}API{{ end }}</span>
           </header>
 
           <div class="step-body">
@@ -673,6 +673,25 @@
               <p class="op">
                 <span class="op-arrow" aria-hidden="true">→</span>
                 <span class="api-link">{{ $step.OperationID }}</span>
+              </p>
+            {{ else if $step.OperationPath }}
+              <p class="op">
+                <span class="op-arrow" aria-hidden="true">→</span>
+                {{ with opPathTarget $step.OperationPath }}
+                  <span class="api-link">{{ . }}</span>
+                {{ else }}
+                  <span class="api-link">{{ $step.OperationPath }}</span>
+                {{ end }}
+              </p>
+            {{ else if $step.WorkflowID }}
+              <p class="op">
+                <span class="op-arrow" aria-hidden="true">→</span>
+                <span class="kv-in">workflow</span>
+                {{ if isLocalWorkflowRef $step.WorkflowID }}
+                  <a class="action-target" href="{{ $step.WorkflowID }}.html">{{ $step.WorkflowID }}</a>
+                {{ else }}
+                  <span class="api-link">{{ $step.WorkflowID }}</span>
+                {{ end }}
               </p>
             {{ end }}
 

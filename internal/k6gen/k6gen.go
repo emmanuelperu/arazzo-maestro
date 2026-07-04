@@ -17,9 +17,14 @@
 // the e2e generator does: callers pass a map of source-description name
 // to *oasresolver.Source. Short operationId forms ("listUsers") resolve
 // when exactly one source is configured; the qualified form
-// ("$sourceDescriptions.<name>.<id>") works with any number of sources.
-// Unresolvable steps emit a placeholder URL and a comment naming the id
-// so the script stays valid JavaScript a human can patch.
+// ("$sourceDescriptions.<name>.<id>") works with any number of sources,
+// and operationPath references resolve their JSON pointer against the
+// named source. Unresolvable steps emit a placeholder URL and a comment
+// naming the reference so the script stays valid JavaScript a human can
+// patch. Steps that invoke another workflow (workflowId) emit an
+// explicit not-supported comment and no request: a nested workflow is
+// not one HTTP call, and a placeholder request would fail against the
+// real endpoint.
 //
 // Arazzo runtime expressions are translated to JavaScript identifiers:
 // $inputs.foo becomes the foo constant (read from __ENV), and
@@ -42,6 +47,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	neturl "net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -169,6 +175,13 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 			fmt.Fprintf(b, "  // %s\n", line)
 		}
 	}
+	if s.WorkflowID != "" {
+		fmt.Fprintf(b, "  // not supported: this step invokes workflow %q (workflowId); no request generated\n", s.WorkflowID)
+		if len(s.Outputs) > 0 {
+			fmt.Fprintf(b, "  // warning: outputs %s are not captured; later references to them stay unresolved\n", outputNames(s.Outputs))
+		}
+		return
+	}
 
 	// Apply payload replacements once, up front: the unsupported-expression
 	// scan and the serialised body must agree on the same payload.
@@ -181,11 +194,19 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		fmt.Fprintf(b, "  // unsupported expression (not translated): %s\n", e)
 	}
 
-	op, method, url, ok := resolveRequestLine(s.OperationID, s.Parameters, sources, declared)
+	op, method, url, ok := resolveRequestLine(s, sources, declared)
 	if !ok {
-		fmt.Fprintf(b, "  // unresolved operationId: %s\n", s.OperationID)
 		method = "GET"
-		url = "${BASE_URL}/__unresolved__/" + s.OperationID
+		if s.OperationPath != "" {
+			fmt.Fprintf(b, "  // unresolved operationPath: %s\n", s.OperationPath)
+			// The raw reference carries JSON-pointer escapes and braces, so
+			// the placeholder URL names the step instead; escaping keeps the
+			// stepId from breaking the backtick URL literal.
+			url = "${BASE_URL}/__unresolved__/" + neturl.PathEscape(s.StepID)
+		} else {
+			fmt.Fprintf(b, "  // unresolved operationId: %s\n", s.OperationID)
+			url = "${BASE_URL}/__unresolved__/" + s.OperationID
+		}
 	}
 	url += queryString(s.Parameters, declared)
 	if qs := querystringValue(s.Parameters, declared); qs != "" {
@@ -401,22 +422,14 @@ func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.Outpu
 
 // resolveRequestLine returns the HTTP method and URL template (a JS
 // backtick-literal body, BASE_URL-prefixed) for the step, or ok=false
-// when the operationId could not be resolved.
-func resolveRequestLine(operationID string, params []model.Parameter, sources map[string]*oasresolver.Source, declared map[string]bool) (op oasresolver.Operation, method, url string, ok bool) {
-	srcName, opID := parseOpRef(operationID, sources)
-	if srcName == "" {
-		return oasresolver.Operation{}, "", "", false
-	}
-	src, exists := sources[srcName]
-	if !exists {
-		return oasresolver.Operation{}, "", "", false
-	}
-	op, err := src.Resolve(opID)
-	if err != nil {
+// when its operation reference could not be resolved.
+func resolveRequestLine(s model.Step, sources map[string]*oasresolver.Source, declared map[string]bool) (op oasresolver.Operation, method, url string, ok bool) {
+	op, ok = oasresolver.ResolveStepOperation(s, sources)
+	if !ok {
 		return oasresolver.Operation{}, "", "", false
 	}
 	// Always BASE_URL, never op.BaseURL: requests stay environment-agnostic.
-	return op, op.Method, "${BASE_URL}" + substitutePathParams(op.Path, params, declared), true
+	return op, op.Method, "${BASE_URL}" + substitutePathParams(op.Path, s.Parameters, declared), true
 }
 
 // defaultBaseURL returns the OpenAPI servers URL backing the workflow's
@@ -424,45 +437,21 @@ func resolveRequestLine(operationID string, params []model.Parameter, sources ma
 // requests always use the BASE_URL constant.
 func defaultBaseURL(wf model.Workflow, sources map[string]*oasresolver.Source) string {
 	for _, s := range wf.Steps {
-		srcName, opID := parseOpRef(s.OperationID, sources)
-		if srcName == "" {
-			continue
-		}
-		src, ok := sources[srcName]
-		if !ok {
-			continue
-		}
-		op, err := src.Resolve(opID)
-		if err != nil {
-			continue
-		}
-		if op.BaseURL != "" {
+		op, ok := oasresolver.ResolveStepOperation(s, sources)
+		if ok && op.BaseURL != "" {
 			return op.BaseURL
 		}
 	}
 	return ""
 }
 
-// parseOpRef recognises the short ("createOrder") and qualified
-// ("$sourceDescriptions.<name>.<id>") forms of operationId. Short form
-// resolves only when exactly one source is configured; the linter
-// enforces the qualified form upstream when several sources exist.
-func parseOpRef(ref string, sources map[string]*oasresolver.Source) (srcName, opID string) {
-	const prefix = "$sourceDescriptions."
-	if strings.HasPrefix(ref, prefix) {
-		rest := strings.TrimPrefix(ref, prefix)
-		idx := strings.Index(rest, ".")
-		if idx < 0 {
-			return "", ""
-		}
-		return rest[:idx], rest[idx+1:]
+// outputNames joins the declared output names for a comment.
+func outputNames(outs []model.OutputEntry) string {
+	names := make([]string, len(outs))
+	for i, o := range outs {
+		names[i] = o.Name
 	}
-	if len(sources) == 1 {
-		for name := range sources {
-			return name, ref
-		}
-	}
-	return "", ""
+	return strings.Join(names, ", ")
 }
 
 func substitutePathParams(path string, params []model.Parameter, declared map[string]bool) string {
@@ -670,7 +659,7 @@ func translateInlineExpr(s string) string {
 func jsonPointerToGJSON(ptr string) string {
 	segs := strings.Split(ptr, "/")
 	for i, seg := range segs {
-		segs[i] = gjsonEscaper.Replace(unescapeJSONPointer(seg))
+		segs[i] = gjsonEscaper.Replace(expr.UnescapeJSONPointer(seg))
 	}
 	return strings.Join(segs, ".")
 }
@@ -680,13 +669,6 @@ func jsonPointerToGJSON(ptr string) string {
 var gjsonEscaper = strings.NewReplacer(
 	`\`, `\\`, ".", `\.`, "*", `\*`, "?", `\?`, "|", `\|`, "#", `\#`,
 )
-
-// unescapeJSONPointer decodes the RFC 6901 escape sequences inside a
-// pointer segment: ~1 is '/', ~0 is '~'. ~1 must be decoded first so
-// that ~01 yields the literal ~1.
-func unescapeJSONPointer(seg string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(seg, "~1", "/"), "~0", "~")
-}
 
 // jsIdent turns an arbitrary name into a valid JS identifier: every
 // character outside [A-Za-z0-9_] becomes '_', and a leading digit is

@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
+	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 	"github.com/emmanuelperu/arazzo-maestro/internal/theme"
 )
 
@@ -211,6 +212,19 @@ func buildTemplate() (*template.Template, error) {
 			return template.CSS(theme.FontStack(name))
 		},
 		"add1": func(i int) int { return i + 1 },
+		// opPathTarget decodes an operationPath reference into a short
+		// "METHOD /path" label, or "" when the reference is not the
+		// canonical spec form (the raw string is shown instead).
+		"opPathTarget": func(ref string) string {
+			if method, path, ok := oasresolver.OperationPathTarget(ref); ok {
+				return method + " " + path
+			}
+			return ""
+		},
+		// isLocalWorkflowRef reports whether a step workflowId names a
+		// workflow of this document (and thus a sibling HTML page), as
+		// opposed to the $sourceDescriptions.<name>.<workflowId> form.
+		"isLocalWorkflowRef": func(id string) bool { return !strings.HasPrefix(id, "$") },
 		// stepRetrySelfAction returns the first onFailure retry action
 		// targeting the step itself (an omitted stepId retries the
 		// current step per the Arazzo spec), or nil.

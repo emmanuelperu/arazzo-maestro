@@ -62,8 +62,8 @@ flagged with a named comment instead of shipping verbatim (#56).
 |---|---|---|---|---|---|---|
 | `stepId` | ✅ | ✅ uniqueness | ✅ | ✅ | ✅ | |
 | `operationId` (short + qualified) | ✅ | ✅ cross-file | ✅ | ✅ | ✅ | |
-| `operationPath` | ❌ | 😶 schema-only | ❌ | ❌ placeholder | ❌ | [#53](https://github.com/emmanuelperu/arazzo-maestro/issues/53) |
-| `workflowId` (nested workflow) | ❌ | 😶 schema-only | ❌ "API" tag | ❌ misleading placeholder | ❌ | [#54](https://github.com/emmanuelperu/arazzo-maestro/issues/54) |
+| `operationPath` | ✅ | ✅ cross-file | ✅ decoded method+path | ✅ | ✅ | JSON pointer resolved against the named source, the target operation needs no operationId (#53) |
+| `workflowId` (nested workflow) | ✅ | ✅ ref checked | ✅ workflow tag + link | 🟡 explicit skip | 🟡 | Generators emit a named not-supported comment and no request; nested execution stays roadmap (#54) |
 | `channelPath` (1.1, AsyncAPI) | ❌ | 😶 accepted | ❌ placeholder | ❌ | 😶 | Accepted structurally since #47; resolution out of scope (AsyncAPI) |
 | `parameters` | ✅ | ✅ schema | ✅ | ✅ | 🟡 | All five `in` locations emitted (cookie as `[Cookies]`/`cookies:`, querystring appended to the URL); Reusable entries parse empty ([#52](https://github.com/emmanuelperu/arazzo-maestro/issues/52)); `in` conditional rule unvalidated |
 | `requestBody.contentType` / `payload` | ✅ | ✅ | ✅ | ✅ | ✅ | Whole-string and embedded `{$expr}` substitution; an omitted `contentType` defers to the operation's declared type, and a real `Content-Type` header reaches the request (#66) |

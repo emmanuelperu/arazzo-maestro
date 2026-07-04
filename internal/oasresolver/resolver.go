@@ -13,6 +13,8 @@ import (
 
 	"github.com/pb33f/libopenapi"
 	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+
+	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 )
 
 // Operation is a resolved view of an OpenAPI operation. Method, Path
@@ -78,10 +80,13 @@ func isJSONMediaType(ct string) bool {
 	return base == "application/json" || strings.HasSuffix(base, "+json")
 }
 
-// Source is a loaded OpenAPI document, indexed by operationId.
+// Source is a loaded OpenAPI document, indexed by operationId and by
+// "<METHOD> <path>" (operationPath references target operations that may
+// declare no operationId at all).
 type Source struct {
-	doc    *v3.Document
-	byOpID map[string]Operation
+	doc          *v3.Document
+	byOpID       map[string]Operation
+	byPathMethod map[string]Operation
 }
 
 // Load parses a local OpenAPI 3.x file and indexes its operations.
@@ -112,6 +117,60 @@ func (s *Source) Resolve(operationID string) (Operation, error) {
 	return op, nil
 }
 
+// ResolveStepOperation resolves a step's operation reference,
+// operationId or operationPath, whichever the step declares (the schema
+// enforces their mutual exclusivity upstream). sources is keyed by
+// sourceDescription name. Both test generators and their base-URL
+// lookups share this dispatch so the same Arazzo step can never resolve
+// differently per output format.
+func ResolveStepOperation(step model.Step, sources map[string]*Source) (Operation, bool) {
+	switch {
+	case step.OperationID != "":
+		srcName, opID := splitOperationRef(step.OperationID, sources)
+		src, exists := sources[srcName]
+		if srcName == "" || !exists {
+			return Operation{}, false
+		}
+		op, err := src.Resolve(opID)
+		return op, err == nil
+	case step.OperationPath != "":
+		srcName, pointer, valid := SplitOperationPath(step.OperationPath)
+		src, exists := sources[srcName]
+		if !valid || !exists {
+			return Operation{}, false
+		}
+		op, err := src.ResolveOperationPointer(pointer)
+		return op, err == nil
+	}
+	return Operation{}, false
+}
+
+// splitOperationRef recognises the two accepted forms of operationId:
+//
+//	"createOrder"                              -> short form
+//	"$sourceDescriptions.shop-api.createOrder" -> qualified form
+//
+// Short form resolves only when exactly one source is configured; when
+// multiple sources are present, the caller is expected to have used the
+// qualified form (the linter enforces this upstream).
+func splitOperationRef(ref string, sources map[string]*Source) (srcName, opID string) {
+	const prefix = "$sourceDescriptions."
+	if strings.HasPrefix(ref, prefix) {
+		rest := strings.TrimPrefix(ref, prefix)
+		idx := strings.Index(rest, ".")
+		if idx < 0 {
+			return "", ""
+		}
+		return rest[:idx], rest[idx+1:]
+	}
+	if len(sources) == 1 {
+		for name := range sources {
+			return name, ref
+		}
+	}
+	return "", ""
+}
+
 // HasOperationID reports whether the source declares an operation with
 // this id.
 func (s *Source) HasOperationID(operationID string) bool {
@@ -130,6 +189,7 @@ func (s *Source) OperationIDs() map[string]bool {
 
 func (s *Source) indexOperations() {
 	s.byOpID = make(map[string]Operation)
+	s.byPathMethod = make(map[string]Operation)
 	docBase := firstServerURL(s.doc.Servers)
 
 	if s.doc.Paths == nil || s.doc.Paths.PathItems == nil {
@@ -143,23 +203,28 @@ func (s *Source) indexOperations() {
 			pathBase = docBase
 		}
 		for _, mo := range methodOps(item) {
-			if mo.op == nil || mo.op.OperationId == "" {
+			if mo.op == nil {
 				continue
 			}
 			opBase := firstServerURL(mo.op.Servers)
 			if opBase == "" {
 				opBase = pathBase
 			}
-			// First definition wins on duplicate operationId.
-			if _, exists := s.byOpID[mo.op.OperationId]; exists {
-				continue
-			}
-			s.byOpID[mo.op.OperationId] = Operation{
+			op := Operation{
 				Method:  mo.method,
 				Path:    path,
 				BaseURL: opBase,
 				Spec:    mo.op,
 			}
+			s.byPathMethod[mo.method+" "+path] = op
+			if mo.op.OperationId == "" {
+				continue
+			}
+			// First definition wins on duplicate operationId.
+			if _, exists := s.byOpID[mo.op.OperationId]; exists {
+				continue
+			}
+			s.byOpID[mo.op.OperationId] = op
 		}
 	}
 }

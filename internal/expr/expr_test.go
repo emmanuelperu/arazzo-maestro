@@ -136,3 +136,18 @@ func TestIsRuntimeExpression(t *testing.T) {
 		}
 	}
 }
+
+func TestUnescapeJSONPointer(t *testing.T) {
+	cases := map[string]string{
+		"~1pet~1findByStatus": "/pet/findByStatus",
+		"a~0b":                "a~b",
+		// ~1 must decode before ~0 so ~01 yields the literal ~1.
+		"~01": "~1",
+		"":    "",
+	}
+	for in, want := range cases {
+		if got := UnescapeJSONPointer(in); got != want {
+			t.Errorf("UnescapeJSONPointer(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

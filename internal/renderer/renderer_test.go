@@ -425,3 +425,56 @@ func TestRenderWorkflowShowsRequestBodyReplacements(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderWorkflowShowsOperationPathTarget(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "by-path", OperationPath: "{$sourceDescriptions.shop.url}#/paths/~1pet~1findByStatus/get"},
+			{StepID: "opaque", OperationPath: "not-the-spec-form"},
+		},
+	}
+	html, err := RenderWorkflow(wf, nil, LayoutPortrait)
+	if err != nil {
+		t.Fatalf("RenderWorkflow: %v", err)
+	}
+	// A canonical reference is decoded to method + path; anything else is
+	// shown raw so the reader still sees what the document declares.
+	if !strings.Contains(html, "GET /pet/findByStatus") {
+		t.Error("expected the decoded operationPath target")
+	}
+	if !strings.Contains(html, "not-the-spec-form") {
+		t.Error("expected the raw operationPath fallback")
+	}
+	if !strings.Contains(html, ">API</span>") {
+		t.Error("operationPath steps keep the API tag")
+	}
+}
+
+func TestRenderWorkflowTagsWorkflowSteps(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "local", WorkflowID: "checkout"},
+			{StepID: "external", WorkflowID: "$sourceDescriptions.other.cleanup"},
+		},
+	}
+	html, err := RenderWorkflow(wf, nil, LayoutPortrait)
+	if err != nil {
+		t.Fatalf("RenderWorkflow: %v", err)
+	}
+	if !strings.Contains(html, ">workflow</span>") {
+		t.Error("expected the workflow step tag instead of API")
+	}
+	// A local reference links to the sibling page; the qualified form has
+	// no page to link to and stays plain text.
+	if !strings.Contains(html, `href="checkout.html"`) {
+		t.Error("expected a link to the local workflow page")
+	}
+	if strings.Contains(html, `href="$sourceDescriptions.other.cleanup.html"`) {
+		t.Error("qualified workflow reference must not become a broken link")
+	}
+	if !strings.Contains(html, "$sourceDescriptions.other.cleanup") {
+		t.Error("expected the qualified reference to be displayed")
+	}
+}

@@ -985,3 +985,69 @@ func TestGenerateScansPostReplacementPayload(t *testing.T) {
 	assertNotContains(t, out2, "# unsupported expression")
 	assertContains(t, out2, `"x": "plain"`)
 }
+
+func TestGenerateResolvesOperationPath(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "get", OperationPath: "{$sourceDescriptions.shop.url}#/paths/~1products~1{id}/get",
+				Parameters: []model.Parameter{{Name: "id", In: "path", Value: "p-1"}}},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{
+		"shop": loadSource(t, shopSpec),
+	})
+	assertContains(t, out, "GET {{baseUrl}}/products/p-1")
+	// The OpenAPI servers URL still backs the documented default.
+	assertContains(t, out, "default (OpenAPI servers): https://api.shop.test")
+	assertNotContains(t, out, "__unresolved__")
+}
+
+func TestGenerateFallsBackWhenOperationPathUnresolved(t *testing.T) {
+	sources := map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)}
+	cases := []struct {
+		name, ref string
+	}{
+		{"unknown operation", "{$sourceDescriptions.shop.url}#/paths/~1nope/get"},
+		{"unknown source", "{$sourceDescriptions.ghost.url}#/paths/~1products/get"},
+		{"malformed reference", "$sourceDescriptions.shop.url#/paths/~1products/get"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			wf := model.Workflow{
+				WorkflowID: "wf",
+				Steps:      []model.Step{{StepID: "broken", OperationPath: tc.ref}},
+			}
+			out, _ := Generate(wf, sources)
+			assertContains(t, out, "# unresolved operationPath: "+tc.ref)
+			// The placeholder names the step: the raw reference is not URL-safe.
+			assertContains(t, out, "GET {{baseUrl}}/__unresolved__/broken")
+		})
+	}
+}
+
+func TestGenerateWorkflowStepEmitsNoRequest(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "delegate", Description: "Hand over to checkout", WorkflowID: "checkout",
+				SuccessCriteria: []model.SuccessCriterion{{Condition: "$statusCode == 200"}},
+				Outputs:         []model.OutputEntry{{Name: "orderId", Expression: "$response.body#/id"}}},
+			{StepID: "list", OperationID: "listProducts"},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{
+		"shop": loadSource(t, shopSpec),
+	})
+	assertContains(t, out, "# Step: delegate")
+	assertContains(t, out, "# Hand over to checkout")
+	assertContains(t, out, `# not supported: this step invokes workflow "checkout" (workflowId); no request generated`)
+	// The skipped step's outputs are named so a later {{delegate_orderId}}
+	// reference failing at run time can be traced back here.
+	assertContains(t, out, "# warning: outputs orderId are not captured")
+	// No bogus placeholder request, no orphan asserts/captures for the
+	// skipped step; the next step still generates normally.
+	assertNotContains(t, out, "__unresolved__")
+	assertNotContains(t, out, "[Captures]")
+	assertContains(t, out, "GET {{baseUrl}}/products")
+}

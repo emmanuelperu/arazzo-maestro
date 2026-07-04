@@ -1,7 +1,8 @@
 // Cross-file validation pass, resolves the `sourceDescriptions[].url`
 // references, loads each OpenAPI document from disk via the
-// oasresolver package, and checks that every step's `operationId`
-// points at an operation that actually exists in the right source.
+// oasresolver package, and checks that every step's operation
+// reference (`operationId` or `operationPath`) points at an operation
+// that actually exists in the right source.
 //
 // HTTP/HTTPS URLs are intentionally rejected (eco-design rule: lint
 // must stay offline and deterministic). HTTPS support would require
@@ -38,9 +39,14 @@ func lintCrossFile(doc *model.ArazzoDocument, basePath string) []Issue {
 		implicitSource = doc.SourceDescriptions[0].Name
 	}
 	multipleSources := len(doc.SourceDescriptions) > 1
+	declared := make(map[string]bool, len(doc.SourceDescriptions))
+	for _, s := range doc.SourceDescriptions {
+		declared[s.Name] = true
+	}
 	for _, wf := range doc.Workflows {
 		for _, step := range wf.Steps {
 			issues = append(issues, checkStepOperation(step, &wf, index, implicitSource, multipleSources)...)
+			issues = append(issues, checkStepOperationPath(step, &wf, index, declared)...)
 		}
 	}
 	return issues
@@ -115,6 +121,60 @@ func checkStepOperation(step model.Step, wf *model.Workflow, index operationInde
 			Severity: SeverityError,
 			Path:     path,
 			Message:  fmt.Sprintf("operation %q not found in source %q", opID, sourceName),
+		}}
+	}
+	return nil
+}
+
+// checkStepOperationPath validates a step's `operationPath`: the value
+// must be the canonical '{$sourceDescriptions.<name>.url}#<pointer>'
+// form, name a declared source, and its JSON pointer must address an
+// operation that exists in that source.
+func checkStepOperationPath(step model.Step, wf *model.Workflow, index operationIndex, declared map[string]bool) []Issue {
+	if step.OperationPath == "" {
+		return nil
+	}
+	path := fmt.Sprintf("workflows[%s].steps[%s].operationPath", wf.WorkflowID, step.StepID)
+	sourceName, pointer, ok := oasresolver.SplitOperationPath(step.OperationPath)
+	if !ok {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message: fmt.Sprintf(
+				"malformed operationPath %q\n\thint: expected {$sourceDescriptions.<name>.url}#/paths/<escaped-path>/<method>",
+				step.OperationPath,
+			),
+		}}
+	}
+	if !declared[sourceName] {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("operationPath references source description %q which does not exist", sourceName),
+		}}
+	}
+	src, loaded := index[sourceName]
+	if !loaded {
+		// The source is declared but couldn't be loaded; the loading
+		// error was already reported by buildOperationIndex.
+		return nil
+	}
+	method, opPath, isOp := oasresolver.OperationPointerTarget(pointer)
+	if !isOp {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message: fmt.Sprintf(
+				"operationPath pointer %q does not address an operation\n\thint: expected #/paths/<escaped-path>/<method>",
+				pointer,
+			),
+		}}
+	}
+	if _, err := src.ResolveOperationPointer(pointer); err != nil {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("no %s operation on path %q in source %q", method, opPath, sourceName),
 		}}
 	}
 	return nil

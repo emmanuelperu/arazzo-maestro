@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
 )
 
@@ -46,7 +47,7 @@ func setAtPointer(root any, pointer string, value any) (any, bool) {
 	}
 	tokens := strings.Split(pointer[1:], "/")
 	for i := range tokens {
-		tokens[i] = unescape(tokens[i])
+		tokens[i] = expr.UnescapeJSONPointer(tokens[i])
 	}
 	return setTokens(root, tokens, value)
 }
@@ -91,12 +92,6 @@ func setTokens(node any, tokens []string, value any) (any, bool) {
 	default:
 		return node, false
 	}
-}
-
-// unescape decodes the RFC 6901 token escapes: ~1 is '/', ~0 is '~'. ~1
-// must be decoded first so ~01 yields the literal ~1.
-func unescape(token string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(token, "~1", "/"), "~0", "~")
 }
 
 func deepCopy(v any) any {
