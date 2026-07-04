@@ -478,3 +478,36 @@ func TestRenderWorkflowTagsWorkflowSteps(t *testing.T) {
 		t.Error("expected the qualified reference to be displayed")
 	}
 }
+
+func TestRenderWorkflowShowsComponentParameters(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listThings",
+			Parameters: []model.Parameter{
+				{Name: "pageSize", In: "query", Value: int64(20)},
+				{Reference: "$components.parameters.ghost"},
+			},
+			OnSuccess: []model.SuccessAction{{Reference: "$components.successActions.ghost"}},
+		}},
+	}
+	html, err := RenderWorkflow(wf, nil, LayoutPortrait)
+	if err != nil {
+		t.Fatalf("RenderWorkflow: %v", err)
+	}
+	// A resolved component parameter renders like a plain one.
+	if !strings.Contains(html, "pageSize") {
+		t.Error("resolved component parameter not rendered")
+	}
+	// Unresolved references are shown instead of a blank row.
+	if !strings.Contains(html, "$components.parameters.ghost") {
+		t.Error("unresolved parameter reference not shown")
+	}
+	if !strings.Contains(html, "$components.successActions.ghost") {
+		t.Error("unresolved action reference not shown")
+	}
+	if !strings.Contains(html, "unresolved reference") {
+		t.Error("missing the unresolved-reference marker")
+	}
+}

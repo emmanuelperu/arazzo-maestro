@@ -378,3 +378,102 @@ workflows:
 		t.Errorf("step by-workflow: unexpected OperationPath %q / OperationID %q", steps[1].OperationPath, steps[1].OperationID)
 	}
 }
+
+const componentsYAML = `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+components:
+  parameters:
+    page-size:
+      name: pageSize
+      in: query
+      value: 20
+    broken: not-a-mapping
+  successActions:
+    finish:
+      name: finish
+      type: end
+  failureActions:
+    retry-later:
+      name: retry-later
+      type: retry
+      retryAfter: 2.5
+      retryLimit: 3
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: list
+        operationId: listThings
+        parameters:
+          - reference: $components.parameters.page-size
+          - reference: $components.parameters.page-size
+            value: 50
+          - reference: $components.parameters.ghost
+        onSuccess:
+          - reference: $components.successActions.finish
+        onFailure:
+          - reference: $components.failureActions.retry-later
+`
+
+func TestParseComponentsAndResolveReusableRefs(t *testing.T) {
+	doc, err := ParseBytes([]byte(componentsYAML))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	// The non-mapping definition is skipped, only page-size survives.
+	if len(doc.Components.Parameters) != 1 || len(doc.Components.SuccessActions) != 1 || len(doc.Components.FailureActions) != 1 {
+		t.Fatalf("components not parsed: %+v", doc.Components)
+	}
+	step := doc.Workflows[0].Steps[0]
+	if len(step.Parameters) != 3 {
+		t.Fatalf("len(Parameters) = %d, want 3", len(step.Parameters))
+	}
+	// Plain reference: inlined as declared in components.
+	p := step.Parameters[0]
+	if p.Name != "pageSize" || p.In != "query" || p.Value != int64(20) {
+		t.Errorf("inlined parameter = %+v, want pageSize/query/20", p)
+	}
+	if p.Reference != "" {
+		t.Errorf("Reference must be cleared on resolution, got %q", p.Reference)
+	}
+	// Reusable value overrides the component's value.
+	if v := step.Parameters[1].Value; v != int64(50) {
+		t.Errorf("override value = %v, want 50", v)
+	}
+	if step.Parameters[1].Name != "pageSize" {
+		t.Errorf("override kept component name: %+v", step.Parameters[1])
+	}
+	// Dangling reference: left unresolved for the linter to flag.
+	if p := step.Parameters[2]; p.Name != "" || p.Reference != "$components.parameters.ghost" {
+		t.Errorf("dangling ref should stay unresolved, got %+v", p)
+	}
+	// Actions inline the same way, clearing Reference.
+	if a := step.OnSuccess[0]; a.Type != "end" || a.Name != "finish" || a.Reference != "" {
+		t.Errorf("onSuccess not inlined: %+v", a)
+	}
+	fa := step.OnFailure[0]
+	if fa.Type != "retry" || fa.RetryAfter != 2.5 || fa.RetryLimit != 3 || !fa.RetryLimitSet {
+		t.Errorf("onFailure not inlined: %+v", fa)
+	}
+}
+
+func TestComponentRefName(t *testing.T) {
+	cases := []struct {
+		ref, kind, name string
+		ok              bool
+	}{
+		{"$components.parameters.page-size", "parameters", "page-size", true},
+		{"$components.parameters.a.b", "parameters", "a.b", true},
+		{"$components.successActions.finish", "successActions", "finish", true},
+		{"$components.successActions.finish", "failureActions", "", false},
+		{"$components.parameters.", "parameters", "", false},
+		{"$inputs.pageSize", "parameters", "", false},
+		{"", "parameters", "", false},
+	}
+	for _, tc := range cases {
+		name, ok := ComponentRefName(tc.ref, tc.kind)
+		if name != tc.name || ok != tc.ok {
+			t.Errorf("ComponentRefName(%q, %q) = (%q, %v), want (%q, %v)", tc.ref, tc.kind, name, ok, tc.name, tc.ok)
+		}
+	}
+}

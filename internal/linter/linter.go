@@ -107,9 +107,34 @@ func lintSemantic(doc *model.ArazzoDocument) []Issue {
 		sourceNames[s.Name] = true
 	}
 	for i := range doc.Workflows {
-		issues = append(issues, lintWorkflow(&doc.Workflows[i], workflowIDs, sourceNames)...)
+		issues = append(issues, lintWorkflow(&doc.Workflows[i], workflowIDs, sourceNames, doc.Components)...)
 	}
 	return issues
+}
+
+// checkComponentRef reports why a Reusable Object reference stayed
+// unresolved (resolution happened at parse time and cleared Reference
+// on success, so a non-empty ref here is always a problem).
+func checkComponentRef[T any](ref, kind string, components map[string]T, path string) []Issue {
+	if ref == "" {
+		return nil
+	}
+	name, ok := parser.ComponentRefName(ref, kind)
+	if !ok {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("malformed component reference %q: expected $components.%s.<name>", ref, kind),
+		}}
+	}
+	if _, found := components[name]; !found {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("reference %q: component %q does not exist in components.%s", ref, name, kind),
+		}}
+	}
+	return nil
 }
 
 func checkUniqueWorkflowIDs(doc *model.ArazzoDocument) []Issue {
@@ -133,7 +158,7 @@ func checkUniqueWorkflowIDs(doc *model.ArazzoDocument) []Issue {
 	return issues
 }
 
-func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool) []Issue {
+func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool, comps model.Components) []Issue {
 	var issues []Issue
 	path := "workflows[" + wf.WorkflowID + "]"
 
@@ -165,7 +190,13 @@ func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool) 
 		if step.WorkflowID != "" {
 			issues = append(issues, checkWorkflowRef(step.WorkflowID, workflowIDs, sourceNames, stepPath+".workflowId")...)
 		}
-		for _, p := range step.Parameters {
+		for pi, p := range step.Parameters {
+			if p.Reference != "" {
+				// Unresolved reusable entry: its (override) value is never
+				// used, so only the reference problem is worth reporting.
+				issues = append(issues, checkComponentRef(p.Reference, "parameters", comps.Parameters, fmt.Sprintf("%s.parameters[%d]", stepPath, pi))...)
+				continue
+			}
 			if s, ok := p.Value.(string); ok {
 				issues = append(issues, checkStepsRef(s, wf, stepPath+".parameters."+p.Name, i)...)
 			}
@@ -179,10 +210,20 @@ func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool) 
 		for _, c := range step.SuccessCriteria {
 			issues = append(issues, checkStepsRef(c.Condition, wf, stepPath+".successCriteria", i)...)
 		}
-		for _, a := range step.OnSuccess {
+		for ai, a := range step.OnSuccess {
+			if a.Reference != "" {
+				// Unresolved reusable entry: the action never runs, so only
+				// the reference problem is worth reporting.
+				issues = append(issues, checkComponentRef(a.Reference, "successActions", comps.SuccessActions, fmt.Sprintf("%s.onSuccess[%d]", stepPath, ai))...)
+				continue
+			}
 			issues = append(issues, checkAction(a.Type, a.StepID, a.WorkflowID, a.Criteria, wf, workflowIDs, sourceNames, stepPath+".onSuccess["+a.Name+"]", i)...)
 		}
-		for _, a := range step.OnFailure {
+		for ai, a := range step.OnFailure {
+			if a.Reference != "" {
+				issues = append(issues, checkComponentRef(a.Reference, "failureActions", comps.FailureActions, fmt.Sprintf("%s.onFailure[%d]", stepPath, ai))...)
+				continue
+			}
 			issues = append(issues, checkAction(a.Type, a.StepID, a.WorkflowID, a.Criteria, wf, workflowIDs, sourceNames, stepPath+".onFailure["+a.Name+"]", i)...)
 		}
 	}

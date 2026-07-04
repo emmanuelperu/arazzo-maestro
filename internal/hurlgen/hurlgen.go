@@ -143,6 +143,15 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	for _, e := range expr.UnsupportedInline(inlineValues(s, effective), translateInlineExpr) {
 		fmt.Fprintf(b, "# unsupported expression (not translated): %s\n", e)
 	}
+	for _, p := range s.Parameters {
+		if p.Reference != "" {
+			fmt.Fprintf(b, "# unresolved component reference (parameter dropped): %s\n", p.Reference)
+		}
+	}
+	// s is a copy: dropping unresolved entries here keeps every writer
+	// below (headers, query, path, cookies, body scan) consistent with
+	// the dropped-comment above.
+	s.Parameters = resolvedParameters(s.Parameters)
 
 	op, method, url, ok := resolveRequestLine(s, sources)
 	if !ok {
@@ -448,6 +457,18 @@ func resolveRequestLine(s model.Step, sources map[string]*oasresolver.Source) (o
 	// Always {{baseUrl}}, never op.BaseURL: requests stay environment-agnostic.
 	path := substitutePathParams(op.Path, s.Parameters)
 	return op, op.Method, "{{baseUrl}}" + path, true
+}
+
+// resolvedParameters filters out unresolved Reusable Object entries:
+// they are announced as dropped and must not reach the request.
+func resolvedParameters(params []model.Parameter) []model.Parameter {
+	out := make([]model.Parameter, 0, len(params))
+	for _, p := range params {
+		if p.Reference == "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // outputNames joins the declared output names for a comment.

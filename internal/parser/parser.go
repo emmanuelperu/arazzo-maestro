@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -97,9 +98,114 @@ func parseDocument(n *yaml.Node) (*model.ArazzoDocument, error) {
 				return nil, err
 			}
 			doc.Workflows = workflows
+		case "components":
+			doc.Components = parseComponents(kv.Value)
 		}
 	}
+	resolveComponentRefs(doc)
 	return doc, nil
+}
+
+// parseComponents reads the document's Components Object. Reusable
+// `inputs` schemas are left to the schema pass (see model.Components).
+func parseComponents(n *yaml.Node) model.Components {
+	c := model.Components{}
+	if n == nil || n.Kind != yaml.MappingNode {
+		return c
+	}
+	for _, kv := range mappingPairs(n) {
+		switch kv.Key {
+		case "parameters":
+			c.Parameters = parseComponentMap(kv.Value, parseParameter)
+		case "successActions":
+			c.SuccessActions = parseComponentMap(kv.Value, parseSuccessAction)
+		case "failureActions":
+			c.FailureActions = parseComponentMap(kv.Value, parseFailureAction)
+		}
+	}
+	return c
+}
+
+// parseComponentMap reads one components sub-map (name to object) with
+// the per-kind item parser. Non-mapping definitions are skipped (the
+// schema pass reports them), so a reference to one stays unresolved
+// instead of inlining an empty struct.
+func parseComponentMap[T any](n *yaml.Node, parse func(*yaml.Node) T) map[string]T {
+	if n == nil || n.Kind != yaml.MappingNode {
+		return nil
+	}
+	out := make(map[string]T, len(n.Content)/2)
+	for _, kv := range mappingPairs(n) {
+		if kv.Value == nil || kv.Value.Kind != yaml.MappingNode {
+			continue
+		}
+		out[kv.Key] = parse(kv.Value)
+	}
+	return out
+}
+
+// resolveComponentRefs inlines every Reusable Object reference into the
+// referenced component, so downstream consumers (renderer, generators)
+// never deal with indirection. Inlining clears Reference, so a non-empty Reference
+// after this pass means exactly "this entry did not resolve" (the
+// linter reports why). Inlined structs share their slice/map backing
+// with the component map; consumers treat the model as read-only.
+func resolveComponentRefs(doc *model.ArazzoDocument) {
+	for wi := range doc.Workflows {
+		wf := &doc.Workflows[wi]
+		for si := range wf.Steps {
+			step := &wf.Steps[si]
+			for pi := range step.Parameters {
+				p := &step.Parameters[pi]
+				if comp, ok := resolveComponent(p.Reference, "parameters", doc.Components.Parameters); ok {
+					// Per the spec (Reusable Object, `value`), a value carried
+					// by the reusable entry overrides the component's value.
+					// An explicit `value: null` is indistinguishable from an
+					// omitted value here and keeps the component's value.
+					override := p.Value
+					*p = comp
+					if override != nil {
+						p.Value = override
+					}
+				}
+			}
+			for ai := range step.OnSuccess {
+				a := &step.OnSuccess[ai]
+				if comp, ok := resolveComponent(a.Reference, "successActions", doc.Components.SuccessActions); ok {
+					*a = comp
+				}
+			}
+			for ai := range step.OnFailure {
+				a := &step.OnFailure[ai]
+				if comp, ok := resolveComponent(a.Reference, "failureActions", doc.Components.FailureActions); ok {
+					*a = comp
+				}
+			}
+		}
+	}
+}
+
+// resolveComponent looks a Reusable Object reference up in the
+// components map of its kind. ok is false when ref is empty, malformed,
+// of another kind, or names no declared component.
+func resolveComponent[T any](ref, kind string, components map[string]T) (T, bool) {
+	name, ok := ComponentRefName(ref, kind)
+	if !ok {
+		var zero T
+		return zero, false
+	}
+	comp, found := components[name]
+	return comp, found
+}
+
+// ComponentRefName extracts the component name from a Reusable Object
+// reference of the given kind: `$components.<kind>.<name>`.
+func ComponentRefName(ref, kind string) (string, bool) {
+	prefix := "$components." + kind + "."
+	if !strings.HasPrefix(ref, prefix) || len(ref) == len(prefix) {
+		return "", false
+	}
+	return strings.TrimPrefix(ref, prefix), true
 }
 
 func parseSourceDescriptions(n *yaml.Node) ([]model.SourceDescription, error) {
@@ -270,24 +376,36 @@ func parseSuccessActions(n *yaml.Node) []model.SuccessAction {
 		if item.Kind != yaml.MappingNode {
 			continue
 		}
-		a := model.SuccessAction{}
-		for _, kv := range mappingPairs(item) {
-			switch kv.Key {
-			case "name":
-				a.Name = scalarString(kv.Value)
-			case "type":
-				a.Type = scalarString(kv.Value)
-			case "stepId":
-				a.StepID = scalarString(kv.Value)
-			case "workflowId":
-				a.WorkflowID = scalarString(kv.Value)
-			case "criteria":
-				a.Criteria = parseSuccessCriteria(kv.Value)
-			}
-		}
-		out = append(out, a)
+		out = append(out, parseSuccessAction(item))
 	}
 	return out
+}
+
+// parseSuccessAction reads one Success Action Object, or a Reusable
+// Object entry (only `reference` is then set; resolveComponentRefs
+// inlines it afterwards).
+func parseSuccessAction(item *yaml.Node) model.SuccessAction {
+	a := model.SuccessAction{}
+	if item == nil || item.Kind != yaml.MappingNode {
+		return a
+	}
+	for _, kv := range mappingPairs(item) {
+		switch kv.Key {
+		case "name":
+			a.Name = scalarString(kv.Value)
+		case "type":
+			a.Type = scalarString(kv.Value)
+		case "stepId":
+			a.StepID = scalarString(kv.Value)
+		case "workflowId":
+			a.WorkflowID = scalarString(kv.Value)
+		case "criteria":
+			a.Criteria = parseSuccessCriteria(kv.Value)
+		case "reference":
+			a.Reference = scalarString(kv.Value)
+		}
+	}
+	return a
 }
 
 func parseFailureActions(n *yaml.Node) []model.FailureAction {
@@ -299,29 +417,41 @@ func parseFailureActions(n *yaml.Node) []model.FailureAction {
 		if item.Kind != yaml.MappingNode {
 			continue
 		}
-		a := model.FailureAction{}
-		for _, kv := range mappingPairs(item) {
-			switch kv.Key {
-			case "name":
-				a.Name = scalarString(kv.Value)
-			case "type":
-				a.Type = scalarString(kv.Value)
-			case "stepId":
-				a.StepID = scalarString(kv.Value)
-			case "workflowId":
-				a.WorkflowID = scalarString(kv.Value)
-			case "retryAfter":
-				a.RetryAfter = scalarFloat(kv.Value)
-			case "retryLimit":
-				a.RetryLimit = scalarInt(kv.Value)
-				a.RetryLimitSet = true
-			case "criteria":
-				a.Criteria = parseSuccessCriteria(kv.Value)
-			}
-		}
-		out = append(out, a)
+		out = append(out, parseFailureAction(item))
 	}
 	return out
+}
+
+// parseFailureAction reads one Failure Action Object, or a Reusable
+// Object entry (only `reference` is then set; resolveComponentRefs
+// inlines it afterwards).
+func parseFailureAction(item *yaml.Node) model.FailureAction {
+	a := model.FailureAction{}
+	if item == nil || item.Kind != yaml.MappingNode {
+		return a
+	}
+	for _, kv := range mappingPairs(item) {
+		switch kv.Key {
+		case "name":
+			a.Name = scalarString(kv.Value)
+		case "type":
+			a.Type = scalarString(kv.Value)
+		case "stepId":
+			a.StepID = scalarString(kv.Value)
+		case "workflowId":
+			a.WorkflowID = scalarString(kv.Value)
+		case "retryAfter":
+			a.RetryAfter = scalarFloat(kv.Value)
+		case "retryLimit":
+			a.RetryLimit = scalarInt(kv.Value)
+			a.RetryLimitSet = true
+		case "criteria":
+			a.Criteria = parseSuccessCriteria(kv.Value)
+		case "reference":
+			a.Reference = scalarString(kv.Value)
+		}
+	}
+	return a
 }
 
 // scalarFloat returns the numeric value of a scalar node, or 0 if the
@@ -361,20 +491,32 @@ func parseParameters(n *yaml.Node) []model.Parameter {
 		if item.Kind != yaml.MappingNode {
 			continue
 		}
-		param := model.Parameter{}
-		for _, kv := range mappingPairs(item) {
-			switch kv.Key {
-			case "name":
-				param.Name = scalarString(kv.Value)
-			case "in":
-				param.In = scalarString(kv.Value)
-			case "value":
-				param.Value = nodeToAny(kv.Value)
-			}
-		}
-		out = append(out, param)
+		out = append(out, parseParameter(item))
 	}
 	return out
+}
+
+// parseParameter reads one Parameter Object, or a Reusable Object entry
+// (`reference` plus an optional overriding `value`;
+// resolveComponentRefs inlines it afterwards).
+func parseParameter(item *yaml.Node) model.Parameter {
+	param := model.Parameter{}
+	if item == nil || item.Kind != yaml.MappingNode {
+		return param
+	}
+	for _, kv := range mappingPairs(item) {
+		switch kv.Key {
+		case "name":
+			param.Name = scalarString(kv.Value)
+		case "in":
+			param.In = scalarString(kv.Value)
+		case "value":
+			param.Value = nodeToAny(kv.Value)
+		case "reference":
+			param.Reference = scalarString(kv.Value)
+		}
+	}
+	return param
 }
 
 func parseRequestBody(n *yaml.Node) *model.RequestBody {

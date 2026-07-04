@@ -10,11 +10,16 @@ type InputProperty struct {
 	Default any
 }
 
-// Parameter is one entry of a step's `parameters` array.
+// Parameter is one entry of a step's `parameters` array. Reference is
+// set when the entry was declared as a Reusable Object
+// (`{reference: $components.parameters.<name>}`); the other fields then
+// hold the resolved component (inlined at parse time), or stay zero
+// when the reference does not resolve (the linter reports it).
 type Parameter struct {
-	Name  string
-	In    string
-	Value any
+	Name      string
+	In        string
+	Value     any
+	Reference string
 }
 
 // RequestBody mirrors the optional `requestBody` block of a step.
@@ -56,17 +61,21 @@ type Step struct {
 }
 
 // SuccessAction is one entry of a step's `onSuccess` array. Per the
-// Arazzo spec, `Type` is one of "end" or "goto".
+// Arazzo spec, `Type` is one of "end" or "goto". Reference is set when
+// the entry was declared as a Reusable Object; see Parameter.Reference.
 type SuccessAction struct {
 	Name       string
 	Type       string // "end" | "goto"
 	StepID     string // when Type == "goto" within the current workflow
 	WorkflowID string // when Type == "goto" to a different workflow
 	Criteria   []SuccessCriterion
+	Reference  string
 }
 
 // FailureAction is one entry of a step's `onFailure` array. Per the
-// Arazzo spec, `Type` is one of "end", "goto", or "retry".
+// Arazzo spec, `Type` is one of "end", "goto", or "retry". Reference is
+// set when the entry was declared as a Reusable Object; see
+// Parameter.Reference.
 type FailureAction struct {
 	Name          string
 	Type          string // "end" | "goto" | "retry"
@@ -76,6 +85,7 @@ type FailureAction struct {
 	RetryLimit    int     // count, only when Type == "retry"
 	RetryLimitSet bool    // distinguishes an explicit 0 from the spec default (a single retry)
 	Criteria      []SuccessCriterion
+	Reference     string
 }
 
 // SourceDescription is one entry of the top-level `sourceDescriptions` array.
@@ -103,6 +113,16 @@ type OutputEntry struct {
 	Expression string
 }
 
+// Components holds the document's reusable objects (Components Object).
+// Reusable `inputs` schemas are accepted by the schema pass but not
+// modelled yet: workflow inputs are only read one property level deep
+// (issue #57 tracks the full JSON Schema depth).
+type Components struct {
+	Parameters     map[string]Parameter
+	SuccessActions map[string]SuccessAction
+	FailureActions map[string]FailureAction
+}
+
 // ArazzoDocument is the root of a parsed Arazzo file.
 type ArazzoDocument struct {
 	Arazzo             string
@@ -112,4 +132,5 @@ type ArazzoDocument struct {
 	Version            string
 	SourceDescriptions []SourceDescription
 	Workflows          []Workflow
+	Components         Components
 }
