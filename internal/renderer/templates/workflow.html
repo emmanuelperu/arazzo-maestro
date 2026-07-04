@@ -705,10 +705,17 @@
                 {{ range $step.Parameters }}
                   <li>
                     <span class="kv-connector" aria-hidden="true">←</span>
-                    <code class="kv-key">{{ .Name }}</code>
-                    {{ if .In }}<span class="kv-in">{{ .In }}</span>{{ end }}
-                    <span class="kv-sep" aria-hidden="true">=</span>
-                    {{ renderValue .Value }}
+                    {{ if .Reference }}
+                      {{/* Reusable Object whose reference did not resolve:
+                           show the reference instead of a blank row. */}}
+                      <code class="runtime">{{ .Reference }}</code>
+                      <span class="kv-in">unresolved reference</span>
+                    {{ else }}
+                      <code class="kv-key">{{ .Name }}</code>
+                      {{ if .In }}<span class="kv-in">{{ .In }}</span>{{ end }}
+                      <span class="kv-sep" aria-hidden="true">=</span>
+                      {{ renderValue .Value }}
+                    {{ end }}
                   </li>
                 {{ end }}
               </ul>
@@ -760,7 +767,12 @@
               <ul class="actions">
                 {{ range $step.OnSuccess }}
                   <li class="action">
-                    <span class="action-tag">{{ .Type }}</span>
+                    {{ if .Reference }}
+                      <code class="runtime">{{ .Reference }}</code>
+                      <span class="action-meta">unresolved reference</span>
+                    {{ else }}
+                      <span class="action-tag">{{ .Type }}</span>
+                    {{ end }}
                     {{ if .StepID }}
                       <span class="action-arrow" aria-hidden="true">→</span>
                       <span class="action-meta">step</span>
@@ -791,7 +803,12 @@
               <ul class="actions">
                 {{ range $step.OnFailure }}
                   <li class="action">
-                    <span class="action-tag">{{ .Type }}</span>
+                    {{ if .Reference }}
+                      <code class="runtime">{{ .Reference }}</code>
+                      <span class="action-meta">unresolved reference</span>
+                    {{ else }}
+                      <span class="action-tag">{{ .Type }}</span>
+                    {{ end }}
                     {{ if .StepID }}
                       <span class="action-arrow" aria-hidden="true">→</span>
                       <span class="action-meta">step</span>

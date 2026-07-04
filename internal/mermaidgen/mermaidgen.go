@@ -106,15 +106,28 @@ func (f *flowchart) edges(steps []model.Step) {
 	for i, step := range steps {
 		src := fmt.Sprintf("s%d", i)
 
-		if len(step.OnSuccess) == 0 {
-			f.solid(src, f.next(i, len(steps))) // implicit "continue"
-		} else {
-			for _, a := range step.OnSuccess {
-				f.solid(src, f.target(a.Type, a.StepID, a.WorkflowID))
+		// Unresolved component references (Reference still set) carry no
+		// drawable action; skipping them keeps the implicit "continue"
+		// edge instead of turning the step into a dead end.
+		drewSuccess := false
+		for _, a := range step.OnSuccess {
+			if a.Reference != "" {
+				continue
 			}
+			if dst := f.target(a.Type, a.StepID, a.WorkflowID); dst != "" {
+				f.solid(src, dst)
+				drewSuccess = true
+			}
+		}
+		if !drewSuccess {
+			// No onSuccess, or only undrawable entries: implicit "continue".
+			f.solid(src, f.next(i, len(steps)))
 		}
 
 		for _, a := range step.OnFailure {
+			if a.Reference != "" {
+				continue
+			}
 			if a.Type == "retry" {
 				f.dotted(src, retryLabel(a), f.retryTarget(src, step.StepID, a.StepID))
 				continue

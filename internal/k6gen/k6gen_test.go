@@ -1005,3 +1005,20 @@ func TestGenerateWorkflowStepEmitsNoRequest(t *testing.T) {
 	assertNotContains(t, out, "const delegate_orderId")
 	assertContains(t, out, "http.request('GET', `${BASE_URL}/products`")
 }
+
+func TestGenerateComponentParameters(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "pageSize", In: "query", Value: int64(20)},
+				{Reference: "$components.parameters.ghost"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "${BASE_URL}/products?pageSize=20")
+	assertContains(t, out, "// unresolved component reference (parameter dropped): $components.parameters.ghost")
+}

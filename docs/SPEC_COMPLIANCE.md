@@ -40,7 +40,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `$self` (1.1) | ❌ | 😶 accepted | ❌ | ❌ | 😶 | Accepted structurally since #47; no base-URI / identity-based reference resolution |
 | `info` | ✅ | ✅ | 🟡 | n/a | 🟡 | `description` and `version` parsed but never rendered |
 | `sourceDescriptions` | ✅ | ✅ | ❌ | 🟡 | 🟡 | Never rendered; `type: arazzo` and `type: asyncapi` sources accepted but never resolved; HTTP/HTTPS URLs rejected by design (offline-first) |
-| `components` + Reusable Objects | ❌ | 😶 schema-only | ❌ | ❌ | ❌ | [#52](https://github.com/emmanuelperu/arazzo-maestro/issues/52); a `{reference: $components...}` entry parses to an empty struct |
+| `components` + Reusable Objects | ✅ | ✅ refs checked | ✅ inlined | ✅ inlined | 🟡 | `parameters`/`successActions`/`failureActions` parsed, `$components.*` references inlined at parse time (`value` override honoured), dangling/malformed/kind-mismatched refs linted, unresolved entries surfaced instead of blank (#52); reusable `inputs` schemas still schema-only (tied to [#57](https://github.com/emmanuelperu/arazzo-maestro/issues/57)) |
 | `x-` extensions | 😶 | ✅ | ❌ | ❌ | 🟡 | Accepted, never surfaced |
 
 ## Workflow object
@@ -65,7 +65,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `operationPath` | ✅ | ✅ cross-file | ✅ decoded method+path | ✅ | ✅ | JSON pointer resolved against the named source, the target operation needs no operationId (#53) |
 | `workflowId` (nested workflow) | ✅ | ✅ ref checked | ✅ workflow tag + link | 🟡 explicit skip | 🟡 | Generators emit a named not-supported comment and no request; nested execution stays roadmap (#54) |
 | `channelPath` (1.1, AsyncAPI) | ❌ | 😶 accepted | ❌ placeholder | ❌ | 😶 | Accepted structurally since #47; resolution out of scope (AsyncAPI) |
-| `parameters` | ✅ | ✅ schema | ✅ | ✅ | 🟡 | All five `in` locations emitted (cookie as `[Cookies]`/`cookies:`, querystring appended to the URL); Reusable entries parse empty ([#52](https://github.com/emmanuelperu/arazzo-maestro/issues/52)); `in` conditional rule unvalidated |
+| `parameters` | ✅ | ✅ schema | ✅ | ✅ | 🟡 | All five `in` locations emitted (cookie as `[Cookies]`/`cookies:`, querystring appended to the URL); Reusable entries inlined at parse time (#52); `in` conditional rule unvalidated |
 | `requestBody.contentType` / `payload` | ✅ | ✅ | ✅ | ✅ | ✅ | Whole-string and embedded `{$expr}` substitution; an omitted `contentType` defers to the operation's declared type, and a real `Content-Type` header reaches the request (#66) |
 | `requestBody.replacements` | ✅ | 😶 schema-only | ✅ shown | ✅ applied | ✅ | JSON-pointer target applied to the payload before expression substitution; unresolved targets flagged (#55) |
 | `successCriteria` | 🟡 | ✅ | 🟡 | 🟡 | 🟡 | Only `condition` survives the parser ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |

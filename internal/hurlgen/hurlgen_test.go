@@ -1051,3 +1051,38 @@ func TestGenerateWorkflowStepEmitsNoRequest(t *testing.T) {
 	assertNotContains(t, out, "[Captures]")
 	assertContains(t, out, "GET {{baseUrl}}/products")
 }
+
+func TestGenerateComponentParameters(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "pageSize", In: "query", Value: int64(20)},
+				{Reference: "$components.parameters.ghost"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "[QueryStringParams]\npageSize: 20")
+	assertContains(t, out, "# unresolved component reference (parameter dropped): $components.parameters.ghost")
+}
+
+func TestGenerateDropsUnresolvedParameterEntirely(t *testing.T) {
+	// An unresolved reusable entry carrying stray inline keys must not
+	// leak into the request: the dropped-comment and the writers agree.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Reference: "$inputs.pageSize", Name: "page", In: "query", Value: int64(5)},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "# unresolved component reference (parameter dropped): $inputs.pageSize")
+	assertNotContains(t, out, "page: 5")
+}

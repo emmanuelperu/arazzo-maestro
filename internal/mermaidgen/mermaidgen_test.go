@@ -155,3 +155,24 @@ func TestGenerateLabelsOperationPathAndWorkflowSteps(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateUnresolvedActionRefsKeepImplicitEdges(t *testing.T) {
+	// A step whose only actions are unresolved component references must
+	// not become a dead end: the implicit continue edge survives.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "a", OperationID: "opA",
+				OnSuccess: []model.SuccessAction{{Reference: "$components.successActions.ghost"}},
+				OnFailure: []model.FailureAction{{Reference: "$components.failureActions.ghost"}}},
+			{StepID: "b", OperationID: "opB"},
+		},
+	}
+	out := Generate(wf)
+	if !strings.Contains(out, "s0 --> s1") {
+		t.Errorf("implicit success edge missing:\n%s", out)
+	}
+	if strings.Contains(out, "on failure") {
+		t.Errorf("unresolved failure ref must not draw an edge:\n%s", out)
+	}
+}

@@ -377,3 +377,52 @@ workflows:
 		}
 	}
 }
+
+func TestSemanticValidatesComponentReferences(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+components:
+  parameters:
+    page-size: { name: pageSize, in: query, value: 20 }
+  successActions:
+    finish: { name: finish, type: end }
+  failureActions:
+    give-up: { name: give-up, type: end }
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: list
+        operationId: listThings
+        parameters:
+          - reference: $components.parameters.page-size
+          - reference: $components.parameters.ghost
+          - reference: $inputs.pageSize
+        onSuccess:
+          - reference: $components.successActions.finish
+          - reference: $components.failureActions.give-up
+        onFailure:
+          - reference: $components.failureActions.give-up
+          - reference: $components.failureActions.missing
+`
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintSemantic(doc)
+	if !containsMessage(issues, `component "ghost" does not exist in components.parameters`) {
+		t.Errorf("expected dangling parameter component issue, got %v", issues)
+	}
+	if !containsMessage(issues, `malformed component reference "$inputs.pageSize"`) {
+		t.Errorf("expected malformed reference issue, got %v", issues)
+	}
+	// A successActions slot referencing a failureActions component is a
+	// kind mismatch, reported as malformed for that slot.
+	if !containsMessage(issues, `malformed component reference "$components.failureActions.give-up": expected $components.successActions.<name>`) {
+		t.Errorf("expected kind-mismatch issue, got %v", issues)
+	}
+	if !containsMessage(issues, `component "missing" does not exist in components.failureActions`) {
+		t.Errorf("expected dangling failure action issue, got %v", issues)
+	}
+	for _, i := range issues {
+		if strings.Contains(i.Message, "page-size") || strings.Contains(i.Message, `"finish"`) {
+			t.Errorf("valid component reference flagged: %s", i)
+		}
+	}
+}

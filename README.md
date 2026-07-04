@@ -201,9 +201,12 @@ The short version:
   `step.workflowId` steps render with a workflow tag and link; the
   generators skip them with an explicit not-supported comment.
 - **Validated but dropped downstream**: workflow-level
-  actions/parameters, `dependsOn`, `components` + Reusable Objects,
-  `Criterion.type`/`context`: the official JSON Schema pass accepts
-  them, the renderer and generators do not act on them yet.
+  actions/parameters, `dependsOn`, reusable `components.inputs`
+  schemas, `Criterion.type`/`context`: the official JSON Schema pass
+  accepts them, the renderer and generators do not act on them yet.
+  Other `components` (`parameters`, `successActions`,
+  `failureActions`) and their `$components.*` references are inlined
+  at parse time.
 - **Known non-compliances** (each tracked): `#/json-pointer` suffixes
   on `$inputs`/`$steps` expressions are not translated by the
   generators. The embedded schema is the official **1.0** one with the
