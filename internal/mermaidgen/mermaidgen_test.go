@@ -133,3 +133,25 @@ func TestGenerateEmptyWorkflowLinksStartToEnd(t *testing.T) {
 		t.Errorf("empty workflow should link start to end\n---\n%s", out)
 	}
 }
+
+func TestGenerateLabelsOperationPathAndWorkflowSteps(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "mixed",
+		Steps: []model.Step{
+			{StepID: "by-path", OperationPath: "{$sourceDescriptions.shop.url}#/paths/~1pet~1findByStatus/get"},
+			{StepID: "by-workflow", WorkflowID: "checkout"},
+			{StepID: "opaque", OperationPath: "not-the-spec-form"},
+		},
+	}
+	out := Generate(wf)
+	for _, want := range []string{
+		`s0["01 by-path<br/>GET /pet/findByStatus"]`,
+		`s1["02 by-workflow<br/>workflow: checkout"]`,
+		// An undecodable operationPath is shown raw, like the HTML renderer.
+		`s2["03 opaque<br/>not-the-spec-form"]`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\n---\n%s", want, out)
+		}
+	}
+}

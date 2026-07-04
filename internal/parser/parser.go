@@ -237,6 +237,10 @@ func parseStep(n *yaml.Node) (model.Step, error) {
 			step.Description = scalarString(kv.Value)
 		case "operationId":
 			step.OperationID = scalarString(kv.Value)
+		case "operationPath":
+			step.OperationPath = scalarString(kv.Value)
+		case "workflowId":
+			step.WorkflowID = scalarString(kv.Value)
 		case "parameters":
 			step.Parameters = parseParameters(kv.Value)
 		case "requestBody":

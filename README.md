@@ -193,13 +193,15 @@ issue [#58](https://github.com/emmanuelperu/arazzo-maestro/issues/58)).
 The short version:
 
 - **Solid**: the core path: `info`/`sourceDescriptions`/`workflows`,
-  steps with `operationId` (short + qualified), parameters
-  (path/query/header), request bodies with whole-string and embedded
-  `{$expr}` substitution, success criteria conditions, outputs and
-  capture chaining, `onSuccess`/`onFailure` incl. self-retry rendering.
+  steps with `operationId` (short + qualified) or `operationPath`,
+  parameters (path/query/header), request bodies with whole-string and
+  embedded `{$expr}` substitution and payload replacements, success
+  criteria conditions, outputs and capture chaining,
+  `onSuccess`/`onFailure` incl. self-retry rendering. Nested
+  `step.workflowId` steps render with a workflow tag and link; the
+  generators skip them with an explicit not-supported comment.
 - **Validated but dropped downstream**: workflow-level
   actions/parameters, `dependsOn`, `components` + Reusable Objects,
-  `operationPath`, nested `step.workflowId`, `requestBody.replacements`,
   `Criterion.type`/`context`: the official JSON Schema pass accepts
   them, the renderer and generators do not act on them yet.
 - **Known non-compliances** (each tracked): `#/json-pointer` suffixes

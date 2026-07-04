@@ -162,6 +162,9 @@ func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool) 
 	// Step-level expressions can only reference outputs of earlier steps.
 	for i, step := range wf.Steps {
 		stepPath := fmt.Sprintf("%s.steps[%s]", path, step.StepID)
+		if step.WorkflowID != "" {
+			issues = append(issues, checkWorkflowRef(step.WorkflowID, workflowIDs, sourceNames, stepPath+".workflowId")...)
+		}
 		for _, p := range step.Parameters {
 			if s, ok := p.Value.(string); ok {
 				issues = append(issues, checkStepsRef(s, wf, stepPath+".parameters."+p.Name, i)...)
@@ -210,35 +213,14 @@ func checkAction(typ, stepID, workflowID string, criteria []model.SuccessCriteri
 		}
 	}
 	if workflowID != "" {
-		switch {
-		case !targetRelevant:
+		if !targetRelevant {
 			issues = append(issues, Issue{
 				Severity: SeverityWarning,
 				Path:     path,
 				Message:  fmt.Sprintf("workflowId has no effect when type is %q", typ),
 			})
-		case strings.HasPrefix(workflowID, "$sourceDescriptions."):
-			rest := strings.TrimPrefix(workflowID, "$sourceDescriptions.")
-			name, target, found := strings.Cut(rest, ".")
-			if !found || name == "" || target == "" {
-				issues = append(issues, Issue{
-					Severity: SeverityError,
-					Path:     path,
-					Message:  fmt.Sprintf("malformed workflowId reference %q: expected $sourceDescriptions.<name>.<workflowId>", workflowID),
-				})
-			} else if !sourceNames[name] {
-				issues = append(issues, Issue{
-					Severity: SeverityError,
-					Path:     path,
-					Message:  fmt.Sprintf("workflowId reference %q: source description %q does not exist", workflowID, name),
-				})
-			}
-		case !workflowIDs[workflowID]:
-			issues = append(issues, Issue{
-				Severity: SeverityError,
-				Path:     path,
-				Message:  fmt.Sprintf("target workflow %q does not exist in this document", workflowID),
-			})
+		} else {
+			issues = append(issues, checkWorkflowRef(workflowID, workflowIDs, sourceNames, path)...)
 		}
 	}
 	// Action criteria evaluate after the step has run, so the current
@@ -247,6 +229,40 @@ func checkAction(typ, stepID, workflowID string, criteria []model.SuccessCriteri
 		issues = append(issues, checkStepsRef(c.Condition, wf, path+".criteria", stepIndex+1)...)
 	}
 	return issues
+}
+
+// checkWorkflowRef validates a workflowId reference (an action target or
+// a workflow-invoking step): a plain id must name a workflow of this
+// document, and the $sourceDescriptions.<name>.<workflowId> form must be
+// well-formed and name a declared source description (the referenced
+// document itself is not loaded).
+func checkWorkflowRef(workflowID string, workflowIDs, sourceNames map[string]bool, path string) []Issue {
+	switch {
+	case strings.HasPrefix(workflowID, "$sourceDescriptions."):
+		rest := strings.TrimPrefix(workflowID, "$sourceDescriptions.")
+		name, target, found := strings.Cut(rest, ".")
+		if !found || name == "" || target == "" {
+			return []Issue{{
+				Severity: SeverityError,
+				Path:     path,
+				Message:  fmt.Sprintf("malformed workflowId reference %q: expected $sourceDescriptions.<name>.<workflowId>", workflowID),
+			}}
+		}
+		if !sourceNames[name] {
+			return []Issue{{
+				Severity: SeverityError,
+				Path:     path,
+				Message:  fmt.Sprintf("workflowId reference %q: source description %q does not exist", workflowID, name),
+			}}
+		}
+	case !workflowIDs[workflowID]:
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("target workflow %q does not exist in this document", workflowID),
+		}}
+	}
+	return nil
 }
 
 // checkStepsRef inspects a single string for `$steps.X.outputs.Y` refs.

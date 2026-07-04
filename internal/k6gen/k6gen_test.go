@@ -958,3 +958,50 @@ func TestGenerateAppliesRequestBodyReplacements(t *testing.T) {
 	assertNotContains(t, out, "original")
 	assertContains(t, out, `// replacement: /name = "INJECTED"`)
 }
+
+func TestGenerateResolvesOperationPath(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "list", OperationPath: "{$sourceDescriptions.shop.url}#/paths/~1products/get"},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "http.request('GET', `${BASE_URL}/products`")
+	assertNotContains(t, out, "__unresolved__")
+}
+
+func TestGenerateFallsBackWhenOperationPathUnresolved(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "broken", OperationPath: "{$sourceDescriptions.shop.url}#/paths/~1nope/get"},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "// unresolved operationPath: {$sourceDescriptions.shop.url}#/paths/~1nope/get")
+	// The placeholder names the step: the raw reference is not URL-safe.
+	assertContains(t, out, "${BASE_URL}/__unresolved__/broken")
+}
+
+func TestGenerateWorkflowStepEmitsNoRequest(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "delegate", WorkflowID: "checkout",
+				Outputs: []model.OutputEntry{{Name: "orderId", Expression: "$response.body#/id"}}},
+			{StepID: "list", OperationID: "listProducts"},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "// Step: delegate")
+	assertContains(t, out, `// not supported: this step invokes workflow "checkout" (workflowId); no request generated`)
+	// The skipped step's outputs are named so a later reference staying
+	// untranslated can be traced back here.
+	assertContains(t, out, "// warning: outputs orderId are not captured")
+	// No bogus placeholder request, no orphan captures for the skipped
+	// step; the next step still generates normally.
+	assertNotContains(t, out, "__unresolved__")
+	assertNotContains(t, out, "const delegate_orderId")
+	assertContains(t, out, "http.request('GET', `${BASE_URL}/products`")
+}

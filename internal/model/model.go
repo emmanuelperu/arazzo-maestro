@@ -37,11 +37,16 @@ type SuccessCriterion struct {
 	Condition string
 }
 
-// Step is one entry of a workflow's `steps` array.
+// Step is one entry of a workflow's `steps` array. OperationID,
+// OperationPath and WorkflowID are mutually exclusive per the Arazzo
+// step oneOf; the schema pass reports violations, the model just holds
+// whichever was declared.
 type Step struct {
 	StepID          string
 	Description     string
 	OperationID     string
+	OperationPath   string
+	WorkflowID      string
 	Parameters      []Parameter
 	RequestBody     *RequestBody
 	SuccessCriteria []SuccessCriterion

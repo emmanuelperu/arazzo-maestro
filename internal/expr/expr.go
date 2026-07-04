@@ -100,6 +100,13 @@ func IsName(s string) bool {
 	return true
 }
 
+// UnescapeJSONPointer decodes the RFC 6901 escape sequences inside a
+// pointer segment: ~1 is '/', ~0 is '~'. ~1 must be decoded first so
+// that ~01 yields the literal ~1.
+func UnescapeJSONPointer(seg string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(seg, "~1", "/"), "~0", "~")
+}
+
 func splitStepOutput(rest string) (step, out string, ok bool) {
 	const sep = ".outputs."
 	idx := strings.Index(rest, sep)

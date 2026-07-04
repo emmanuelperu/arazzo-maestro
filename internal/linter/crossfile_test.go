@@ -247,3 +247,79 @@ func TestParseOperationRef(t *testing.T) {
 		}
 	}
 }
+
+func TestCrossFileResolvesOperationPath(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+sourceDescriptions:
+  - name: api
+    url: ./openapi.yaml
+    type: openapi
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationPath: '{$sourceDescriptions.api.url}#/paths/~1ping/get'
+        successCriteria:
+          - condition: $statusCode == 200
+`
+	_, base := setupArazzoProject(t, src, tinyOpenAPI)
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintCrossFile(doc, base)
+	for _, issue := range issues {
+		t.Errorf("unexpected finding: %s", issue)
+	}
+}
+
+func TestCrossFileRejectsBadOperationPaths(t *testing.T) {
+	cases := []struct {
+		name, ref, wantMsg string
+	}{
+		{
+			name:    "malformed reference",
+			ref:     "$sourceDescriptions.api.url#/paths/~1ping/get",
+			wantMsg: "malformed operationPath",
+		},
+		{
+			name:    "unknown source",
+			ref:     "{$sourceDescriptions.ghost.url}#/paths/~1ping/get",
+			wantMsg: `source description "ghost" which does not exist`,
+		},
+		{
+			name:    "pointer not an operation",
+			ref:     "{$sourceDescriptions.api.url}#/components/schemas/Pet",
+			wantMsg: "does not address an operation",
+		},
+		{
+			name:    "operation not in source",
+			ref:     "{$sourceDescriptions.api.url}#/paths/~1ping/post",
+			wantMsg: `no POST operation on path "/ping" in source "api"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+sourceDescriptions:
+  - name: api
+    url: ./openapi.yaml
+    type: openapi
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationPath: '` + tc.ref + `'
+        successCriteria:
+          - condition: $statusCode == 200
+`
+			_, base := setupArazzoProject(t, src, tinyOpenAPI)
+			doc, _ := parser.ParseBytes([]byte(src))
+			issues := lintCrossFile(doc, base)
+			if !containsMessage(issues, tc.wantMsg) {
+				t.Errorf("expected an issue containing %q, got %v", tc.wantMsg, issues)
+			}
+		})
+	}
+}

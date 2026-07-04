@@ -344,3 +344,37 @@ workflows:
 		t.Errorf("replacement = %+v, want {/name $inputs.token}", r)
 	}
 }
+
+func TestParseStepOperationPathAndWorkflowID(t *testing.T) {
+	const src = `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: by-path
+        operationPath: '{$sourceDescriptions.petstore.url}#/paths/~1pet~1findByStatus/get'
+      - stepId: by-workflow
+        workflowId: other-flow
+`
+	doc, err := ParseBytes([]byte(src))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	steps := doc.Workflows[0].Steps
+	if len(steps) != 2 {
+		t.Fatalf("len(Steps) = %d, want 2", len(steps))
+	}
+	if got, want := steps[0].OperationPath, "{$sourceDescriptions.petstore.url}#/paths/~1pet~1findByStatus/get"; got != want {
+		t.Errorf("OperationPath = %q, want %q", got, want)
+	}
+	if steps[0].WorkflowID != "" || steps[0].OperationID != "" {
+		t.Errorf("step by-path: unexpected WorkflowID %q / OperationID %q", steps[0].WorkflowID, steps[0].OperationID)
+	}
+	if got, want := steps[1].WorkflowID, "other-flow"; got != want {
+		t.Errorf("WorkflowID = %q, want %q", got, want)
+	}
+	if steps[1].OperationPath != "" || steps[1].OperationID != "" {
+		t.Errorf("step by-workflow: unexpected OperationPath %q / OperationID %q", steps[1].OperationPath, steps[1].OperationID)
+	}
+}

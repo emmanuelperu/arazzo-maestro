@@ -334,3 +334,46 @@ func containsMessage(issues []Issue, substr string) bool {
 	}
 	return false
 }
+
+func TestSemanticValidatesStepWorkflowID(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+sourceDescriptions:
+  - name: other
+    url: ./other.arazzo.yaml
+    type: arazzo
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: local-ok
+        workflowId: nested
+      - stepId: local-missing
+        workflowId: ghost-flow
+      - stepId: qualified-ok
+        workflowId: $sourceDescriptions.other.cleanup
+      - stepId: qualified-missing
+        workflowId: $sourceDescriptions.ghost.cleanup
+      - stepId: malformed
+        workflowId: $sourceDescriptions.other
+  - workflowId: nested
+    steps:
+      - stepId: noop
+        operationId: ping
+`
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintSemantic(doc)
+	if !containsMessage(issues, `target workflow "ghost-flow" does not exist`) {
+		t.Errorf("expected dangling step workflowId issue, got %v", issues)
+	}
+	if !containsMessage(issues, `source description "ghost" does not exist`) {
+		t.Errorf("expected unknown source-description issue, got %v", issues)
+	}
+	if !containsMessage(issues, `malformed workflowId reference "$sourceDescriptions.other"`) {
+		t.Errorf("expected malformed reference issue, got %v", issues)
+	}
+	for _, i := range issues {
+		if strings.Contains(i.Path, "steps[local-ok]") || strings.Contains(i.Path, "steps[qualified-ok]") {
+			t.Errorf("valid step workflowId flagged: %s", i)
+		}
+	}
+}
