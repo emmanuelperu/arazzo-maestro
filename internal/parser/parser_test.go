@@ -477,3 +477,97 @@ func TestComponentRefName(t *testing.T) {
 		}
 	}
 }
+
+const workflowDefaultsYAML = `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+components:
+  parameters:
+    lang: { name: Accept-Language, in: header, value: en }
+workflows:
+  - workflowId: wf
+    dependsOn:
+      - warmup
+      - $sourceDescriptions.other.prepare
+    parameters:
+      - name: apiKey
+        in: header
+        value: $inputs.apiKey
+      - reference: $components.parameters.lang
+    successActions:
+      - name: finish
+        type: end
+    failureActions:
+      - name: retry-later
+        type: retry
+        retryAfter: 2
+        retryLimit: 3
+    steps:
+      - stepId: a
+        operationId: opA
+      - stepId: b
+        operationId: opB
+        parameters:
+          - name: apiKey
+            in: header
+            value: override-key
+        failureActions: []
+        onFailure:
+          - name: retry-later
+            type: end
+  - workflowId: warmup
+    steps:
+      - stepId: noop
+        operationId: opC
+`
+
+func TestParseWorkflowDefaultsAndMerge(t *testing.T) {
+	doc, err := ParseBytes([]byte(workflowDefaultsYAML))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	wf := doc.Workflows[0]
+	if len(wf.DependsOn) != 2 || wf.DependsOn[0] != "warmup" {
+		t.Errorf("DependsOn = %v", wf.DependsOn)
+	}
+	if len(wf.Parameters) != 2 || len(wf.SuccessActions) != 1 || len(wf.FailureActions) != 1 {
+		t.Fatalf("workflow defaults not parsed: %+v", wf)
+	}
+	// The workflow-level reusable ref resolves like step-level ones.
+	if p := wf.Parameters[1]; p.Name != "Accept-Language" || p.Reference != "" {
+		t.Errorf("workflow-level reusable ref not resolved: %+v", p)
+	}
+
+	// Step a inherits everything.
+	a := wf.Steps[0]
+	if len(a.Parameters) != 2 || !a.Parameters[0].Inherited || a.Parameters[0].Name != "apiKey" {
+		t.Errorf("step a parameters = %+v", a.Parameters)
+	}
+	if len(a.OnSuccess) != 1 || !a.OnSuccess[0].Inherited || a.OnSuccess[0].Type != "end" {
+		t.Errorf("step a onSuccess = %+v", a.OnSuccess)
+	}
+	if len(a.OnFailure) != 1 || !a.OnFailure[0].Inherited || a.OnFailure[0].RetryLimit != 3 {
+		t.Errorf("step a onFailure = %+v", a.OnFailure)
+	}
+
+	// Step b overrides apiKey (same name+in) and the retry-later action
+	// (same name); the lang default is still inherited.
+	b := wf.Steps[1]
+	if len(b.Parameters) != 2 {
+		t.Fatalf("step b parameters = %+v", b.Parameters)
+	}
+	if b.Parameters[0].Name != "Accept-Language" || !b.Parameters[0].Inherited {
+		t.Errorf("step b should inherit only lang: %+v", b.Parameters)
+	}
+	if b.Parameters[1].Value != "override-key" || b.Parameters[1].Inherited {
+		t.Errorf("step b own apiKey must win: %+v", b.Parameters[1])
+	}
+	if len(b.OnFailure) != 1 || b.OnFailure[0].Type != "end" || b.OnFailure[0].Inherited {
+		t.Errorf("step b own retry-later must win: %+v", b.OnFailure)
+	}
+
+	// The second workflow declares no defaults: steps untouched.
+	if len(doc.Workflows[1].Steps[0].Parameters) != 0 {
+		t.Errorf("workflow without defaults must not gain parameters")
+	}
+}

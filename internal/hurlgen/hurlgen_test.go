@@ -1086,3 +1086,20 @@ func TestGenerateDropsUnresolvedParameterEntirely(t *testing.T) {
 	assertContains(t, out, "# unresolved component reference (parameter dropped): $inputs.pageSize")
 	assertNotContains(t, out, "page: 5")
 }
+
+func TestGenerateEmitsInheritedWorkflowParameters(t *testing.T) {
+	// Workflow-level parameters are merged into steps by the parser;
+	// the generator emits them like any other parameter.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "X-Api-Key", In: "header", Value: "k-1", Inherited: true},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "X-Api-Key: k-1")
+}

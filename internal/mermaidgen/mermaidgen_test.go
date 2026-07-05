@@ -176,3 +176,23 @@ func TestGenerateUnresolvedActionRefsKeepImplicitEdges(t *testing.T) {
 		t.Errorf("unresolved failure ref must not draw an edge:\n%s", out)
 	}
 }
+
+func TestGenerateInheritedActionsKeepImplicitChain(t *testing.T) {
+	// A workflow-level success action is merged into every step; it must
+	// draw its edge without disconnecting the step chain.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "a", OperationID: "opA",
+				OnSuccess: []model.SuccessAction{{Name: "finish", Type: "end", Inherited: true}}},
+			{StepID: "b", OperationID: "opB",
+				OnSuccess: []model.SuccessAction{{Name: "finish", Type: "end", Inherited: true}}},
+		},
+	}
+	out := Generate(wf)
+	for _, want := range []string{"s0 --> s1", "s1 --> wfEnd", "s0 --> wfEnd"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing edge %q:\n%s", want, out)
+		}
+	}
+}

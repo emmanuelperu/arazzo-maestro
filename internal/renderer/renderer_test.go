@@ -511,3 +511,41 @@ func TestRenderWorkflowShowsComponentParameters(t *testing.T) {
 		t.Error("missing the unresolved-reference marker")
 	}
 }
+
+func TestRenderWorkflowShowsDependsOnAndInheritedBadges(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		DependsOn:  []string{"warmup", "$sourceDescriptions.other.prepare"},
+		Steps: []model.Step{{
+			StepID:      "a",
+			OperationID: "op",
+			Parameters: []model.Parameter{
+				{Name: "apiKey", In: "header", Value: "k", Inherited: true},
+				{Name: "id", In: "path", Value: "42"},
+			},
+			OnFailure: []model.FailureAction{
+				{Name: "retry-later", Type: "retry", RetryLimit: 3, RetryLimitSet: true, Inherited: true},
+			},
+		}},
+	}
+	html, err := RenderWorkflow(wf, nil, LayoutPortrait)
+	if err != nil {
+		t.Fatalf("RenderWorkflow: %v", err)
+	}
+	if !strings.Contains(html, "Depends on") || !strings.Contains(html, `href="warmup.html"`) {
+		t.Error("dependsOn block or local link missing")
+	}
+	if strings.Contains(html, `href="$sourceDescriptions.other.prepare.html"`) {
+		t.Error("qualified dependsOn entry must not become a broken link")
+	}
+	// Inherited entries carry a workflow origin badge; own ones do not.
+	if !strings.Contains(html, `<span class="kv-in">workflow</span>`) {
+		t.Error("inherited parameter badge missing")
+	}
+	if !strings.Contains(html, `<span class="action-meta">workflow</span>`) {
+		t.Error("inherited action badge missing")
+	}
+	if strings.Count(html, `<span class="kv-in">workflow</span>`) != 1 {
+		t.Error("own parameter must not carry the workflow badge")
+	}
+}

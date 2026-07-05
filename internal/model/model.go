@@ -15,11 +15,14 @@ type InputProperty struct {
 // (`{reference: $components.parameters.<name>}`); the other fields then
 // hold the resolved component (inlined at parse time), or stay zero
 // when the reference does not resolve (the linter reports it).
+// Inherited marks a copy merged in from the workflow-level `parameters`
+// defaults, which apply to every step unless overridden.
 type Parameter struct {
 	Name      string
 	In        string
 	Value     any
 	Reference string
+	Inherited bool
 }
 
 // RequestBody mirrors the optional `requestBody` block of a step.
@@ -70,6 +73,7 @@ type SuccessAction struct {
 	WorkflowID string // when Type == "goto" to a different workflow
 	Criteria   []SuccessCriterion
 	Reference  string
+	Inherited  bool // merged in from the workflow-level defaults
 }
 
 // FailureAction is one entry of a step's `onFailure` array. Per the
@@ -86,6 +90,7 @@ type FailureAction struct {
 	RetryLimitSet bool    // distinguishes an explicit 0 from the spec default (a single retry)
 	Criteria      []SuccessCriterion
 	Reference     string
+	Inherited     bool // merged in from the workflow-level defaults
 }
 
 // SourceDescription is one entry of the top-level `sourceDescriptions` array.
@@ -97,12 +102,16 @@ type SourceDescription struct {
 
 // Workflow is one entry of the top-level `workflows` array.
 type Workflow struct {
-	WorkflowID  string
-	Summary     string
-	Description string
-	Inputs      []InputProperty
-	Steps       []Step
-	Outputs     []OutputEntry
+	WorkflowID     string
+	Summary        string
+	Description    string
+	DependsOn      []string // workflowIds that must complete before this workflow runs
+	Inputs         []InputProperty
+	Parameters     []Parameter     // workflow-level defaults, also merged into every step
+	SuccessActions []SuccessAction // workflow-level defaults, also merged into every step
+	FailureActions []FailureAction // workflow-level defaults, also merged into every step
+	Steps          []Step
+	Outputs        []OutputEntry
 }
 
 // OutputEntry preserves the ordered key/value pairs of an `outputs` block.

@@ -103,7 +103,123 @@ func parseDocument(n *yaml.Node) (*model.ArazzoDocument, error) {
 		}
 	}
 	resolveComponentRefs(doc)
+	mergeWorkflowDefaults(doc)
 	return doc, nil
+}
+
+// parseStringSequence reads a YAML sequence of scalars.
+func parseStringSequence(n *yaml.Node) []string {
+	if n == nil || n.Kind != yaml.SequenceNode {
+		return nil
+	}
+	out := make([]string, 0, len(n.Content))
+	for _, item := range n.Content {
+		out = append(out, scalarString(item))
+	}
+	return out
+}
+
+// mergeWorkflowDefaults copies the workflow-level parameters and
+// success/failure actions into every step, per the spec: they apply to
+// all steps, can be overridden at the step level (same name, plus `in`
+// for parameters) and cannot be removed. Inherited copies are flagged
+// so the linter validates them once at the workflow level and the
+// renderer can badge their origin. Unresolved reusable entries are not
+// propagated: they carry nothing and are reported at their declaration.
+// The copies share inner slice/map backing (criteria, composite values)
+// with the declared defaults; consumers treat the model as read-only.
+func mergeWorkflowDefaults(doc *model.ArazzoDocument) {
+	for wi := range doc.Workflows {
+		wf := &doc.Workflows[wi]
+		if len(wf.Parameters) == 0 && len(wf.SuccessActions) == 0 && len(wf.FailureActions) == 0 {
+			continue
+		}
+		for si := range wf.Steps {
+			step := &wf.Steps[si]
+			step.Parameters = mergeParameters(wf.Parameters, step.Parameters)
+			step.OnSuccess = mergeSuccessActions(wf.SuccessActions, step.OnSuccess)
+			step.OnFailure = mergeFailureActions(wf.FailureActions, step.OnFailure)
+		}
+	}
+}
+
+func mergeParameters(defaults, own []model.Parameter) []model.Parameter {
+	if len(defaults) == 0 {
+		return own
+	}
+	merged := make([]model.Parameter, 0, len(defaults)+len(own))
+	for _, d := range defaults {
+		if d.Reference != "" || overridesParameter(own, d) {
+			continue
+		}
+		d.Inherited = true
+		merged = append(merged, d)
+	}
+	return append(merged, own...)
+}
+
+// overridesParameter reports whether the step declares its own
+// parameter with the same identity (name + in) as the default.
+func overridesParameter(own []model.Parameter, d model.Parameter) bool {
+	for _, p := range own {
+		if p.Reference == "" && p.Name == d.Name && p.In == d.In {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeSuccessActions(defaults, own []model.SuccessAction) []model.SuccessAction {
+	if len(defaults) == 0 {
+		return own
+	}
+	names := make([]string, 0, len(own))
+	for _, a := range own {
+		if a.Reference == "" {
+			names = append(names, a.Name)
+		}
+	}
+	merged := make([]model.SuccessAction, 0, len(defaults)+len(own))
+	for _, d := range defaults {
+		if d.Reference != "" || overridesAction(names, d.Name) {
+			continue
+		}
+		d.Inherited = true
+		merged = append(merged, d)
+	}
+	return append(merged, own...)
+}
+
+func mergeFailureActions(defaults, own []model.FailureAction) []model.FailureAction {
+	if len(defaults) == 0 {
+		return own
+	}
+	names := make([]string, 0, len(own))
+	for _, a := range own {
+		if a.Reference == "" {
+			names = append(names, a.Name)
+		}
+	}
+	merged := make([]model.FailureAction, 0, len(defaults)+len(own))
+	for _, d := range defaults {
+		if d.Reference != "" || overridesAction(names, d.Name) {
+			continue
+		}
+		d.Inherited = true
+		merged = append(merged, d)
+	}
+	return append(merged, own...)
+}
+
+// overridesAction reports whether the step declares its own action with
+// the same name as the default (actions are identified by name).
+func overridesAction(ownNames []string, name string) bool {
+	for _, n := range ownNames {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 // parseComponents reads the document's Components Object. Reusable
@@ -153,34 +269,49 @@ func parseComponentMap[T any](n *yaml.Node, parse func(*yaml.Node) T) map[string
 func resolveComponentRefs(doc *model.ArazzoDocument) {
 	for wi := range doc.Workflows {
 		wf := &doc.Workflows[wi]
+		resolveParameterRefs(wf.Parameters, doc.Components)
+		resolveSuccessActionRefs(wf.SuccessActions, doc.Components)
+		resolveFailureActionRefs(wf.FailureActions, doc.Components)
 		for si := range wf.Steps {
 			step := &wf.Steps[si]
-			for pi := range step.Parameters {
-				p := &step.Parameters[pi]
-				if comp, ok := resolveComponent(p.Reference, "parameters", doc.Components.Parameters); ok {
-					// Per the spec (Reusable Object, `value`), a value carried
-					// by the reusable entry overrides the component's value.
-					// An explicit `value: null` is indistinguishable from an
-					// omitted value here and keeps the component's value.
-					override := p.Value
-					*p = comp
-					if override != nil {
-						p.Value = override
-					}
-				}
+			resolveParameterRefs(step.Parameters, doc.Components)
+			resolveSuccessActionRefs(step.OnSuccess, doc.Components)
+			resolveFailureActionRefs(step.OnFailure, doc.Components)
+		}
+	}
+}
+
+func resolveParameterRefs(params []model.Parameter, components model.Components) {
+	for pi := range params {
+		p := &params[pi]
+		if comp, ok := resolveComponent(p.Reference, "parameters", components.Parameters); ok {
+			// Per the spec (Reusable Object, `value`), a value carried
+			// by the reusable entry overrides the component's value.
+			// An explicit `value: null` is indistinguishable from an
+			// omitted value here and keeps the component's value.
+			override := p.Value
+			*p = comp
+			if override != nil {
+				p.Value = override
 			}
-			for ai := range step.OnSuccess {
-				a := &step.OnSuccess[ai]
-				if comp, ok := resolveComponent(a.Reference, "successActions", doc.Components.SuccessActions); ok {
-					*a = comp
-				}
-			}
-			for ai := range step.OnFailure {
-				a := &step.OnFailure[ai]
-				if comp, ok := resolveComponent(a.Reference, "failureActions", doc.Components.FailureActions); ok {
-					*a = comp
-				}
-			}
+		}
+	}
+}
+
+func resolveSuccessActionRefs(actions []model.SuccessAction, components model.Components) {
+	for ai := range actions {
+		a := &actions[ai]
+		if comp, ok := resolveComponent(a.Reference, "successActions", components.SuccessActions); ok {
+			*a = comp
+		}
+	}
+}
+
+func resolveFailureActionRefs(actions []model.FailureAction, components model.Components) {
+	for ai := range actions {
+		a := &actions[ai]
+		if comp, ok := resolveComponent(a.Reference, "failureActions", components.FailureActions); ok {
+			*a = comp
 		}
 	}
 }
@@ -263,8 +394,16 @@ func parseWorkflow(n *yaml.Node) (model.Workflow, error) {
 			wf.Summary = scalarString(kv.Value)
 		case "description":
 			wf.Description = scalarString(kv.Value)
+		case "dependsOn":
+			wf.DependsOn = parseStringSequence(kv.Value)
 		case "inputs":
 			wf.Inputs = parseInputs(kv.Value)
+		case "parameters":
+			wf.Parameters = parseParameters(kv.Value)
+		case "successActions":
+			wf.SuccessActions = parseSuccessActions(kv.Value)
+		case "failureActions":
+			wf.FailureActions = parseFailureActions(kv.Value)
 		case "steps":
 			steps, err := parseSteps(kv.Value)
 			if err != nil {
