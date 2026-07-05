@@ -126,6 +126,9 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	}
 	if s.WorkflowID != "" {
 		fmt.Fprintf(b, "# not supported: this step invokes workflow %q (workflowId); no request generated\n", s.WorkflowID)
+		if len(s.Parameters) > 0 {
+			b.WriteString("# warning: parameters are not forwarded to the invoked workflow\n")
+		}
 		if len(s.Outputs) > 0 {
 			fmt.Fprintf(b, "# warning: outputs %s are not captured; later references to them stay unresolved\n", outputNames(s.Outputs))
 		}

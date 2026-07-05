@@ -108,7 +108,10 @@ func (f *flowchart) edges(steps []model.Step) {
 
 		// Unresolved component references (Reference still set) carry no
 		// drawable action; skipping them keeps the implicit "continue"
-		// edge instead of turning the step into a dead end.
+		// edge instead of turning the step into a dead end. Inherited
+		// workflow-level actions draw their edge on every step but do not
+		// replace the implicit continue: suppressing it on all steps at
+		// once would disconnect the whole chain.
 		drewSuccess := false
 		for _, a := range step.OnSuccess {
 			if a.Reference != "" {
@@ -116,11 +119,13 @@ func (f *flowchart) edges(steps []model.Step) {
 			}
 			if dst := f.target(a.Type, a.StepID, a.WorkflowID); dst != "" {
 				f.solid(src, dst)
-				drewSuccess = true
+				if !a.Inherited {
+					drewSuccess = true
+				}
 			}
 		}
 		if !drewSuccess {
-			// No onSuccess, or only undrawable entries: implicit "continue".
+			// No own onSuccess, or only undrawable entries: implicit "continue".
 			f.solid(src, f.next(i, len(steps)))
 		}
 

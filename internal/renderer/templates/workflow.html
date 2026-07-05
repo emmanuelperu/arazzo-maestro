@@ -630,6 +630,20 @@
       {{ if .Workflow.Description }}
         <p class="step-description terminus-muted" style="margin-top:0.75rem">{{ trim .Workflow.Description }}</p>
       {{ end }}
+      {{ if .Workflow.DependsOn }}
+        <p class="block-label terminus-muted">Depends on</p>
+        <ul class="kv">
+          {{ range .Workflow.DependsOn }}
+            <li>
+              {{ if isLocalWorkflowRef . }}
+                <a class="action-target" href="{{ . }}.html">{{ . }}</a>
+              {{ else }}
+                <code class="kv-key">{{ . }}</code>
+              {{ end }}
+            </li>
+          {{ end }}
+        </ul>
+      {{ end }}
       {{ if .Workflow.Inputs }}
         <p class="block-label terminus-muted">Inputs</p>
         <ul class="kv">
@@ -713,6 +727,7 @@
                     {{ else }}
                       <code class="kv-key">{{ .Name }}</code>
                       {{ if .In }}<span class="kv-in">{{ .In }}</span>{{ end }}
+                      {{ if .Inherited }}<span class="kv-in">workflow</span>{{ end }}
                       <span class="kv-sep" aria-hidden="true">=</span>
                       {{ renderValue .Value }}
                     {{ end }}
@@ -772,6 +787,7 @@
                       <span class="action-meta">unresolved reference</span>
                     {{ else }}
                       <span class="action-tag">{{ .Type }}</span>
+                      {{ if .Inherited }}<span class="action-meta">workflow</span>{{ end }}
                     {{ end }}
                     {{ if .StepID }}
                       <span class="action-arrow" aria-hidden="true">→</span>
@@ -808,6 +824,7 @@
                       <span class="action-meta">unresolved reference</span>
                     {{ else }}
                       <span class="action-tag">{{ .Type }}</span>
+                      {{ if .Inherited }}<span class="action-meta">workflow</span>{{ end }}
                     {{ end }}
                     {{ if .StepID }}
                       <span class="action-arrow" aria-hidden="true">→</span>

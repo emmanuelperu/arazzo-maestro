@@ -50,10 +50,10 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `workflowId` | ✅ | ✅ uniqueness | ✅ | ✅ | ✅ | SHOULD-pattern not enforced (spec allows) |
 | `summary` / `description` | ✅ | ✅ | ✅ | ✅ | ✅ | CommonMark rendered as plain text |
 | `inputs` (JSON Schema 2020-12) | 🟡 | ✅ schema | 🟡 | 🟡 | 🟡 | Flattened to one level of `{type, default}`; `required`, nesting, enums dropped ([#57](https://github.com/emmanuelperu/arazzo-maestro/issues/57)) |
-| `dependsOn` | ❌ | 😶 schema-only | ❌ | ❌ | ❌ | Targets never validated ([#50](https://github.com/emmanuelperu/arazzo-maestro/issues/50)) |
+| `dependsOn` | ✅ | ✅ targets | ✅ Start block | n/a | ✅ | Each entry checked as a local workflowId or $sourceDescriptions form; rendered with links to local workflows (#50) |
 | `steps` | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| `successActions` / `failureActions` (workflow-level) | ❌ | 😶 schema-only | ❌ | ❌ | ❌ | Per-step override semantics unimplemented ([#50](https://github.com/emmanuelperu/arazzo-maestro/issues/50)) |
-| `parameters` (workflow-level) | ❌ | 😶 schema-only | ❌ | ❌ | ❌ | Workflow-wide params never reach generated requests ([#50](https://github.com/emmanuelperu/arazzo-maestro/issues/50)) |
+| `successActions` / `failureActions` (workflow-level) | ✅ | ✅ once at workflow level | ✅ badged per step | n/a | ✅ | Merged into every step at parse time with the per-step override-by-name rule; inherited copies badged `workflow` (#50) |
+| `parameters` (workflow-level) | ✅ | ✅ once at workflow level | ✅ badged per step | ✅ | ✅ | Merged into every step at parse time (override by name+in); workflow-wide params now reach every generated request (#50) |
 | `outputs` | ✅ | ✅ refs | ✅ | n/a | 🟡 | Selector Object form coerced to string |
 
 ## Step object and request body

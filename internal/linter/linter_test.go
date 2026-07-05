@@ -426,3 +426,112 @@ workflows:
 		}
 	}
 }
+
+func TestSemanticValidatesDependsOn(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+sourceDescriptions:
+  - name: other
+    url: ./other.arazzo.yaml
+    type: arazzo
+workflows:
+  - workflowId: wf
+    dependsOn:
+      - warmup
+      - ghost-flow
+      - $sourceDescriptions.other.prepare
+      - $sourceDescriptions.ghost.prepare
+    steps:
+      - stepId: a
+        operationId: op
+  - workflowId: warmup
+    steps:
+      - stepId: noop
+        operationId: op
+`
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintSemantic(doc)
+	if !containsMessage(issues, `target workflow "ghost-flow" does not exist`) {
+		t.Errorf("expected dangling dependsOn issue, got %v", issues)
+	}
+	if !containsMessage(issues, `source description "ghost" does not exist`) {
+		t.Errorf("expected unknown source in dependsOn, got %v", issues)
+	}
+	for _, i := range issues {
+		if strings.Contains(i.Message, `"warmup"`) || strings.Contains(i.Message, `"other"`) {
+			t.Errorf("valid dependsOn entry flagged: %s", i)
+		}
+	}
+}
+
+func TestSemanticValidatesWorkflowLevelDefaultsOnce(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+workflows:
+  - workflowId: wf
+    parameters:
+      - reference: $components.parameters.ghost
+    successActions:
+      - name: jump
+        type: goto
+        stepId: nowhere
+    failureActions:
+      - name: bail
+        type: end
+        criteria:
+          - condition: $steps.b.outputs.token == "x"
+    steps:
+      - stepId: a
+        operationId: op
+      - stepId: b
+        operationId: op2
+        outputs:
+          token: $response.body#/token
+`
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintSemantic(doc)
+	dangling, target := 0, 0
+	for _, i := range issues {
+		if strings.Contains(i.Message, `component "ghost" does not exist`) {
+			dangling++
+			if !strings.Contains(i.Path, "workflows[wf].parameters[0]") {
+				t.Errorf("workflow-level ref reported at wrong path: %s", i)
+			}
+		}
+		if strings.Contains(i.Message, `target step "nowhere" does not exist`) {
+			target++
+			if !strings.Contains(i.Path, "workflows[wf].successActions[jump]") {
+				t.Errorf("workflow-level action reported at wrong path: %s", i)
+			}
+		}
+		// A workflow-level criteria may reference any declared step
+		// (no existence ERROR), but the ordering hazard is warned.
+		if i.Severity == SeverityError && strings.Contains(i.Message, "$steps.b.outputs.token") {
+			t.Errorf("workflow-level criteria ref wrongly errored: %s", i)
+		}
+	}
+	// Exactly once each, not once per inheriting step.
+	if dangling != 1 || target != 1 {
+		t.Errorf("workflow-level issues must be reported once (got dangling=%d target=%d): %v", dangling, target, issues)
+	}
+	if !containsMessage(issues, "does not exist yet for steps running before") {
+		t.Errorf("expected the workflow-level ordering warning, got %v", issues)
+	}
+}
+
+func TestSemanticRejectsSelfDependency(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+workflows:
+  - workflowId: wf
+    dependsOn: [wf]
+    steps:
+      - stepId: a
+        operationId: op
+`
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintSemantic(doc)
+	if !containsMessage(issues, `workflow "wf" cannot depend on itself`) {
+		t.Errorf("expected self-dependency issue, got %v", issues)
+	}
+}
