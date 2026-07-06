@@ -1022,3 +1022,40 @@ func TestGenerateComponentParameters(t *testing.T) {
 	assertContains(t, out, "${BASE_URL}/products?pageSize=20")
 	assertContains(t, out, "// unresolved component reference (parameter dropped): $components.parameters.ghost")
 }
+
+func TestGenerateTypedCriteriaAreNotTranslated(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "username", Type: "string", Required: true}},
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			SuccessCriteria: []model.SuccessCriterion{
+				{Condition: "$statusCode == 200", Type: "simple"},
+				// A typed criterion is another mini-language even when its
+				// condition superficially parses as a status check.
+				{Condition: "$statusCode == 200", Context: "$response.body", Type: "regex"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "- username (string, required)")
+	assertContains(t, out, `"list: $statusCode == 200": (r) => r.status === 200,`)
+	assertContains(t, out, "// successCriteria (not translated): [regex] $statusCode == 200  (context: $response.body)")
+}
+
+func TestGenerateInputIdentCollisionIsGuarded(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs: []model.InputProperty{
+			{Name: "user.name", Type: "string"},
+			{Name: "user_name", Type: "string"},
+		},
+		Steps: []model.Step{{StepID: "list", OperationID: "listProducts"}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	if strings.Count(out, "const user_name =") != 1 {
+		t.Errorf("sanitised idents must be declared once:\n%s", out)
+	}
+	assertContains(t, out, `// input "user_name" collides with an earlier declaration after sanitisation`)
+}

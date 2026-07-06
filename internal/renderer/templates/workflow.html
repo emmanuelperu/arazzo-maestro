@@ -1,3 +1,4 @@
+{{ define "criterionMeta" }}{{ if or .Type .TypeVersion }}<span class="kv-in">{{ .Type }}{{ if .TypeVersion }}{{ if .Type }} · {{ end }}{{ .TypeVersion }}{{ end }}</span>{{ end }}{{ if .Context }}<span class="action-meta">in {{ .Context }}</span>{{ end }}{{ end }}
 <!doctype html>
 <html lang="en">
 <head>
@@ -651,6 +652,7 @@
             <li>
               <code class="kv-key">{{ .Name }}</code>
               {{ if .Type }}<span class="kv-in">{{ .Type }}</span>{{ end }}
+              {{ if .Required }}<span class="kv-in">required</span>{{ end }}
               {{ if hasDefault .Default }}
                 <span class="kv-sep" aria-hidden="true">=</span>
                 <code>{{ renderDefault .Default }}</code>
@@ -755,7 +757,10 @@
               <p class="block-label">Success Criteria</p>
               <ul class="success-block">
                 {{ range $step.SuccessCriteria }}
-                  <li><span class="check" aria-hidden="true">✓</span>{{ .Condition }}</li>
+                  <li>
+                    <span class="check" aria-hidden="true">✓</span>{{ .Condition }}
+                    {{ template "criterionMeta" . }}
+                  </li>
                 {{ end }}
               </ul>
             {{ end }}
@@ -802,7 +807,10 @@
                     {{ if .Criteria }}
                       <ul class="action-criteria">
                         {{ range .Criteria }}
-                          <li><span class="when">when</span>{{ .Condition }}</li>
+                          <li>
+                            <span class="when">when</span>{{ .Condition }}
+                            {{ template "criterionMeta" . }}
+                          </li>
                         {{ end }}
                       </ul>
                     {{ end }}
@@ -845,7 +853,10 @@
                     {{ if .Criteria }}
                       <ul class="action-criteria">
                         {{ range .Criteria }}
-                          <li><span class="when">when</span>{{ .Condition }}</li>
+                          <li>
+                            <span class="when">when</span>{{ .Condition }}
+                            {{ template "criterionMeta" . }}
+                          </li>
                         {{ end }}
                       </ul>
                     {{ end }}

@@ -3,11 +3,17 @@
 // validator is supposed to run upstream.
 package model
 
-// InputProperty is a single property listed under a workflow's `inputs` block.
+import "strings"
+
+// InputProperty is a single property listed under a workflow's `inputs`
+// block. Nested object properties are flattened to dotted names
+// ("user.name") for declaration purposes; arrays, enums and $ref stay
+// out of the model (the schema pass validates them).
 type InputProperty struct {
-	Name    string
-	Type    string
-	Default any
+	Name     string
+	Type     string
+	Default  any
+	Required bool
 }
 
 // Parameter is one entry of a step's `parameters` array. Reference is
@@ -40,9 +46,49 @@ type Replacement struct {
 	Value  any
 }
 
-// SuccessCriterion is one assertion checked after a step.
+// SuccessCriterion is one assertion checked after a step. Type is one
+// of the spec's simple/regex/jsonpath/xpath (empty means simple);
+// TypeVersion carries the Criterion Expression Type Object version
+// (written flat next to `type` per the official schema, or nested
+// under it per the spec prose). Context is the runtime expression the
+// condition is applied to, required by the spec whenever Type is set.
 type SuccessCriterion struct {
-	Condition string
+	Condition   string
+	Context     string
+	Type        string
+	TypeVersion string
+}
+
+// Describe returns the criterion for a generated comment: the condition
+// prefixed with its declared type and version, followed by its context.
+func (c SuccessCriterion) Describe() string {
+	out := c.Condition
+	if c.Type != "" || c.TypeVersion != "" {
+		typ := c.Type
+		if c.TypeVersion != "" {
+			typ = strings.TrimSpace(typ + " " + c.TypeVersion)
+		}
+		out = "[" + typ + "] " + out
+	}
+	if c.Context != "" {
+		out += "  (context: " + c.Context + ")"
+	}
+	return out
+}
+
+// IsSimple reports whether the criterion is in the spec's simple
+// condition mini-language, the only one the generators translate.
+func (c SuccessCriterion) IsSimple() bool {
+	return (c.Type == "" && c.TypeVersion == "") || c.Type == "simple"
+}
+
+// TypeLabel returns the input's type plus its required marker for
+// generated header comments.
+func (in InputProperty) TypeLabel() string {
+	if in.Required {
+		return in.Type + ", required"
+	}
+	return in.Type
 }
 
 // Step is one entry of a workflow's `steps` array. OperationID,
@@ -124,8 +170,8 @@ type OutputEntry struct {
 
 // Components holds the document's reusable objects (Components Object).
 // Reusable `inputs` schemas are accepted by the schema pass but not
-// modelled yet: workflow inputs are only read one property level deep
-// (issue #57 tracks the full JSON Schema depth).
+// modelled: workflow inputs only keep per-property type/default/required
+// (arrays, enums and $ref stay schema-only).
 type Components struct {
 	Parameters     map[string]Parameter
 	SuccessActions map[string]SuccessAction

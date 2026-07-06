@@ -1103,3 +1103,36 @@ func TestGenerateEmitsInheritedWorkflowParameters(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
 	assertContains(t, out, "X-Api-Key: k-1")
 }
+
+func TestGenerateDescribesTypedCriteriaAndRequiredInputs(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs: []model.InputProperty{
+			{Name: "username", Type: "string", Required: true},
+			{Name: "pageSize", Type: "integer"},
+		},
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			SuccessCriteria: []model.SuccessCriterion{
+				{Condition: "$statusCode == 200"},
+				{Condition: "$.pets[0].id == 1", Context: "$response.body", Type: "jsonpath", TypeVersion: "draft-goessner-dispatch-jsonpath-00"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "- username (string, required)")
+	assertContains(t, out, "- pageSize (integer)")
+	assertContains(t, out, "# $statusCode == 200")
+	assertContains(t, out, "# [jsonpath draft-goessner-dispatch-jsonpath-00] $.pets[0].id == 1  (context: $response.body)")
+}
+
+func TestGenerateNotesDottedInputNames(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "options.lang", Type: "string"}},
+		Steps:      []model.Step{{StepID: "list", OperationID: "listProducts"}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "note: dotted input names cannot become Hurl variables")
+}

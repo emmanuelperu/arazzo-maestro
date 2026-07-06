@@ -421,22 +421,37 @@ func parseWorkflow(n *yaml.Node) (model.Workflow, error) {
 }
 
 func parseInputs(n *yaml.Node) []model.InputProperty {
-	if n == nil || n.Kind != yaml.MappingNode {
-		return nil
+	var out []model.InputProperty
+	collectInputProperties(n, "", &out)
+	return out
+}
+
+// collectInputProperties walks one level of a JSON Schema object node:
+// its `properties` become InputProperty entries (marked by `required`),
+// and nested object properties recurse with a dotted prefix so they can
+// be declared and documented individually.
+func collectInputProperties(schema *yaml.Node, prefix string, out *[]model.InputProperty) {
+	if schema == nil || schema.Kind != yaml.MappingNode {
+		return
 	}
 	var properties *yaml.Node
-	for _, kv := range mappingPairs(n) {
-		if kv.Key == "properties" {
+	required := make(map[string]bool)
+	for _, kv := range mappingPairs(schema) {
+		switch kv.Key {
+		case "properties":
 			properties = kv.Value
-			break
+		case "required":
+			for _, name := range parseStringSequence(kv.Value) {
+				required[name] = true
+			}
 		}
 	}
 	if properties == nil || properties.Kind != yaml.MappingNode {
-		return nil
+		return
 	}
-	out := make([]model.InputProperty, 0, len(properties.Content)/2)
 	for _, kv := range mappingPairs(properties) {
-		prop := model.InputProperty{Name: kv.Key}
+		prop := model.InputProperty{Name: prefix + kv.Key, Required: required[kv.Key]}
+		var nested *yaml.Node
 		if kv.Value.Kind == yaml.MappingNode {
 			for _, specKV := range mappingPairs(kv.Value) {
 				switch specKV.Key {
@@ -444,12 +459,19 @@ func parseInputs(n *yaml.Node) []model.InputProperty {
 					prop.Type = scalarString(specKV.Value)
 				case "default":
 					prop.Default = nodeToAny(specKV.Value)
+				case "properties":
+					nested = kv.Value
 				}
 			}
 		}
-		out = append(out, prop)
+		// The parent row is always kept: the whole object stays
+		// referenceable ($inputs.user) and carries its own required
+		// marker and default; nested properties add dotted rows.
+		*out = append(*out, prop)
+		if nested != nil {
+			collectInputProperties(nested, prop.Name+".", out)
+		}
 	}
-	return out
 }
 
 func parseSteps(n *yaml.Node) ([]model.Step, error) {
@@ -713,10 +735,37 @@ func parseSuccessCriteria(n *yaml.Node) []model.SuccessCriterion {
 		if item.Kind != yaml.MappingNode {
 			continue
 		}
+		c := model.SuccessCriterion{}
 		for _, kv := range mappingPairs(item) {
-			if kv.Key == "condition" {
-				out = append(out, model.SuccessCriterion{Condition: scalarString(kv.Value)})
+			switch kv.Key {
+			case "condition":
+				c.Condition = scalarString(kv.Value)
+			case "context":
+				c.Context = scalarString(kv.Value)
+			case "version":
+				// The official JSON Schema validates the Criterion
+				// Expression Type Object flat: `version` next to `type`.
+				c.TypeVersion = scalarString(kv.Value)
+			case "type":
+				// The spec prose allows `type` to be the Criterion
+				// Expression Type Object itself ({type, version}); accept
+				// both that nested form and the plain scalar.
+				if kv.Value != nil && kv.Value.Kind == yaml.MappingNode {
+					for _, typeKV := range mappingPairs(kv.Value) {
+						switch typeKV.Key {
+						case "type":
+							c.Type = scalarString(typeKV.Value)
+						case "version":
+							c.TypeVersion = scalarString(typeKV.Value)
+						}
+					}
+				} else {
+					c.Type = scalarString(kv.Value)
+				}
 			}
+		}
+		if c.Condition != "" {
+			out = append(out, c)
 		}
 	}
 	return out

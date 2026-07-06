@@ -571,3 +571,125 @@ func TestParseWorkflowDefaultsAndMerge(t *testing.T) {
 		t.Errorf("workflow without defaults must not gain parameters")
 	}
 }
+
+func TestParseCriterionContextAndType(t *testing.T) {
+	const src = `
+arazzo: "1.1.0"
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationId: op
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            condition: $.pets[0].id == 1
+            type: jsonpath
+          - context: $response.body
+            condition: $[?count(@.pets) > 0]
+            type:
+              type: jsonpath
+              version: draft-goessner-dispatch-jsonpath-00
+`
+	doc, err := ParseBytes([]byte(src))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	crits := doc.Workflows[0].Steps[0].SuccessCriteria
+	if len(crits) != 3 {
+		t.Fatalf("len = %d, want 3", len(crits))
+	}
+	if crits[0].Type != "" || crits[0].Context != "" {
+		t.Errorf("simple criterion must stay bare: %+v", crits[0])
+	}
+	if crits[1].Type != "jsonpath" || crits[1].Context != "$response.body" || crits[1].TypeVersion != "" {
+		t.Errorf("scalar type form: %+v", crits[1])
+	}
+	if crits[2].Type != "jsonpath" || crits[2].TypeVersion != "draft-goessner-dispatch-jsonpath-00" {
+		t.Errorf("Expression Type Object form: %+v", crits[2])
+	}
+}
+
+func TestParseInputsRequiredAndNested(t *testing.T) {
+	const src = `
+arazzo: "1.1.0"
+workflows:
+  - workflowId: wf
+    inputs:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+        pageSize:
+          type: integer
+          default: 20
+        address:
+          type: object
+          required: [city]
+          properties:
+            city: { type: string }
+            zip: { type: string }
+    steps:
+      - stepId: a
+        operationId: op
+`
+	doc, err := ParseBytes([]byte(src))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	inputs := doc.Workflows[0].Inputs
+	byName := map[string]struct {
+		typ      string
+		required bool
+	}{}
+	for _, in := range inputs {
+		byName[in.Name] = struct {
+			typ      string
+			required bool
+		}{in.Type, in.Required}
+	}
+	if len(inputs) != 5 {
+		t.Fatalf("inputs = %+v, want username, pageSize, address, address.city, address.zip", inputs)
+	}
+	// The parent object row is kept so $inputs.address stays declared.
+	if byName["address"].typ != "object" {
+		t.Errorf("parent object row missing: %+v", byName)
+	}
+	if !byName["username"].required || byName["pageSize"].required {
+		t.Errorf("required markers wrong: %+v", byName)
+	}
+	// Nested properties flatten to dotted names with their own required.
+	if byName["address.city"].typ != "string" || !byName["address.city"].required {
+		t.Errorf("nested required property wrong: %+v", byName)
+	}
+	if byName["address.zip"].required {
+		t.Errorf("address.zip must not be required: %+v", byName)
+	}
+}
+
+func TestParseCriterionFlatExpressionTypeForm(t *testing.T) {
+	// The official schema validates the Criterion Expression Type Object
+	// flat: `version` is a sibling of `type`.
+	const src = `
+arazzo: "1.1.0"
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationId: op
+        successCriteria:
+          - context: $response.body
+            condition: $.pets[0].id == 1
+            type: jsonpath
+            version: draft-goessner-dispatch-jsonpath-00
+`
+	doc, err := ParseBytes([]byte(src))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	c := doc.Workflows[0].Steps[0].SuccessCriteria[0]
+	if c.Type != "jsonpath" || c.TypeVersion != "draft-goessner-dispatch-jsonpath-00" {
+		t.Errorf("flat form not parsed: %+v", c)
+	}
+}

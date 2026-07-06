@@ -262,6 +262,7 @@ func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool, 
 		}
 		for _, c := range step.SuccessCriteria {
 			issues = append(issues, checkStepsRef(c.Condition, wf, stepPath+".successCriteria", i)...)
+			issues = append(issues, checkStepsRef(c.Context, wf, stepPath+".successCriteria.context", i)...)
 		}
 		for ai, a := range step.OnSuccess {
 			if a.Inherited {
@@ -333,6 +334,7 @@ func checkAction(typ, stepID, workflowID string, criteria []model.SuccessCriteri
 	}
 	for _, c := range criteria {
 		issues = append(issues, checkStepsRef(c.Condition, wf, path+".criteria", critIndex)...)
+		issues = append(issues, checkStepsRef(c.Context, wf, path+".criteria.context", critIndex)...)
 	}
 	return issues
 }
