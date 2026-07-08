@@ -49,7 +49,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 |---|---|---|---|---|---|---|
 | `workflowId` | ✅ | ✅ uniqueness | ✅ | ✅ | ✅ | SHOULD-pattern not enforced (spec allows) |
 | `summary` / `description` | ✅ | ✅ | ✅ | ✅ | ✅ | CommonMark rendered as plain text |
-| `inputs` (JSON Schema 2020-12) | 🟡 | ✅ schema | 🟡 | 🟡 | 🟡 | Flattened to one level of `{type, default}`; `required`, nesting, enums dropped ([#57](https://github.com/emmanuelperu/arazzo-maestro/issues/57)) |
+| `inputs` (JSON Schema 2020-12) | 🟡 | ✅ schema | ✅ | ✅ | 🟡 | `required` carried through (render marker + generator doc-comment) and nested object properties flattened to dotted names for declaration (#57); arrays/items, enums and `$ref` remain schema-only |
 | `dependsOn` | ✅ | ✅ targets | ✅ Start block | n/a | ✅ | Each entry checked as a local workflowId or $sourceDescriptions form; rendered with links to local workflows (#50) |
 | `steps` | ✅ | ✅ | ✅ | ✅ | ✅ | |
 | `successActions` / `failureActions` (workflow-level) | ✅ | ✅ once at workflow level | ✅ badged per step | n/a | ✅ | Merged into every step at parse time with the per-step override-by-name rule; inherited copies badged `workflow` (#50) |
@@ -68,7 +68,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `parameters` | ✅ | ✅ schema | ✅ | ✅ | 🟡 | All five `in` locations emitted (cookie as `[Cookies]`/`cookies:`, querystring appended to the URL); Reusable entries inlined at parse time (#52); `in` conditional rule unvalidated |
 | `requestBody.contentType` / `payload` | ✅ | ✅ | ✅ | ✅ | ✅ | Whole-string and embedded `{$expr}` substitution; an omitted `contentType` defers to the operation's declared type, and a real `Content-Type` header reaches the request (#66) |
 | `requestBody.replacements` | ✅ | 😶 schema-only | ✅ shown | ✅ applied | ✅ | JSON-pointer target applied to the payload before expression substitution; unresolved targets flagged (#55) |
-| `successCriteria` | 🟡 | ✅ | 🟡 | 🟡 | 🟡 | Only `condition` survives the parser ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
+| `successCriteria` | ✅ | ✅ | ✅ | ✅ | ✅ | `context` and `type` carried through, incl. the Expression Type Object in both its flat (official schema) and nested (spec prose) forms; rendered as badges, named in generator comments, `context` references linted (#51) |
 | `onSuccess` / `onFailure` | ✅ | ✅ targets + criteria | ✅ | n/a | 🟡 | Mutual exclusivity stepId/workflowId only schema-checked; generators do not emit retry/goto logic |
 | `outputs` | ✅ | ✅ | ✅ | ✅ | ✅ | |
 
@@ -77,8 +77,8 @@ flagged with a named comment instead of shipping verbatim (#56).
 | Element | Status | Notes |
 |---|---|---|
 | Criterion `condition` (simple grammar) | 🟡 | k6 translates the `$statusCode <op> <number>` subset to real `check()`s; everything else is an explicit comment in both generators (never guessed) |
-| Criterion `context` / `type` (`simple`/`regex`/`jsonpath`/`xpath`) | 😶 | Schema enforces "context required with type"; dropped at the parser, indistinguishable downstream ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
-| Expression Type Object versions | ✅ schema | 1.1 values `rfc9535` and `jsonpointer`/`rfc6901` accepted since #47 (per the spec's Expression Type table, xpath versions stay 10/20/30); still dropped at the parser ([#51](https://github.com/emmanuelperu/arazzo-maestro/issues/51)) |
+| Criterion `context` / `type` (`simple`/`regex`/`jsonpath`/`xpath`) | ✅ | Schema enforces "context required with type"; both carried through the model, rendered, and named in untranslated-criterion comments; typed criteria are never translated as the simple grammar (#51) |
+| Expression Type Object versions | ✅ | 1.1 values `rfc9535` and `jsonpointer`/`rfc6901` accepted since #47 (per the spec's Expression Type table, xpath versions stay 10/20/30); carried through the model and rendered, in both the schema's flat form (`version` next to `type`) and the spec prose's nested form (#51) |
 | `retryAfter` | ✅ | Decimal seconds end to end (model `float64`, rendered `after Ns`) |
 | `retryLimit` | ✅ | Rendered `× N`, or the spec default `× 1` when unspecified; an explicit `0` is distinguished |
 

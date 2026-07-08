@@ -549,3 +549,34 @@ func TestRenderWorkflowShowsDependsOnAndInheritedBadges(t *testing.T) {
 		t.Error("own parameter must not carry the workflow badge")
 	}
 }
+
+func TestRenderWorkflowShowsCriterionTypeAndRequiredInputs(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs: []model.InputProperty{
+			{Name: "username", Type: "string", Required: true},
+			{Name: "address.city", Type: "string"},
+		},
+		Steps: []model.Step{{
+			StepID:      "a",
+			OperationID: "op",
+			SuccessCriteria: []model.SuccessCriterion{
+				{Condition: "$.pets[0].id == 1", Context: "$response.body", Type: "jsonpath", TypeVersion: "draft-goessner-dispatch-jsonpath-00"},
+			},
+		}},
+	}
+	html, err := RenderWorkflow(wf, nil, LayoutPortrait)
+	if err != nil {
+		t.Fatalf("RenderWorkflow: %v", err)
+	}
+	for _, want := range []string{
+		`<span class="kv-in">required</span>`,
+		"address.city",
+		"jsonpath · draft-goessner-dispatch-jsonpath-00",
+		"in $response.body",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("expected output to contain %q", want)
+		}
+	}
+}

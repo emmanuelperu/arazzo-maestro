@@ -95,8 +95,13 @@ func writeHeader(b *strings.Builder, wf model.Workflow, defaultBase string) {
 	}
 	if len(wf.Inputs) > 0 {
 		b.WriteString("#\n# Inputs (pass via `hurl --variable name=value`):\n")
+		dotted := false
 		for _, in := range wf.Inputs {
-			fmt.Fprintf(b, "#   - %s (%s)\n", in.Name, in.Type)
+			fmt.Fprintf(b, "#   - %s (%s)\n", in.Name, in.TypeLabel())
+			dotted = dotted || strings.ContainsRune(in.Name, '.')
+		}
+		if dotted {
+			b.WriteString("#   note: dotted input names cannot become Hurl variables; their references stay literal\n")
 		}
 	}
 	b.WriteString("\n")
@@ -431,7 +436,7 @@ func writeAsserts(b *strings.Builder, crits []model.SuccessCriterion) {
 	}
 	b.WriteString("[Asserts]\n")
 	for _, c := range crits {
-		fmt.Fprintf(b, "# %s\n", c.Condition)
+		fmt.Fprintf(b, "# %s\n", c.Describe())
 	}
 }
 

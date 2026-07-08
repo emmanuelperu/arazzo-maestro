@@ -535,3 +535,23 @@ workflows:
 		t.Errorf("expected self-dependency issue, got %v", issues)
 	}
 }
+
+func TestSemanticChecksCriterionContextRefs(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationId: op
+        successCriteria:
+          - context: $steps.ghost.outputs.body
+            condition: $.id == 1
+            type: jsonpath
+`
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintSemantic(doc)
+	if !containsMessage(issues, `step "ghost" does not exist`) {
+		t.Errorf("expected context reference issue, got %v", issues)
+	}
+}

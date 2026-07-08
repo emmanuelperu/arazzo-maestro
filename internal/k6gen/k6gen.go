@@ -97,7 +97,7 @@ func writeHeader(b *strings.Builder, wf model.Workflow, defaultBase string) {
 	if len(wf.Inputs) > 0 {
 		b.WriteString("//\n// Inputs: override each with `-e <name>=<value>`.\n")
 		for _, in := range wf.Inputs {
-			fmt.Fprintf(b, "//   - %s (%s)\n", in.Name, in.Type)
+			fmt.Fprintf(b, "//   - %s (%s)\n", in.Name, in.TypeLabel())
 		}
 	}
 	b.WriteString("\n")
@@ -120,8 +120,17 @@ func writeInputs(b *strings.Builder, inputs []model.InputProperty) {
 	if len(inputs) == 0 {
 		return
 	}
+	declared := make(map[string]bool, len(inputs))
 	for _, in := range inputs {
-		fmt.Fprintf(b, "const %s = __ENV[%s] || %s;\n", jsIdent(in.Name), jsString(in.Name), jsDefault(in.Default))
+		ident := jsIdent(in.Name)
+		if declared[ident] {
+			// Sanitisation can collide (e.g. "user.name" and "user_name"
+			// both become user_name); redeclaring would be a SyntaxError.
+			fmt.Fprintf(b, "// input %s collides with an earlier declaration after sanitisation\n", jsString(in.Name))
+			continue
+		}
+		declared[ident] = true
+		fmt.Fprintf(b, "const %s = __ENV[%s] || %s;\n", ident, jsString(in.Name), jsDefault(in.Default))
 	}
 	b.WriteString("\n")
 }
@@ -400,11 +409,13 @@ func writeChecks(b *strings.Builder, resVar, stepID string, crits []model.Succes
 	var predicates []string
 	var unsupported []string
 	for _, c := range crits {
-		if pred, ok := translateCondition(c.Condition); ok {
+		// Only the simple mini-language is translated; a typed criterion
+		// (regex/jsonpath/xpath) is in another language entirely.
+		if pred, ok := translateCondition(c.Condition); ok && c.IsSimple() {
 			predicates = append(predicates, fmt.Sprintf("    %s: (r) => %s,",
 				jsString(stepID+": "+c.Condition), pred))
 		} else {
-			unsupported = append(unsupported, c.Condition)
+			unsupported = append(unsupported, c.Describe())
 		}
 	}
 	for _, u := range unsupported {
