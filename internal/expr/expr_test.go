@@ -151,3 +151,29 @@ func TestUnescapeJSONPointer(t *testing.T) {
 		}
 	}
 }
+
+func TestParsePointerSuffixes(t *testing.T) {
+	cases := []struct {
+		in      string
+		kind    Kind
+		name    string
+		out     string
+		pointer string
+		hasPtr  bool
+	}{
+		{"$steps.list.outputs.pets#/0/id", KindStepOutput, "list", "pets", "0/id", true},
+		{"$inputs.opts#/lang", KindInput, "opts", "", "lang", true},
+		{"$inputs.opts", KindInput, "opts", "", "", false},
+		// A bare '#' is the RFC 6901 whole-document pointer: same value.
+		{"$inputs.opts#", KindInput, "opts", "", "", false},
+		// '#' not followed by '/' is not a pointer: unrecognised.
+		{"$inputs.opts#lang", KindUnknown, "", "", "", false},
+		{"$statusCode#/x", KindUnknown, "", "", "", false},
+	}
+	for _, tc := range cases {
+		e := Parse(tc.in)
+		if e.Kind != tc.kind || e.Name != tc.name || e.OutputName != tc.out || e.Pointer != tc.pointer || e.HasPointer != tc.hasPtr {
+			t.Errorf("Parse(%q) = %+v, want kind=%v name=%q out=%q ptr=%q hasPtr=%v", tc.in, e, tc.kind, tc.name, tc.out, tc.pointer, tc.hasPtr)
+		}
+	}
+}

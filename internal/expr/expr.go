@@ -45,32 +45,44 @@ type Expr struct {
 
 // Parse recognises the runtime-expression forms the generators translate.
 // Unrecognised input (including plain literals) yields KindUnknown with
-// the original string preserved in Raw.
+// the original string preserved in Raw. The spec applies the same
+// #/<json-pointer> sub-access to $inputs and $steps references in its
+// examples (e.g. $steps.someStepId.outputs.pets#/0/id), so those forms
+// carry an optional pointer like $response.body does.
 func Parse(s string) Expr {
 	e := strings.TrimSpace(s)
+	base, pointer, hasPointer := splitPointer(e)
 	switch {
 	case e == "$statusCode":
 		return Expr{Kind: KindStatusCode, Raw: s}
-	case e == "$response.body":
-		return Expr{Kind: KindResponseBody, Raw: s}
-	case strings.HasPrefix(e, "$response.body#/"):
-		return Expr{
-			Kind:       KindResponseBody,
-			Pointer:    strings.TrimPrefix(e, "$response.body#/"),
-			HasPointer: true,
-			Raw:        s,
+	case base == "$response.body":
+		return Expr{Kind: KindResponseBody, Pointer: pointer, HasPointer: hasPointer, Raw: s}
+	case strings.HasPrefix(base, "$inputs."):
+		if name := strings.TrimPrefix(base, "$inputs."); IsName(name) {
+			return Expr{Kind: KindInput, Name: name, Pointer: pointer, HasPointer: hasPointer, Raw: s}
 		}
-	case strings.HasPrefix(e, "$inputs."):
-		if name := strings.TrimPrefix(e, "$inputs."); IsName(name) {
-			return Expr{Kind: KindInput, Name: name, Raw: s}
-		}
-	case strings.HasPrefix(e, "$steps."):
-		rest := strings.TrimPrefix(e, "$steps.")
+	case strings.HasPrefix(base, "$steps."):
+		rest := strings.TrimPrefix(base, "$steps.")
 		if step, out, ok := splitStepOutput(rest); ok && IsName(step) && IsName(out) {
-			return Expr{Kind: KindStepOutput, Name: step, OutputName: out, Raw: s}
+			return Expr{Kind: KindStepOutput, Name: step, OutputName: out, Pointer: pointer, HasPointer: hasPointer, Raw: s}
 		}
 	}
 	return Expr{Kind: KindUnknown, Raw: s}
+}
+
+// splitPointer separates a runtime expression from its optional
+// #/<json-pointer> suffix. A bare "#" (the RFC 6901 whole-document
+// pointer) is treated as no pointer at all; anything after "#" that is
+// not a valid pointer start keeps the expression unrecognised.
+func splitPointer(e string) (base, pointer string, ok bool) {
+	idx := strings.IndexByte(e, '#')
+	if idx < 0 || idx == len(e)-1 {
+		return strings.TrimSuffix(e, "#"), "", false
+	}
+	if e[idx+1] != '/' {
+		return e, "", false
+	}
+	return e[:idx], e[idx+2:], true
 }
 
 // IsRuntimeExpression reports whether s is (the start of) an Arazzo

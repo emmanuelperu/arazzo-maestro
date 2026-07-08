@@ -555,3 +555,38 @@ workflows:
 		t.Errorf("expected context reference issue, got %v", issues)
 	}
 }
+
+func TestSemanticValidatesDottedOutputNames(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationId: op
+        outputs:
+          user.id: $response.body#/id
+      - stepId: b
+        operationId: op2
+        parameters:
+          - name: known
+            in: query
+            value: $steps.a.outputs.user.id
+          - name: ghost
+            in: query
+            value: $steps.a.outputs.no.such
+          - name: pointer
+            in: query
+            value: $steps.a.outputs.user.id#/x
+`
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintSemantic(doc)
+	if !containsMessage(issues, `does not declare output "no.such"`) {
+		t.Errorf("expected dotted-output existence issue, got %v", issues)
+	}
+	for _, i := range issues {
+		if strings.Contains(i.Message, `"user.id"`) {
+			t.Errorf("declared dotted output wrongly flagged: %s", i)
+		}
+	}
+}

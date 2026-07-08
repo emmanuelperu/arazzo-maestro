@@ -44,8 +44,12 @@ func (i Issue) String() string {
 }
 
 // stepsRefRe matches references of the form `$steps.<stepId>.outputs.<name>`.
-// stepId can contain hyphens; name is alphanumeric (with hyphen/underscore).
-var stepsRefRe = regexp.MustCompile(`\$steps\.([A-Za-z0-9_\-]+)\.outputs\.([A-Za-z0-9_\-]+)`)
+// stepId follows the spec's SHOULD pattern (no dots). The output name
+// accepts inner dots; the spec's name pattern also allows leading and
+// trailing dots, which this heuristic deliberately excludes so a ref
+// followed by prose punctuation is not swallowed into the name. A
+// #/<json-pointer> suffix naturally ends the match.
+var stepsRefRe = regexp.MustCompile(`\$steps\.([A-Za-z0-9_\-]+)\.outputs\.([A-Za-z0-9_\-](?:[A-Za-z0-9._\-]*[A-Za-z0-9_\-])?)`)
 
 // LintFile is the high-level entry point used by the CLI. It reads the
 // file, parses it, and runs the full three-pass linter.
@@ -423,10 +427,17 @@ func checkStepsRef(expr string, wf *model.Workflow, path string, stepIndex int) 
 			continue
 		}
 		if !hasOutput(step, targetOutput) {
+			msg := fmt.Sprintf("reference $steps.%s.outputs.%s: step %q does not declare output %q", targetStep, targetOutput, targetStep, targetOutput)
+			// Dots are legal in output names, so "o.f" is one name; when
+			// only its first segment is declared the author probably
+			// meant a #/<json-pointer> sub-access.
+			if first, rest, found := strings.Cut(targetOutput, "."); found && hasOutput(step, first) {
+				msg += fmt.Sprintf("\n\thint: to point into output %q, use $steps.%s.outputs.%s#/%s", first, targetStep, first, strings.ReplaceAll(rest, ".", "/"))
+			}
 			issues = append(issues, Issue{
 				Severity: SeverityError,
 				Path:     path,
-				Message:  fmt.Sprintf("reference $steps.%s.outputs.%s: step %q does not declare output %q", targetStep, targetOutput, targetStep, targetOutput),
+				Message:  msg,
 			})
 		}
 	}
