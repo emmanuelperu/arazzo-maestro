@@ -78,7 +78,7 @@ func Generate(wf model.Workflow, sources map[string]*oasresolver.Source, opts Op
 	writeHeader(&b, wf, defaultBaseURL(wf, sources))
 	writeImports(&b)
 	writeBaseURL(&b, defaultBaseURL(wf, sources))
-	writeInputs(&b, wf.Inputs)
+	writeInputs(&b, wf.Inputs, subAccessedInputs(wf))
 	writeOptions(&b, opts)
 	writeDefaultFunc(&b, wf, sources)
 	return b.String(), nil
@@ -115,8 +115,15 @@ func writeBaseURL(b *strings.Builder, defaultBase string) {
 // writeInputs declares one constant per workflow input, read from the
 // matching environment variable with the Arazzo default (or empty
 // string) as fallback. The constant name is the sanitised input name so
-// it matches what translateInlineExpr emits for $inputs.<name>.
-func writeInputs(b *strings.Builder, inputs []model.InputProperty) {
+// it matches what translateInlineExpr emits for $inputs.<name>. When
+// some reference sub-accesses an input with a #/<json-pointer> suffix,
+// the asJson helper is emitted: parsing happens per reference, so a
+// whole-value use of the same input keeps its plain string.
+func writeInputs(b *strings.Builder, inputs []model.InputProperty, subAccessed bool) {
+	if subAccessed {
+		b.WriteString("// asJson parses string values so #/<json-pointer> sub-accesses can navigate them.\n")
+		b.WriteString("function asJson(v) { return typeof v === \"string\" ? JSON.parse(v) : v; }\n\n")
+	}
 	if len(inputs) == 0 {
 		return
 	}
@@ -133,6 +140,30 @@ func writeInputs(b *strings.Builder, inputs []model.InputProperty) {
 		fmt.Fprintf(b, "const %s = __ENV[%s] || %s;\n", ident, jsString(in.Name), jsDefault(in.Default))
 	}
 	b.WriteString("\n")
+}
+
+// subAccessedInputs reports whether any reference sub-accesses an input
+// with a #/<json-pointer> suffix, scanning the same post-replacement
+// values the steps serialise.
+func subAccessedInputs(wf model.Workflow) bool {
+	for _, step := range wf.Steps {
+		if step.WorkflowID != "" {
+			continue
+		}
+		step.Parameters = resolvedParameters(step.Parameters)
+		var effective any
+		if step.RequestBody != nil {
+			effective, _ = payload.Apply(step.RequestBody.Payload, step.RequestBody.Replacements)
+		}
+		for _, value := range inlineValues(step, effective) {
+			for _, ref := range expr.CollectRefs(value) {
+				if e := expr.Parse(ref); e.Kind == expr.KindInput && e.HasPointer {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func writeOptions(b *strings.Builder, opts Options) {
@@ -325,8 +356,8 @@ func jsBodyValue(v any, declared map[string]bool) (string, error) {
 func swapBodyExprs(v any, declared map[string]bool, base string, repls *[]string) any {
 	switch t := v.(type) {
 	case string:
-		if ident, isExpr := exprIdent(t); isExpr && declared[ident] {
-			*repls = append(*repls, ident)
+		if jsExpr, isExpr := exprIdent(t); isExpr && declared[baseIdent(jsExpr)] {
+			*repls = append(*repls, jsExpr)
 			return bodyExprSentinel(base, len(*repls)-1)
 		}
 		if lit, ok := jsTemplateLiteral(t, declared); ok {
@@ -370,12 +401,12 @@ func jsTemplateLiteral(s string, declared map[string]bool) (string, bool) {
 	interpolated := false
 	for _, loc := range locs {
 		expr := s[loc[2]:loc[3]]
-		ident, isExpr := exprIdent(expr)
-		if !isExpr || !declared[ident] {
+		jsExpr, isExpr := exprIdent(expr)
+		if !isExpr || !declared[baseIdent(jsExpr)] {
 			continue
 		}
 		b.WriteString(jsTemplateEscaper.Replace(s[last:loc[0]]))
-		b.WriteString("${" + ident + "}")
+		b.WriteString("${" + jsExpr + "}")
 		last = loc[1]
 		interpolated = true
 	}
@@ -574,15 +605,15 @@ func querystringValue(params []model.Parameter, declared map[string]bool) string
 // inlined verbatim.
 func urlValue(v any, declared map[string]bool) string {
 	if s, ok := v.(string); ok {
-		if ident, isExpr := exprIdent(s); isExpr && declared[ident] {
-			return "${" + ident + "}"
+		if jsExpr, isExpr := exprIdent(s); isExpr && declared[baseIdent(jsExpr)] {
+			return "${" + jsExpr + "}"
 		}
 		// The value lands inside the request's backtick URL literal, so
 		// literal text must be escaped; the {$expr} pattern survives the
 		// escaper untouched.
 		return embeddedExprRe.ReplaceAllStringFunc(jsTemplateEscaper.Replace(s), func(m string) string {
-			if ident, isExpr := exprIdent(m[1 : len(m)-1]); isExpr && declared[ident] {
-				return "${" + ident + "}"
+			if jsExpr, isExpr := exprIdent(m[1 : len(m)-1]); isExpr && declared[baseIdent(jsExpr)] {
+				return "${" + jsExpr + "}"
 			}
 			return m
 		})
@@ -595,8 +626,8 @@ func urlValue(v any, declared map[string]bool) string {
 // template literal (embedded {$expr}), plain strings are quoted.
 func headerValue(v any, declared map[string]bool) string {
 	if s, ok := v.(string); ok {
-		if ident, isExpr := exprIdent(s); isExpr && declared[ident] {
-			return ident
+		if jsExpr, isExpr := exprIdent(s); isExpr && declared[baseIdent(jsExpr)] {
+			return jsExpr
 		}
 		if lit, ok := jsTemplateLiteral(s, declared); ok {
 			return lit
@@ -676,17 +707,47 @@ func inlineValues(s model.Step, effectiveBody any) []any {
 }
 
 // translateInlineExpr maps an inline runtime expression to the JS
-// identifier holding its value ($inputs.foo -> foo, $steps.s.outputs.o
-// -> s_o); anything else is returned unchanged.
+// expression reading its value ($inputs.foo -> foo, $steps.s.outputs.o
+// -> s_o); anything else is returned unchanged. A #/<json-pointer>
+// suffix becomes a bracket chain on the parsed value (arrays accept
+// string indices in JS, so every segment is emitted as a string key).
 func translateInlineExpr(s string) string {
-	switch e := expr.Parse(s); e.Kind {
+	e := expr.Parse(s)
+	var base string
+	switch e.Kind {
 	case expr.KindInput:
-		return jsIdent(e.Name)
+		base = jsIdent(e.Name)
 	case expr.KindStepOutput:
-		return jsIdent(e.Name) + "_" + jsIdent(e.OutputName)
+		base = jsIdent(e.Name) + "_" + jsIdent(e.OutputName)
 	default:
 		return s
 	}
+	if !e.HasPointer {
+		return base
+	}
+	var b strings.Builder
+	if e.Kind == expr.KindInput {
+		// Inputs come from __ENV as strings: parse per reference so a
+		// whole-value use of the same input stays a plain string.
+		b.WriteString("asJson(" + base + ")")
+	} else {
+		b.WriteString(base)
+	}
+	for _, seg := range strings.Split(e.Pointer, "/") {
+		b.WriteString("[" + jsString(expr.UnescapeJSONPointer(seg)) + "]")
+	}
+	return b.String()
+}
+
+// baseIdent returns the identifier a translated expression reads, which
+// is what must be declared: the bracket chain of a pointer sub-access
+// starts at the same base identifier, possibly wrapped in asJson().
+func baseIdent(jsExpr string) string {
+	if i := strings.IndexByte(jsExpr, '['); i >= 0 {
+		jsExpr = jsExpr[:i]
+	}
+	jsExpr = strings.TrimPrefix(jsExpr, "asJson(")
+	return strings.TrimSuffix(jsExpr, ")")
 }
 
 // jsonPointerToGJSON converts the body of a JSON Pointer (after '#/')

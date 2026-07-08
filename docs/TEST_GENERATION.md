@@ -41,8 +41,15 @@ Arazzo step features translated:
 | `$inputs.foo`              | `{{foo}}` (Hurl variable)                     |
 | `{$inputs.foo}` embedded in text | `{{foo}}` inside the string             |
 | `$steps.s.outputs.o`       | `{{s_o}}` (capture-chained)                   |
+| `$steps.s.outputs.o#/x/0`  | `{{s_o_x_0}}` (derived capture at step `s`, pointer folded into the source jsonpath) |
 | `$response.body#/x/y`      | `jsonpath "$.x.y"`                            |
 | `$statusCode`              | `status`                                      |
+
+`$inputs.foo#/x` stays flagged as untranslated in Hurl: a variable
+cannot be sub-accessed at render time (member access on a structured
+value is unrenderable and placeholder filters are silently ignored,
+verified against hurl 8.0.1). The k6 generator translates it through a
+per-reference `asJson()` parse instead.
 
 ## Running against your environment: `test run e2e`
 

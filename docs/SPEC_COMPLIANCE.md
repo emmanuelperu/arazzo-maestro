@@ -24,7 +24,7 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 
 | Gap | Issue |
 |---|---|
-| `#/json-pointer` suffixes on `$inputs`/`$steps...outputs` references are flagged but their sub-access is not yet translated; dotted names translate in k6 but are declined in Hurl (no dotted variable) | [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
+| Dotted names translate in k6 but are declined in Hurl: hurl reads `{{a.b}}` as member access, so a dotted name cannot become a Hurl variable (tool limitation, noted in the generated header) | [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
 
 Resolved non-compliances: 1.1 structural schema rejections (#47),
 `retryAfter` unit and `retryLimit` default (#41), cookie and
@@ -87,7 +87,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 | Form | Linter | Renderer | TestGen | Verdict |
 |---|---|---|---|---|
 | `$inputs.name`, `$steps.id.outputs.name` | ✅ existence + ordering | ✅ | ✅ | ✅ |
-| `$inputs.name#/ptr`, `$steps...outputs.name#/ptr` | 🟡 suffix ignored | ✅ highlighted | 🟡 flagged, sub-access deferred | 🟡 [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
+| `$inputs.name#/ptr`, `$steps...outputs.name#/ptr` | ✅ existence + ordering | ✅ highlighted | Step outputs: ✅ derived capture folding the pointer into the source jsonpath (Hurl) / JS navigation of the parsed value (k6). Inputs: ✅ per-reference parse in k6; flagged in Hurl, which has no render-time sub-access on a variable (verified against hurl 8.0.1) | 🟡 (#49) |
 | `$response.body#/ptr` (captures) | n/a | ✅ | ✅ | ✅ |
 | `$response.body` (whole body) | n/a | ✅ | ✅ `jsonpath "$"` / `res.json()` | ✅ |
 | `$statusCode` | n/a | ✅ | ✅ captures + k6 checks | ✅ |

@@ -1059,3 +1059,54 @@ func TestGenerateInputIdentCollisionIsGuarded(t *testing.T) {
 	}
 	assertContains(t, out, `// input "user_name" collides with an earlier declaration after sanitisation`)
 }
+
+func TestGeneratePointerRefsNavigateParsedValues(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "list", OperationID: "listProducts",
+				Outputs: []model.OutputEntry{{Name: "pets", Expression: "$response.body#/items"}}},
+			{StepID: "get", OperationID: "getProduct",
+				Parameters: []model.Parameter{{Name: "id", In: "path", Value: "$steps.list.outputs.pets#/0/id"}}},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	// The captured const is already parsed JSON: navigate it in JS.
+	assertContains(t, out, `${list_pets["0"]["id"]}`)
+	assertNotContains(t, out, "unsupported expression")
+}
+
+func TestGenerateSubAccessedInputUsesAsJson(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs: []model.InputProperty{
+			{Name: "opts", Type: "object", Default: map[string]any{"lang": "en"}},
+			{Name: "plain", Type: "string"},
+		},
+		Steps: []model.Step{{
+			StepID: "list", OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Name: "Accept-Language", In: "header", Value: "$inputs.opts#/lang"},
+				// The same input used whole keeps its raw string value.
+				{Name: "X-Raw", In: "header", Value: "$inputs.opts"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	// Parsing happens per reference through the helper, so declarations
+	// stay plain and whole-value uses are untouched.
+	assertContains(t, out, `function asJson(v) { return typeof v === "string" ? JSON.parse(v) : v; }`)
+	assertContains(t, out, `const opts = __ENV["opts"] || {"lang":"en"};`)
+	assertContains(t, out, `asJson(opts)["lang"]`)
+	assertContains(t, out, `"X-Raw": opts`)
+}
+
+func TestGenerateNoAsJsonHelperWithoutSubAccess(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "plain", Type: "string"}},
+		Steps:      []model.Step{{StepID: "list", OperationID: "listProducts"}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertNotContains(t, out, "asJson")
+}

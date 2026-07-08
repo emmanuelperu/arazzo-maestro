@@ -30,7 +30,13 @@
 // Arazzo runtime expressions are translated: $inputs.foo becomes
 // {{foo}}, $steps.s.outputs.o becomes {{s_o}}, $response.body#/x/y
 // becomes `jsonpath "$.x.y"`, and the spec's embedded {$expr} form is
-// interpolated in place. Unknown forms pass through unchanged.
+// interpolated in place. A #/<json-pointer> sub-access on a step
+// output becomes a derived capture at the producing step (the pointer
+// folded into the source jsonpath); on an input it stays untranslated
+// and flagged, because Hurl offers no render-time sub-access on a
+// variable (member access on a structured value is unrenderable and
+// placeholder filters are silently ignored, both verified against
+// hurl 8.0.1). Unknown forms pass through unchanged.
 //
 // The request host is never hard-coded: every request line is prefixed
 // with the {{baseUrl}} Hurl variable, so the same .hurl file can run
@@ -61,14 +67,143 @@ import (
 func Generate(wf model.Workflow, sources map[string]*oasresolver.Source) (string, error) {
 	var b strings.Builder
 	writeHeader(&b, wf, defaultBaseURL(wf, sources))
-	unquoted := nonStringInputs(wf.Inputs)
+	tr := newTranslator(wf, sources)
 	for i, step := range wf.Steps {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		writeStep(&b, step, sources, unquoted)
+		tr.writeStep(&b, step)
 	}
 	return b.String(), nil
+}
+
+// derivedCapture is an extra capture emitted at the step producing an
+// output that a later reference sub-accesses with a #/<json-pointer>
+// suffix: the pointer is folded into the source jsonpath, because Hurl
+// placeholders cannot navigate a structured capture at render time
+// (member access and filters on an Object value fail, verified against
+// hurl 8.0.1).
+type derivedCapture struct {
+	name  string
+	query string
+}
+
+// translator carries the per-Generate state the expression translation
+// needs: the loaded sources, the unquoted-input set, and the derived
+// captures planned by the pre-scan.
+type translator struct {
+	sources       map[string]*oasresolver.Source
+	unquoted      map[string]bool
+	derived       map[string]string // trimmed raw expression -> derived capture name
+	derivedByStep map[string][]derivedCapture
+}
+
+// newTranslator pre-scans the workflow for $steps output references
+// carrying a #/<json-pointer> suffix and plans one derived capture per
+// distinct (output, pointer) pair at the producing step.
+func newTranslator(wf model.Workflow, sources map[string]*oasresolver.Source) *translator {
+	tr := &translator{
+		sources:       sources,
+		unquoted:      nonStringInputs(wf.Inputs),
+		derived:       make(map[string]string),
+		derivedByStep: make(map[string][]derivedCapture),
+	}
+
+	// Outputs per step, excluding workflow-invoking steps: those emit no
+	// request, so their outputs are never captured and references to
+	// them must stay visibly untranslated.
+	outputs := make(map[string]map[string]string, len(wf.Steps))
+	taken := make(map[string]bool)
+	for _, step := range wf.Steps {
+		if step.WorkflowID != "" {
+			continue
+		}
+		outs := make(map[string]string, len(step.Outputs))
+		for _, o := range step.Outputs {
+			outs[o.Name] = o.Expression
+			taken[step.StepID+"_"+o.Name] = true
+		}
+		outputs[step.StepID] = outs
+	}
+
+	for _, step := range wf.Steps {
+		if step.WorkflowID != "" {
+			continue
+		}
+		// Match what writeStep serialises: unresolved reusable parameters
+		// are dropped there, so their values must not plan captures.
+		step.Parameters = resolvedParameters(step.Parameters)
+		var effective any
+		if step.RequestBody != nil {
+			effective, _ = payload.Apply(step.RequestBody.Payload, step.RequestBody.Replacements)
+		}
+		for _, value := range inlineValues(step, effective) {
+			for _, ref := range expr.CollectRefs(value) {
+				tr.planDerivedCapture(ref, outputs, taken)
+			}
+		}
+	}
+	return tr
+}
+
+// planDerivedCapture registers a derived capture for one referenced
+// expression when it is a pointer sub-access on a translatable step
+// output; anything else is left for the unsupported-expression scan.
+func (tr *translator) planDerivedCapture(ref string, outputs map[string]map[string]string, taken map[string]bool) {
+	key := strings.TrimSpace(ref)
+	if _, done := tr.derived[key]; done {
+		return
+	}
+	e := expr.Parse(ref)
+	if e.Kind != expr.KindStepOutput || !e.HasPointer {
+		return
+	}
+	if !hurlVarSafe(e.Name) || !hurlVarSafe(e.OutputName) {
+		return
+	}
+	srcExpr, declared := outputs[e.Name][e.OutputName]
+	if !declared {
+		return
+	}
+	// Fold the reference pointer into the source capture: only a
+	// $response.body output has a JSON document to point into.
+	src := expr.Parse(srcExpr)
+	if src.Kind != expr.KindResponseBody {
+		return
+	}
+	pointer := e.Pointer
+	if src.HasPointer {
+		pointer = src.Pointer + "/" + e.Pointer
+	}
+	path, ok := jsonPointerToJSONPath(pointer)
+	if !ok {
+		return
+	}
+	base := e.Name + "_" + e.OutputName + "_" + sanitizeVar(e.Pointer)
+	name := base
+	for i := 2; taken[name]; i++ {
+		name = fmt.Sprintf("%s_%d", base, i)
+	}
+	taken[name] = true
+	tr.derived[key] = name
+	tr.derivedByStep[e.Name] = append(tr.derivedByStep[e.Name], derivedCapture{
+		name:  name,
+		query: `jsonpath "` + path + `"`,
+	})
+}
+
+// sanitizeVar maps a JSON-pointer body to a Hurl-variable-safe suffix.
+func sanitizeVar(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
 }
 
 // nonStringInputs lists the inputs whose body templates are emitted
@@ -122,7 +257,7 @@ func defaultBaseURL(wf model.Workflow, sources map[string]*oasresolver.Source) s
 	return ""
 }
 
-func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source, unquoted map[string]bool) {
+func (tr *translator) writeStep(b *strings.Builder, s model.Step) {
 	fmt.Fprintf(b, "# Step: %s\n", s.StepID)
 	if s.Description != "" {
 		for _, line := range strings.Split(strings.TrimSpace(s.Description), "\n") {
@@ -148,7 +283,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	if s.RequestBody != nil {
 		effective, unresolved = payload.Apply(s.RequestBody.Payload, s.RequestBody.Replacements)
 	}
-	for _, e := range expr.UnsupportedInline(inlineValues(s, effective), translateInlineExpr) {
+	for _, e := range expr.UnsupportedInline(inlineValues(s, effective), tr.translateInlineExpr) {
 		fmt.Fprintf(b, "# unsupported expression (not translated): %s\n", e)
 	}
 	for _, p := range s.Parameters {
@@ -161,7 +296,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	// the dropped-comment above.
 	s.Parameters = resolvedParameters(s.Parameters)
 
-	op, method, url, ok := resolveRequestLine(s, sources)
+	op, method, url, ok := tr.resolveRequestLine(s)
 	if !ok {
 		method = "GET"
 		if s.OperationPath != "" {
@@ -175,7 +310,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 			url = "{{baseUrl}}/__unresolved__/" + s.OperationID
 		}
 	}
-	if qs := querystringValue(s.Parameters); qs != "" {
+	if qs := tr.querystringValue(s.Parameters); qs != "" {
 		sep := "?"
 		if strings.Contains(url, "?") {
 			sep = "&"
@@ -191,29 +326,29 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		ct, ctKnown = oasresolver.EffectiveContentType(s.RequestBody.ContentType, op.RequestContentTypes())
 	}
 
-	writeHeaders(b, s.Parameters)
+	tr.writeHeaders(b, s.Parameters)
 	if ctKnown && !hasHeaderParam(s.Parameters, "content-type") {
 		fmt.Fprintf(b, "Content-Type: %s\n", ct)
 	}
-	writeQuery(b, s.Parameters)
-	writeCookies(b, s.Parameters)
-	writeBody(b, s.RequestBody, effective, unresolved, ct, ctKnown, unquoted)
+	tr.writeQuery(b, s.Parameters)
+	tr.writeCookies(b, s.Parameters)
+	tr.writeBody(b, s.RequestBody, effective, unresolved, ct, ctKnown)
 
 	b.WriteString("\nHTTP *\n")
 	writeAsserts(b, s.SuccessCriteria)
-	writeCaptures(b, s.StepID, s.Outputs)
+	tr.writeCaptures(b, s.StepID, s.Outputs)
 }
 
-func writeHeaders(b *strings.Builder, params []model.Parameter) {
+func (tr *translator) writeHeaders(b *strings.Builder, params []model.Parameter) {
 	for _, p := range params {
 		if p.In != "header" {
 			continue
 		}
-		fmt.Fprintf(b, "%s: %s\n", p.Name, renderValue(p.Value))
+		fmt.Fprintf(b, "%s: %s\n", p.Name, tr.renderValue(p.Value))
 	}
 }
 
-func writeQuery(b *strings.Builder, params []model.Parameter) {
+func (tr *translator) writeQuery(b *strings.Builder, params []model.Parameter) {
 	first := true
 	for _, p := range params {
 		if p.In != "query" {
@@ -223,11 +358,11 @@ func writeQuery(b *strings.Builder, params []model.Parameter) {
 			b.WriteString("[QueryStringParams]\n")
 			first = false
 		}
-		fmt.Fprintf(b, "%s: %s\n", p.Name, renderValue(p.Value))
+		fmt.Fprintf(b, "%s: %s\n", p.Name, tr.renderValue(p.Value))
 	}
 }
 
-func writeCookies(b *strings.Builder, params []model.Parameter) {
+func (tr *translator) writeCookies(b *strings.Builder, params []model.Parameter) {
 	first := true
 	for _, p := range params {
 		if p.In != "cookie" {
@@ -237,16 +372,16 @@ func writeCookies(b *strings.Builder, params []model.Parameter) {
 			b.WriteString("[Cookies]\n")
 			first = false
 		}
-		fmt.Fprintf(b, "%s: %s\n", p.Name, renderValue(p.Value))
+		fmt.Fprintf(b, "%s: %s\n", p.Name, tr.renderValue(p.Value))
 	}
 }
 
 // querystringValue returns the rendered value of the querystring
 // parameter, the spec's whole-query-string location, or "".
-func querystringValue(params []model.Parameter) string {
+func (tr *translator) querystringValue(params []model.Parameter) string {
 	for _, p := range params {
 		if p.In == "querystring" {
-			return renderValue(p.Value)
+			return tr.renderValue(p.Value)
 		}
 	}
 	return ""
@@ -256,7 +391,7 @@ func querystringValue(params []model.Parameter) string {
 // payload (effective) and the unresolved replacement targets, both
 // computed once by writeStep so the inline scan and the serialised body
 // stay in sync.
-func writeBody(b *strings.Builder, body *model.RequestBody, effective any, unresolved []string, ct string, ctKnown bool, unquoted map[string]bool) {
+func (tr *translator) writeBody(b *strings.Builder, body *model.RequestBody, effective any, unresolved []string, ct string, ctKnown bool) {
 	if body == nil {
 		return
 	}
@@ -274,7 +409,7 @@ func writeBody(b *strings.Builder, body *model.RequestBody, effective any, unres
 	if payloadHasLiteralBraces(effective) {
 		b.WriteString("# warning: literal '{{' in the body is interpreted by Hurl templating at run time\n")
 	}
-	fmt.Fprintf(b, "```\n%s\n```\n", serialiseBody(effective, ct, unquoted))
+	fmt.Fprintf(b, "```\n%s\n```\n", tr.serialiseBody(effective, ct))
 }
 
 // inlineValues lists the values a step emits inline (parameter values and
@@ -338,22 +473,22 @@ func payloadHasLiteralBraces(v any) bool {
 
 // serialiseBody turns the requestBody payload into the text of the Hurl
 // body block, with runtime expressions translated to Hurl templates.
-func serialiseBody(payload any, ct string, unquoted map[string]bool) string {
+func (tr *translator) serialiseBody(payload any, ct string) string {
 	if s, ok := payload.(string); ok {
-		return renderValue(s)
+		return tr.renderValue(s)
 	}
 	if strings.Contains(ct, "json") {
-		if out, err := jsonBodyWithTemplates(payload, unquoted); err == nil {
+		if out, err := tr.jsonBodyWithTemplates(payload); err == nil {
 			return out
 		}
 	}
-	return fmt.Sprintf("%v", translateBodyExprs(payload))
+	return fmt.Sprintf("%v", tr.translateBodyExprs(payload))
 }
 
 // jsonBodyWithTemplates marshals the payload with expressions swapped
 // for sentinels absent from the payload itself, so a literal string can
 // never be mistaken for a template.
-func jsonBodyWithTemplates(payload any, unquoted map[string]bool) (string, error) {
+func (tr *translator) jsonBodyWithTemplates(payload any) (string, error) {
 	probe, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
@@ -363,7 +498,7 @@ func jsonBodyWithTemplates(payload any, unquoted map[string]bool) (string, error
 		base = "_" + base
 	}
 	var repls []string
-	swapped := swapBodyExprs(payload, unquoted, base, &repls)
+	swapped := tr.swapBodyExprs(payload, base, &repls)
 	raw, err := json.MarshalIndent(swapped, "", "  ")
 	if err != nil {
 		return "", err
@@ -375,19 +510,19 @@ func jsonBodyWithTemplates(payload any, unquoted map[string]bool) (string, error
 	return out, nil
 }
 
-func swapBodyExprs(v any, unquoted map[string]bool, base string, repls *[]string) any {
+func (tr *translator) swapBodyExprs(v any, base string, repls *[]string) any {
 	switch t := v.(type) {
 	case string:
-		tpl := translateInlineExpr(t)
+		tpl := tr.translateInlineExpr(t)
 		if tpl == t {
 			// Not a whole-string expression: translate the spec's
 			// embedded {$expr} occurrences in place; the result stays
 			// a plain string.
-			out, _ := translateEmbedded(t)
+			out, _ := tr.translateEmbedded(t)
 			return out
 		}
 		repl := `"` + tpl + `"`
-		if e := strings.TrimSpace(t); strings.HasPrefix(e, "$inputs.") && unquoted[strings.TrimPrefix(e, "$inputs.")] {
+		if e := strings.TrimSpace(t); strings.HasPrefix(e, "$inputs.") && tr.unquoted[strings.TrimPrefix(e, "$inputs.")] {
 			repl = tpl
 		}
 		*repls = append(*repls, repl)
@@ -395,13 +530,13 @@ func swapBodyExprs(v any, unquoted map[string]bool, base string, repls *[]string
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			out[k] = swapBodyExprs(val, unquoted, base, repls)
+			out[k] = tr.swapBodyExprs(val, base, repls)
 		}
 		return out
 	case []any:
 		out := make([]any, len(t))
 		for i, val := range t {
-			out[i] = swapBodyExprs(val, unquoted, base, repls)
+			out[i] = tr.swapBodyExprs(val, base, repls)
 		}
 		return out
 	default:
@@ -409,20 +544,20 @@ func swapBodyExprs(v any, unquoted map[string]bool, base string, repls *[]string
 	}
 }
 
-func translateBodyExprs(v any) any {
+func (tr *translator) translateBodyExprs(v any) any {
 	switch t := v.(type) {
 	case string:
-		return renderValue(t)
+		return tr.renderValue(t)
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			out[k] = translateBodyExprs(val)
+			out[k] = tr.translateBodyExprs(val)
 		}
 		return out
 	case []any:
 		out := make([]any, len(t))
 		for i, val := range t {
-			out[i] = translateBodyExprs(val)
+			out[i] = tr.translateBodyExprs(val)
 		}
 		return out
 	default:
@@ -444,26 +579,32 @@ func writeAsserts(b *strings.Builder, crits []model.SuccessCriterion) {
 // Capture variables are namespaced by step id (<stepId>_<outputName>)
 // so later steps can resolve them with the same translation that
 // $steps.<stepId>.outputs.<outputName> uses inline.
-func writeCaptures(b *strings.Builder, stepID string, outs []model.OutputEntry) {
-	if len(outs) == 0 {
+func (tr *translator) writeCaptures(b *strings.Builder, stepID string, outs []model.OutputEntry) {
+	derived := tr.derivedByStep[stepID]
+	if len(outs) == 0 && len(derived) == 0 {
 		return
 	}
 	b.WriteString("[Captures]\n")
 	for _, o := range outs {
 		fmt.Fprintf(b, "%s_%s: %s\n", stepID, o.Name, translateCaptureExpr(o.Expression))
 	}
+	// Derived captures serve later #/<json-pointer> sub-accesses on this
+	// step's outputs (the pointer is folded into the source jsonpath).
+	for _, d := range derived {
+		fmt.Fprintf(b, "%s: %s\n", d.name, d.query)
+	}
 }
 
 // resolveRequestLine returns the HTTP method and full URL for the
 // step, or ok=false when its operation reference could not be resolved
 // against the configured sources.
-func resolveRequestLine(s model.Step, sources map[string]*oasresolver.Source) (op oasresolver.Operation, method, url string, ok bool) {
-	op, ok = oasresolver.ResolveStepOperation(s, sources)
+func (tr *translator) resolveRequestLine(s model.Step) (op oasresolver.Operation, method, url string, ok bool) {
+	op, ok = oasresolver.ResolveStepOperation(s, tr.sources)
 	if !ok {
 		return oasresolver.Operation{}, "", "", false
 	}
 	// Always {{baseUrl}}, never op.BaseURL: requests stay environment-agnostic.
-	path := substitutePathParams(op.Path, s.Parameters)
+	path := tr.substitutePathParams(op.Path, s.Parameters)
 	return op, op.Method, "{{baseUrl}}" + path, true
 }
 
@@ -488,26 +629,26 @@ func outputNames(outs []model.OutputEntry) string {
 	return strings.Join(names, ", ")
 }
 
-func substitutePathParams(path string, params []model.Parameter) string {
+func (tr *translator) substitutePathParams(path string, params []model.Parameter) string {
 	for _, p := range params {
 		if p.In != "path" {
 			continue
 		}
 		placeholder := "{" + p.Name + "}"
-		path = strings.ReplaceAll(path, placeholder, renderValue(p.Value))
+		path = strings.ReplaceAll(path, placeholder, tr.renderValue(p.Value))
 	}
 	return path
 }
 
-func renderValue(v any) string {
+func (tr *translator) renderValue(v any) string {
 	s, ok := v.(string)
 	if !ok {
 		return fmt.Sprintf("%v", v)
 	}
-	if tpl := translateInlineExpr(s); tpl != s {
+	if tpl := tr.translateInlineExpr(s); tpl != s {
 		return tpl
 	}
-	out, _ := translateEmbedded(s)
+	out, _ := tr.translateEmbedded(s)
 	return out
 }
 
@@ -517,11 +658,11 @@ var embeddedExprRe = regexp.MustCompile(`\{(\$[^{}]+)\}`)
 
 // translateEmbedded replaces every embedded {$expr} whose expression is
 // recognised with its Hurl template; unrecognised ones pass through.
-func translateEmbedded(s string) (string, bool) {
+func (tr *translator) translateEmbedded(s string) (string, bool) {
 	changed := false
 	out := embeddedExprRe.ReplaceAllStringFunc(s, func(m string) string {
 		expr := m[1 : len(m)-1]
-		if tpl := translateInlineExpr(expr); tpl != expr {
+		if tpl := tr.translateInlineExpr(expr); tpl != expr {
 			changed = true
 			return tpl
 		}
@@ -532,15 +673,26 @@ func translateEmbedded(s string) (string, bool) {
 
 // translateInlineExpr maps an inline runtime expression to a Hurl
 // template ($inputs.foo -> {{foo}}, $steps.s.outputs.o -> {{s_o}});
-// anything else is returned unchanged so the user can spot it.
-func translateInlineExpr(s string) string {
+// anything else is returned unchanged so the user can spot it. A
+// #/<json-pointer> suffix on a step output resolves to the derived
+// capture the pre-scan planned; on an input it is declined: Hurl has
+// no render-time sub-access on a variable (member access on a
+// structured value is unrenderable and placeholder filters are
+// silently ignored, both verified against hurl 8.0.1).
+func (tr *translator) translateInlineExpr(s string) string {
 	switch e := expr.Parse(s); e.Kind {
 	case expr.KindInput:
-		if hurlVarSafe(e.Name) {
+		if hurlVarSafe(e.Name) && !e.HasPointer {
 			return "{{" + e.Name + "}}"
 		}
 		return s
 	case expr.KindStepOutput:
+		if e.HasPointer {
+			if name, ok := tr.derived[strings.TrimSpace(s)]; ok {
+				return "{{" + name + "}}"
+			}
+			return s
+		}
 		if hurlVarSafe(e.Name) && hurlVarSafe(e.OutputName) {
 			return "{{" + e.Name + "_" + e.OutputName + "}}"
 		}

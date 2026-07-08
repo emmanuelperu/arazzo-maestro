@@ -1136,3 +1136,82 @@ func TestGenerateNotesDottedInputNames(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
 	assertContains(t, out, "note: dotted input names cannot become Hurl variables")
 }
+
+func TestGenerateDerivedCapturesForPointerRefs(t *testing.T) {
+	// The spec's own example shape: $steps.someStepId.outputs.pets#/0/id.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "list", OperationID: "listProducts",
+				Outputs: []model.OutputEntry{
+					{Name: "pets", Expression: "$response.body#/items"},
+					{Name: "body", Expression: "$response.body"},
+				}},
+			{StepID: "get", OperationID: "getProduct",
+				Parameters: []model.Parameter{
+					{Name: "id", In: "path", Value: "$steps.list.outputs.pets#/0/id"},
+					{Name: "X-Total", In: "header", Value: "$steps.list.outputs.body#/meta/total"},
+				}},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	// The pointer folds into the source capture's jsonpath.
+	assertContains(t, out, `list_pets_0_id: jsonpath "$.items[0].id"`)
+	assertContains(t, out, `list_body_meta_total: jsonpath "$.meta.total"`)
+	// References resolve to the derived variables.
+	assertContains(t, out, "GET {{baseUrl}}/products/{{list_pets_0_id}}")
+	assertContains(t, out, "X-Total: {{list_body_meta_total}}")
+	assertNotContains(t, out, "unsupported expression")
+}
+
+func TestGenerateInputPointerStaysFlagged(t *testing.T) {
+	// Hurl has no render-time sub-access on a variable (member access is
+	// unrenderable and placeholder filters are silently ignored, both
+	// verified against hurl 8.0.1), so the reference must stay visible.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "opts", Type: "object"}},
+		Steps: []model.Step{{
+			StepID: "list", OperationID: "listProducts",
+			Parameters: []model.Parameter{{Name: "Accept-Language", In: "header", Value: "$inputs.opts#/lang"}},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "# unsupported expression (not translated): $inputs.opts#/lang")
+	assertNotContains(t, out, "jsonpath \"$.lang\"}}")
+}
+
+func TestGeneratePointerRefOnNonBodyOutputStaysFlagged(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "list", OperationID: "listProducts",
+				Outputs: []model.OutputEntry{{Name: "code", Expression: "$statusCode"}}},
+			{StepID: "get", OperationID: "getProduct",
+				Parameters: []model.Parameter{{Name: "id", In: "path", Value: "$steps.list.outputs.code#/x"}}},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	// A status capture has no JSON document to point into.
+	assertContains(t, out, "# unsupported expression (not translated): $steps.list.outputs.code#/x")
+}
+
+func TestGenerateDerivedCaptureNameCollisionGetsSuffix(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "list", OperationID: "listProducts",
+				Outputs: []model.OutputEntry{
+					{Name: "pets", Expression: "$response.body#/items"},
+					// A real output whose capture name equals the derived name.
+					{Name: "pets_0_id", Expression: "$response.body#/first"},
+				}},
+			{StepID: "get", OperationID: "getProduct",
+				Parameters: []model.Parameter{{Name: "id", In: "path", Value: "$steps.list.outputs.pets#/0/id"}}},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, `list_pets_0_id: jsonpath "$.first"`)
+	assertContains(t, out, `list_pets_0_id_2: jsonpath "$.items[0].id"`)
+	assertContains(t, out, "GET {{baseUrl}}/products/{{list_pets_0_id_2}}")
+}

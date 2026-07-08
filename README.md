@@ -208,12 +208,17 @@ The short version:
   merged into every step (overridable per step), `dependsOn` targets
   are validated and rendered, `Criterion.type`/`context` and input
   `required`/nested properties are carried through.
-- **Known non-compliances** (each tracked): `#/json-pointer` suffixes
-  on `$inputs`/`$steps` expressions are not translated by the
-  generators. The embedded schema is the official **1.0** one with the
-  1.1 structural additions (`$self`, `channelPath`, `in: querystring`,
-  AsyncAPI sources, expression versions) grafted on at load time, so
-  1.1 documents lint; their semantics are not implemented yet.
+- **Known non-compliances** (each tracked): dotted names and
+  `$inputs` pointer sub-access cannot be rendered by Hurl (templating
+  limitations, flagged in the generated file); `#/json-pointer`
+  sub-access on `$steps` outputs IS translated in both generators
+  (derived captures in Hurl, value navigation in k6), and `$inputs`
+  sub-access is translated in k6. The embedded schema is the official
+  **1.0**
+  one with the 1.1 structural additions (`$self`, `channelPath`,
+  `in: querystring`, AsyncAPI sources, expression versions) grafted on
+  at load time, so 1.1 documents lint; their semantics are not
+  implemented yet.
 
 ### 🧪 Test generation
 
