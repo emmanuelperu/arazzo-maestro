@@ -1,0 +1,22 @@
+services:
+
+  mongo:
+    image: mongo:7.0
+    container_name: arazzo-microcks-db
+    # tmpfs keeps the mock dataset ephemeral: every start re-imports the
+    # contracts, so the mocks always reflect the committed specs.
+    tmpfs:
+      - /data/db
+
+  app:
+    depends_on:
+      - mongo
+    image: quay.io/microcks/microcks:1.13.2
+    container_name: arazzo-microcks
+    ports:
+      - "8082:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017
+      - SPRING_DATA_MONGODB_DATABASE=microcks
+      - KEYCLOAK_ENABLED=false
