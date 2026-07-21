@@ -30,7 +30,11 @@
 // Arazzo runtime expressions are translated: $inputs.foo becomes
 // {{foo}}, $steps.s.outputs.o becomes {{s_o}}, $response.body#/x/y
 // becomes `jsonpath "$.x.y"`, and the spec's embedded {$expr} form is
-// interpolated in place. A #/<json-pointer> sub-access on a step
+// interpolated in place. A step-output reference only translates when
+// the producing step actually emits the capture: outputs of a
+// workflowId step (no request, no [Captures]) and undeclared outputs
+// stay untranslated and flagged, so the file never references a Hurl
+// variable nothing defines. A #/<json-pointer> sub-access on a step
 // output becomes a derived capture at the producing step (the pointer
 // folded into the source jsonpath); on an input it stays untranslated
 // and flagged, because Hurl offers no render-time sub-access on a
@@ -49,7 +53,6 @@ import (
 	"encoding/json"
 	"fmt"
 	neturl "net/url"
-	"regexp"
 	"strings"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
@@ -66,7 +69,7 @@ import (
 // unresolved placeholder.
 func Generate(wf model.Workflow, sources map[string]*oasresolver.Source) (string, error) {
 	var b strings.Builder
-	writeHeader(&b, wf, defaultBaseURL(wf, sources))
+	writeHeader(&b, wf, oasresolver.DefaultBaseURL(wf, sources))
 	tr := newTranslator(wf, sources)
 	for i, step := range wf.Steps {
 		if i > 0 {
@@ -89,22 +92,26 @@ type derivedCapture struct {
 }
 
 // translator carries the per-Generate state the expression translation
-// needs: the loaded sources, the unquoted-input set, and the derived
-// captures planned by the pre-scan.
+// needs: the loaded sources, the unquoted-input set, the outputs that
+// will actually be captured, and the derived captures planned by the
+// pre-scan.
 type translator struct {
 	sources       map[string]*oasresolver.Source
 	unquoted      map[string]bool
-	derived       map[string]string // trimmed raw expression -> derived capture name
+	captured      map[string]map[string]string // stepID -> output name -> expression
+	derived       map[string]string            // trimmed raw expression -> derived capture name
 	derivedByStep map[string][]derivedCapture
 }
 
-// newTranslator pre-scans the workflow for $steps output references
-// carrying a #/<json-pointer> suffix and plans one derived capture per
-// distinct (output, pointer) pair at the producing step.
+// newTranslator indexes the outputs that will get a [Captures] entry and
+// pre-scans the workflow for $steps output references carrying a
+// #/<json-pointer> suffix, planning one derived capture per distinct
+// (output, pointer) pair at the producing step.
 func newTranslator(wf model.Workflow, sources map[string]*oasresolver.Source) *translator {
 	tr := &translator{
 		sources:       sources,
 		unquoted:      nonStringInputs(wf.Inputs),
+		captured:      make(map[string]map[string]string, len(wf.Steps)),
 		derived:       make(map[string]string),
 		derivedByStep: make(map[string][]derivedCapture),
 	}
@@ -112,7 +119,6 @@ func newTranslator(wf model.Workflow, sources map[string]*oasresolver.Source) *t
 	// Outputs per step, excluding workflow-invoking steps: those emit no
 	// request, so their outputs are never captured and references to
 	// them must stay visibly untranslated.
-	outputs := make(map[string]map[string]string, len(wf.Steps))
 	taken := make(map[string]bool)
 	for _, step := range wf.Steps {
 		if step.WorkflowID != "" {
@@ -123,7 +129,7 @@ func newTranslator(wf model.Workflow, sources map[string]*oasresolver.Source) *t
 			outs[o.Name] = o.Expression
 			taken[step.StepID+"_"+o.Name] = true
 		}
-		outputs[step.StepID] = outs
+		tr.captured[step.StepID] = outs
 	}
 
 	for _, step := range wf.Steps {
@@ -132,14 +138,14 @@ func newTranslator(wf model.Workflow, sources map[string]*oasresolver.Source) *t
 		}
 		// Match what writeStep serialises: unresolved reusable parameters
 		// are dropped there, so their values must not plan captures.
-		step.Parameters = resolvedParameters(step.Parameters)
+		step.Parameters = model.ResolvedParameters(step.Parameters)
 		var effective any
 		if step.RequestBody != nil {
 			effective, _ = payload.Apply(step.RequestBody.Payload, step.RequestBody.Replacements)
 		}
-		for _, value := range inlineValues(step, effective) {
+		for _, value := range model.InlineValues(step, effective) {
 			for _, ref := range expr.CollectRefs(value) {
-				tr.planDerivedCapture(ref, outputs, taken)
+				tr.planDerivedCapture(ref, taken)
 			}
 		}
 	}
@@ -149,7 +155,7 @@ func newTranslator(wf model.Workflow, sources map[string]*oasresolver.Source) *t
 // planDerivedCapture registers a derived capture for one referenced
 // expression when it is a pointer sub-access on a translatable step
 // output; anything else is left for the unsupported-expression scan.
-func (tr *translator) planDerivedCapture(ref string, outputs map[string]map[string]string, taken map[string]bool) {
+func (tr *translator) planDerivedCapture(ref string, taken map[string]bool) {
 	key := strings.TrimSpace(ref)
 	if _, done := tr.derived[key]; done {
 		return
@@ -161,7 +167,7 @@ func (tr *translator) planDerivedCapture(ref string, outputs map[string]map[stri
 	if !hurlVarSafe(e.Name) || !hurlVarSafe(e.OutputName) {
 		return
 	}
-	srcExpr, declared := outputs[e.Name][e.OutputName]
+	srcExpr, declared := tr.captured[e.Name][e.OutputName]
 	if !declared {
 		return
 	}
@@ -242,21 +248,6 @@ func writeHeader(b *strings.Builder, wf model.Workflow, defaultBase string) {
 	b.WriteString("\n")
 }
 
-// defaultBaseURL returns the OpenAPI `servers:` URL backing the
-// workflow's first resolvable step, or "" when no step resolves or none
-// of the sources declares a server. It is documentation only: requests
-// always use the {{baseUrl}} variable so the value can be overridden per
-// environment at run time.
-func defaultBaseURL(wf model.Workflow, sources map[string]*oasresolver.Source) string {
-	for _, s := range wf.Steps {
-		op, ok := oasresolver.ResolveStepOperation(s, sources)
-		if ok && op.BaseURL != "" {
-			return op.BaseURL
-		}
-	}
-	return ""
-}
-
 func (tr *translator) writeStep(b *strings.Builder, s model.Step) {
 	fmt.Fprintf(b, "# Step: %s\n", s.StepID)
 	if s.Description != "" {
@@ -266,14 +257,27 @@ func (tr *translator) writeStep(b *strings.Builder, s model.Step) {
 	}
 	if s.WorkflowID != "" {
 		fmt.Fprintf(b, "# not supported: this step invokes workflow %q (workflowId); no request generated\n", s.WorkflowID)
-		if len(s.Parameters) > 0 {
+		// Workflow-level parameter defaults reach every step, so only the
+		// step's own parameters justify the warning.
+		if len(model.OwnParameters(s.Parameters)) > 0 {
 			b.WriteString("# warning: parameters are not forwarded to the invoked workflow\n")
 		}
 		if len(s.Outputs) > 0 {
-			fmt.Fprintf(b, "# warning: outputs %s are not captured; later references to them stay unresolved\n", outputNames(s.Outputs))
+			fmt.Fprintf(b, "# warning: outputs %s are not captured; later references to them stay unresolved\n", model.OutputNames(s.Outputs))
 		}
 		return
 	}
+
+	for _, p := range s.Parameters {
+		if p.Reference != "" {
+			fmt.Fprintf(b, "# unresolved component reference (parameter dropped): %s\n", p.Reference)
+		}
+	}
+	// s is a copy: dropping unresolved entries here, before the scan,
+	// keeps the unsupported-expression comments and every writer below
+	// (headers, query, path, cookies, body) consistent with the
+	// dropped-comment above.
+	s.Parameters = model.ResolvedParameters(s.Parameters)
 
 	// Apply payload replacements once, up front: the unsupported-expression
 	// scan and the serialised body must agree on the same (post-replacement)
@@ -283,18 +287,9 @@ func (tr *translator) writeStep(b *strings.Builder, s model.Step) {
 	if s.RequestBody != nil {
 		effective, unresolved = payload.Apply(s.RequestBody.Payload, s.RequestBody.Replacements)
 	}
-	for _, e := range expr.UnsupportedInline(inlineValues(s, effective), tr.translateInlineExpr) {
+	for _, e := range expr.UnsupportedInline(model.InlineValues(s, effective), tr.translateInlineExpr) {
 		fmt.Fprintf(b, "# unsupported expression (not translated): %s\n", e)
 	}
-	for _, p := range s.Parameters {
-		if p.Reference != "" {
-			fmt.Fprintf(b, "# unresolved component reference (parameter dropped): %s\n", p.Reference)
-		}
-	}
-	// s is a copy: dropping unresolved entries here keeps every writer
-	// below (headers, query, path, cookies, body scan) consistent with
-	// the dropped-comment above.
-	s.Parameters = resolvedParameters(s.Parameters)
 
 	op, method, url, ok := tr.resolveRequestLine(s)
 	if !ok {
@@ -410,20 +405,6 @@ func (tr *translator) writeBody(b *strings.Builder, body *model.RequestBody, eff
 		b.WriteString("# warning: literal '{{' in the body is interpreted by Hurl templating at run time\n")
 	}
 	fmt.Fprintf(b, "```\n%s\n```\n", tr.serialiseBody(effective, ct))
-}
-
-// inlineValues lists the values a step emits inline (parameter values and
-// the request body after replacements) for the unsupported-expression
-// scan, so the scan sees exactly what gets serialised.
-func inlineValues(s model.Step, effectiveBody any) []any {
-	values := make([]any, 0, len(s.Parameters)+1)
-	for _, p := range s.Parameters {
-		values = append(values, p.Value)
-	}
-	if s.RequestBody != nil {
-		values = append(values, effectiveBody)
-	}
-	return values
 }
 
 // compactValue renders a replacement value for a comment: JSON when it
@@ -608,27 +589,6 @@ func (tr *translator) resolveRequestLine(s model.Step) (op oasresolver.Operation
 	return op, op.Method, "{{baseUrl}}" + path, true
 }
 
-// resolvedParameters filters out unresolved Reusable Object entries:
-// they are announced as dropped and must not reach the request.
-func resolvedParameters(params []model.Parameter) []model.Parameter {
-	out := make([]model.Parameter, 0, len(params))
-	for _, p := range params {
-		if p.Reference == "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-// outputNames joins the declared output names for a comment.
-func outputNames(outs []model.OutputEntry) string {
-	names := make([]string, len(outs))
-	for i, o := range outs {
-		names[i] = o.Name
-	}
-	return strings.Join(names, ", ")
-}
-
 func (tr *translator) substitutePathParams(path string, params []model.Parameter) string {
 	for _, p := range params {
 		if p.In != "path" {
@@ -652,15 +612,11 @@ func (tr *translator) renderValue(v any) string {
 	return out
 }
 
-// embeddedExprRe matches the spec's embedded form: a runtime expression
-// wrapped in {} curly braces inside a string value.
-var embeddedExprRe = regexp.MustCompile(`\{(\$[^{}]+)\}`)
-
 // translateEmbedded replaces every embedded {$expr} whose expression is
 // recognised with its Hurl template; unrecognised ones pass through.
 func (tr *translator) translateEmbedded(s string) (string, bool) {
 	changed := false
-	out := embeddedExprRe.ReplaceAllStringFunc(s, func(m string) string {
+	out := expr.EmbeddedRe.ReplaceAllStringFunc(s, func(m string) string {
 		expr := m[1 : len(m)-1]
 		if tpl := tr.translateInlineExpr(expr); tpl != expr {
 			changed = true
@@ -673,12 +629,14 @@ func (tr *translator) translateEmbedded(s string) (string, bool) {
 
 // translateInlineExpr maps an inline runtime expression to a Hurl
 // template ($inputs.foo -> {{foo}}, $steps.s.outputs.o -> {{s_o}});
-// anything else is returned unchanged so the user can spot it. A
-// #/<json-pointer> suffix on a step output resolves to the derived
-// capture the pre-scan planned; on an input it is declined: Hurl has
-// no render-time sub-access on a variable (member access on a
-// structured value is unrenderable and placeholder filters are
-// silently ignored, both verified against hurl 8.0.1).
+// anything else is returned unchanged so the user can spot it. A step
+// output only translates when its step will emit the capture (declared
+// output of a non-workflowId step), so the file never references a Hurl
+// variable nothing defines. A #/<json-pointer> suffix on a step output
+// resolves to the derived capture the pre-scan planned; on an input it
+// is declined: Hurl has no render-time sub-access on a variable (member
+// access on a structured value is unrenderable and placeholder filters
+// are silently ignored, both verified against hurl 8.0.1).
 func (tr *translator) translateInlineExpr(s string) string {
 	switch e := expr.Parse(s); e.Kind {
 	case expr.KindInput:
@@ -691,6 +649,9 @@ func (tr *translator) translateInlineExpr(s string) string {
 			if name, ok := tr.derived[strings.TrimSpace(s)]; ok {
 				return "{{" + name + "}}"
 			}
+			return s
+		}
+		if _, ok := tr.captured[e.Name][e.OutputName]; !ok {
 			return s
 		}
 		if hurlVarSafe(e.Name) && hurlVarSafe(e.OutputName) {

@@ -1044,20 +1044,77 @@ func TestGenerateTypedCriteriaAreNotTranslated(t *testing.T) {
 	assertContains(t, out, "// successCriteria (not translated): [regex] $statusCode == 200  (context: $response.body)")
 }
 
-func TestGenerateInputIdentCollisionIsGuarded(t *testing.T) {
+func TestGenerateInputIdentCollisionIsSuffixed(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",
 		Inputs: []model.InputProperty{
 			{Name: "user.name", Type: "string"},
 			{Name: "user_name", Type: "string"},
 		},
-		Steps: []model.Step{{StepID: "list", OperationID: "listProducts"}},
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				Payload: map[string]any{
+					"nested": "$inputs.user.name",
+					"flat":   "$inputs.user_name",
+				},
+			},
+		}},
 	}
 	out := gen(t, wf, shopSources(t), defaultOpts())
-	if strings.Count(out, "const user_name =") != 1 {
-		t.Errorf("sanitised idents must be declared once:\n%s", out)
+	// Each input keeps its own constant and environment variable; the
+	// second declaration gets a suffixed identifier instead of silently
+	// reading the first input's value.
+	assertContains(t, out, `const user_name = __ENV["user.name"]`)
+	assertContains(t, out, `const user_name_2 = __ENV["user_name"]`)
+	assertContains(t, out, `// input "user_name": identifier user_name was already taken, declared as user_name_2`)
+	// References translate by exact name to the right constant.
+	assertContains(t, out, "\"nested\": user_name\n")
+	assertContains(t, out, `"flat": user_name_2`)
+}
+
+func TestGenerateUndeclaredInputRefStaysLiteral(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "user_name", Type: "string"}},
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				// "user.name" is not a declared input: it must not silently
+				// bind to user_name just because the identifiers collide.
+				Payload: map[string]any{"name": "$inputs.user.name"},
+			},
+		}},
 	}
-	assertContains(t, out, `// input "user_name" collides with an earlier declaration after sanitisation`)
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, `"name": "$inputs.user.name"`)
+	assertContains(t, out, "// unsupported expression (not translated): $inputs.user.name")
+}
+
+func TestGenerateInputNamedAsJSONDoesNotCollideWithHelper(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "asJson", Type: "string"}},
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				// The pointer sub-access forces the asJson helper into the
+				// script, in the same scope as the input constants.
+				Payload: map[string]any{"v": "$inputs.asJson#/k"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "function asJson(v)")
+	assertContains(t, out, `const asJson_2 = __ENV["asJson"]`)
+	assertContains(t, out, `asJson(asJson_2)["k"]`)
+	assertNotContains(t, out, "const asJson =")
 }
 
 func TestGeneratePointerRefsNavigateParsedValues(t *testing.T) {
@@ -1109,4 +1166,56 @@ func TestGenerateNoAsJsonHelperWithoutSubAccess(t *testing.T) {
 	}
 	out := gen(t, wf, shopSources(t), defaultOpts())
 	assertNotContains(t, out, "asJson")
+}
+
+func TestGenerateEmbeddedRefInsideDollarLeadingLiteralEmitsHelper(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Inputs:     []model.InputProperty{{Name: "coupon", Type: "string"}},
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{
+				ContentType: "application/json",
+				// A '$'-leading literal used to hide the embedded sub-access
+				// from the pre-scan, so asJson was interpolated but never
+				// declared (ReferenceError at k6 runtime).
+				Payload: map[string]any{"note": "$10 off with {$inputs.coupon#/code}"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "function asJson(v)")
+	assertContains(t, out, `${asJson(coupon)["code"]}`)
+}
+
+func TestGenerateDroppedParameterValueIsNotFlagged(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Reference: "$components.parameters.ghost", Value: "$method"},
+			},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "// unresolved component reference (parameter dropped): $components.parameters.ghost")
+	// The dropped entry's value is never serialised, so it must not be
+	// flagged as an unsupported expression.
+	assertNotContains(t, out, "// unsupported expression")
+}
+
+func TestGenerateWorkflowStepInheritedParametersDoNotWarn(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:     "sub",
+			WorkflowID: "nested",
+			Parameters: []model.Parameter{{Name: "api-key", In: "header", Value: "k", Inherited: true}},
+		}},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertNotContains(t, out, "parameters are not forwarded")
 }

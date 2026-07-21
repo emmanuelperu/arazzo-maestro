@@ -580,3 +580,27 @@ func TestRenderWorkflowShowsCriterionTypeAndRequiredInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderWorkflowDoesNotFabricateContentType(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "create",
+			OperationID: "createOrder",
+			RequestBody: &model.RequestBody{Payload: map[string]any{"a": 1}},
+		}},
+	}
+	html, err := RenderWorkflow(wf, loadTheme(t, "light"), LayoutPortrait)
+	if err != nil {
+		t.Fatalf("RenderWorkflow: %v", err)
+	}
+	// The renderer cannot resolve the operation's declared type (it is
+	// OpenAPI-blind), so an omitted contentType must not display as
+	// application/json.
+	if strings.Contains(html, "application/json") {
+		t.Errorf("omitted contentType fabricated as application/json")
+	}
+	if !strings.Contains(html, "content type per the operation") {
+		t.Errorf("missing honest omitted-contentType label")
+	}
+}

@@ -112,20 +112,22 @@ func (f *flowchart) edges(steps []model.Step) {
 		// workflow-level actions draw their edge on every step but do not
 		// replace the implicit continue: suppressing it on all steps at
 		// once would disconnect the whole chain.
-		drewSuccess := false
+		hasOwnAction := false
 		for _, a := range step.OnSuccess {
 			if a.Reference != "" {
 				continue
 			}
+			if !a.Inherited {
+				hasOwnAction = true
+			}
 			if dst := f.target(a.Type, a.StepID, a.WorkflowID); dst != "" {
 				f.solid(src, dst)
-				if !a.Inherited {
-					drewSuccess = true
-				}
 			}
 		}
-		if !drewSuccess {
-			// No own onSuccess, or only undrawable entries: implicit "continue".
+		if !hasOwnAction {
+			// No own onSuccess action: implicit "continue". An own action
+			// whose target is unknown draws no edge at all, a visible dead
+			// end, never a continue flow the document does not declare.
 			f.solid(src, f.next(i, len(steps)))
 		}
 

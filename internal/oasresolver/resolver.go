@@ -145,6 +145,19 @@ func ResolveStepOperation(step model.Step, sources map[string]*Source) (Operatio
 	return Operation{}, false
 }
 
+// DefaultBaseURL returns the OpenAPI servers URL backing the workflow's
+// first resolvable step, or "" when none resolves. Documentation only:
+// the generators always route requests through their base-URL variable.
+func DefaultBaseURL(wf model.Workflow, sources map[string]*Source) string {
+	for _, s := range wf.Steps {
+		op, ok := ResolveStepOperation(s, sources)
+		if ok && op.BaseURL != "" {
+			return op.BaseURL
+		}
+	}
+	return ""
+}
+
 // splitOperationRef recognises the two accepted forms of operationId:
 //
 //	"createOrder"                              -> short form

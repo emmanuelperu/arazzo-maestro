@@ -693,3 +693,67 @@ workflows:
 		t.Errorf("flat form not parsed: %+v", c)
 	}
 }
+
+func TestParseReplacementsKeepsExplicitEmptyTarget(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: s1
+        operationId: op
+        requestBody:
+          payload: { a: 1 }
+          replacements:
+            - target: ""
+              value: { b: 2 }
+            - value: 3
+`
+	doc, err := ParseBytes([]byte(src))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	repls := doc.Workflows[0].Steps[0].RequestBody.Replacements
+	// target: "" is the valid RFC 6901 whole-document pointer and must be
+	// kept; the entry with no target key at all stays dropped.
+	if len(repls) != 1 {
+		t.Fatalf("len(Replacements) = %d, want 1 (%v)", len(repls), repls)
+	}
+	if repls[0].Target != "" {
+		t.Errorf("Target = %q, want empty", repls[0].Target)
+	}
+}
+
+func TestParseSuccessCriteriaKeepsEmptyCondition(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: s1
+        operationId: op
+        successCriteria:
+          - condition:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+`
+	doc, err := ParseBytes([]byte(src))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	crits := doc.Workflows[0].Steps[0].SuccessCriteria
+	// The empty condition stays visible (authoring mistake surfaced
+	// downstream); the entry without a condition key stays dropped.
+	if len(crits) != 2 {
+		t.Fatalf("len(SuccessCriteria) = %d, want 2 (%v)", len(crits), crits)
+	}
+	if crits[0].Condition != "" {
+		t.Errorf("Condition[0] = %q, want empty", crits[0].Condition)
+	}
+	if crits[1].Condition != "$statusCode == 200" {
+		t.Errorf("Condition[1] = %q", crits[1].Condition)
+	}
+}

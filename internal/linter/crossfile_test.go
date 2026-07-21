@@ -323,3 +323,58 @@ workflows:
 		})
 	}
 }
+
+func TestCrossFileRejectsOperationRefsToNonOpenAPISource(t *testing.T) {
+	// LoadAll skips non-openapi sources without a SourceResult, so
+	// nothing else reports these references; the generators would emit
+	// an __unresolved__ placeholder for both steps.
+	src := `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+sourceDescriptions:
+  - name: api
+    url: ./openapi.yaml
+    type: openapi
+  - name: other
+    url: ./other.arazzo.yaml
+    type: arazzo
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationPath: '{$sourceDescriptions.other.url}#/paths/~1x/get'
+      - stepId: b
+        operationId: $sourceDescriptions.other.getX
+`
+	_, base := setupArazzoProject(t, src, tinyOpenAPI)
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintCrossFile(doc, base)
+	if !containsMessage(issues, `operationPath references source "other" of type "arazzo"`) {
+		t.Errorf("expected non-openapi operationPath issue, got %v", issues)
+	}
+	if !containsMessage(issues, `operationId references source "other" of type "arazzo"`) {
+		t.Errorf("expected non-openapi operationId issue, got %v", issues)
+	}
+}
+
+func TestCrossFileRejectsQualifiedOperationIDOnUnknownSource(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+sourceDescriptions:
+  - name: api
+    url: ./openapi.yaml
+    type: openapi
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationId: $sourceDescriptions.ghost.ping
+`
+	_, base := setupArazzoProject(t, src, tinyOpenAPI)
+	doc, _ := parser.ParseBytes([]byte(src))
+	issues := lintCrossFile(doc, base)
+	if !containsMessage(issues, `operationId references source description "ghost" which does not exist`) {
+		t.Errorf("expected unknown-source issue, got %v", issues)
+	}
+}

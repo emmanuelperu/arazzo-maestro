@@ -128,18 +128,35 @@ func splitStepOutput(rest string) (step, out string, ok bool) {
 	return rest[:idx], rest[idx+len(sep):], true
 }
 
-// embeddedRe matches the spec's embedded form: a runtime expression
-// wrapped in {} curly braces inside a string value.
-var embeddedRe = regexp.MustCompile(`\{(\$[^{}]+)\}`)
+// EmbeddedRe matches the spec's embedded form: a runtime expression
+// wrapped in {} curly braces inside a string value. It is exported so the
+// generators interpolate with the exact grammar this package scans with;
+// a private copy per consumer would let the two drift apart.
+var EmbeddedRe = regexp.MustCompile(`\{(\$[^{}]+)\}`)
 
 // Refs returns the runtime expressions referenced by s: the whole trimmed
-// string when it is itself an expression, otherwise the inner $expr of
-// each embedded {$expr} occurrence. A plain literal yields nothing.
+// string when it is itself a recognised expression, otherwise the inner
+// $expr of each embedded {$expr} occurrence. A "$"-leading string the
+// parser does not recognise is treated like any other literal carrier
+// first (its embedded occurrences are what the generators interpolate)
+// and reported whole only when it embeds nothing. A plain literal yields
+// nothing.
 func Refs(s string) []string {
 	if IsRuntimeExpression(s) {
-		return []string{strings.TrimSpace(s)}
+		e := strings.TrimSpace(s)
+		if Parse(e).Kind != KindUnknown {
+			return []string{e}
+		}
+		if embedded := embeddedRefs(s); len(embedded) > 0 {
+			return embedded
+		}
+		return []string{e}
 	}
-	matches := embeddedRe.FindAllStringSubmatch(s, -1)
+	return embeddedRefs(s)
+}
+
+func embeddedRefs(s string) []string {
+	matches := EmbeddedRe.FindAllStringSubmatch(s, -1)
 	if len(matches) == 0 {
 		return nil
 	}

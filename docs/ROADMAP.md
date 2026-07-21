@@ -20,15 +20,14 @@
 - [x] `test gen perf`: k6 script generation with `--vus` / `--duration` / `--threshold`, runtime expressions substituted in request bodies
 - [x] Landscape layout (`view --layout landscape`), portrait stays the default
 - [x] Mermaid export (`view --format mermaid`): one `.mmd` flowchart per workflow
+- [x] Spec-compliance wave (PRs #78 to #90): shared runtime-expression parser (`internal/expr`), requestBody `contentType` + `replacements` (`internal/payload`), `operationPath` resolution, honest degradation of `workflowId` steps, `components` reusable objects inlined at parse time, workflow-level `parameters`/`successActions`/`failureActions` defaults, `workflow.dependsOn` (parse + lint + render), criterion `context`/`type` badges, JSON-pointer sub-access on `$inputs`/`$steps` references
 
 ## Planned
 
 - [ ] Reach OpenSSF Best Practices `passing` badge ([project 12929](https://www.bestpractices.dev/projects/12929), currently `in_progress`)
-- [ ] Shrink the binary (~5 MB before libopenapi, ~19 MB after: its `index` package links the whole `net/http`/TLS stack for remote `$ref` support we deliberately refuse)
-- [ ] Nested workflows (`step.workflowId`)
-- [ ] `step.dependsOn` parallel branches
-- [ ] `components.{parameters,successActions,failureActions}` `$ref` reuse
-- [ ] `Criterion.type` + `context` surfaced in the render
+- [ ] Shrink the binary (~5 MB before libopenapi, ~20 MB after: its `index` package links the whole `net/http`/TLS stack for remote `$ref` support we deliberately refuse)
+- [ ] Nested workflow execution (`step.workflowId` rendering + honest test-gen degradation shipped; expanding/inlining the invoked workflow is not)
+- [ ] Parallel-branch rendering for `workflow.dependsOn` (the field is parsed, linted and displayed; the diagram does not lay branches out in parallel)
 - [ ] SVG / PNG export (pure-Go layout pass, no headless browser)
 - [ ] Internalise Tailwind CSS (zero network requests at page load)
 - [ ] HTTPS source URLs with deterministic caching (opt-in)

@@ -2,8 +2,10 @@
 
 Honest, field-by-field status of `arazzo-maestro` against the official
 [Arazzo 1.1.0 specification](https://spec.openapis.org/arazzo/latest.html),
-audited section by section on 2026-06-05. Tracking issue:
-[#58](https://github.com/emmanuelperu/arazzo-maestro/issues/58).
+audited section by section on 2026-06-05, matrix kept current through
+the spec-compliance wave (PRs #78 to #90, merged 2026-07). Tracking
+issue [#58](https://github.com/emmanuelperu/arazzo-maestro/issues/58)
+is closed.
 
 How to read the columns: **Parse** is the typed model the renderer and
 the test generators consume; **Lint** distinguishes the embedded

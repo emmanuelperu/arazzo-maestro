@@ -699,8 +699,9 @@ func parseRequestBody(n *yaml.Node) *model.RequestBody {
 }
 
 // parseReplacements reads the `replacements` array of Payload Replacement
-// Objects. Entries missing the required `target` are skipped (the schema
-// pass reports them upstream).
+// Objects. Entries missing the required `target` key are skipped (the
+// schema pass reports them upstream); an explicit `target: ""` is kept,
+// it is the valid RFC 6901 whole-document pointer.
 func parseReplacements(n *yaml.Node) []model.Replacement {
 	if n == nil || n.Kind != yaml.SequenceNode {
 		return nil
@@ -711,15 +712,17 @@ func parseReplacements(n *yaml.Node) []model.Replacement {
 			continue
 		}
 		var r model.Replacement
+		hasTarget := false
 		for _, kv := range mappingPairs(item) {
 			switch kv.Key {
 			case "target":
 				r.Target = scalarString(kv.Value)
+				hasTarget = true
 			case "value":
 				r.Value = nodeToAny(kv.Value)
 			}
 		}
-		if r.Target != "" {
+		if hasTarget {
 			out = append(out, r)
 		}
 	}
@@ -736,10 +739,12 @@ func parseSuccessCriteria(n *yaml.Node) []model.SuccessCriterion {
 			continue
 		}
 		c := model.SuccessCriterion{}
+		hasCondition := false
 		for _, kv := range mappingPairs(item) {
 			switch kv.Key {
 			case "condition":
 				c.Condition = scalarString(kv.Value)
+				hasCondition = true
 			case "context":
 				c.Context = scalarString(kv.Value)
 			case "version":
@@ -764,7 +769,10 @@ func parseSuccessCriteria(n *yaml.Node) []model.SuccessCriterion {
 				}
 			}
 		}
-		if c.Condition != "" {
+		// Presence of the required `condition` key decides, not its value:
+		// an empty condition is an authoring mistake that must stay visible
+		// downstream (render, generated comments) instead of vanishing.
+		if hasCondition {
 			out = append(out, c)
 		}
 	}

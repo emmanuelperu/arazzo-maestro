@@ -189,3 +189,51 @@ type ArazzoDocument struct {
 	Workflows          []Workflow
 	Components         Components
 }
+
+// ResolvedParameters filters out unresolved Reusable Object entries
+// (Reference != ""): they carry no usable name/in/value and must not
+// reach a request, so every consumer applies the same rule.
+func ResolvedParameters(params []Parameter) []Parameter {
+	out := make([]Parameter, 0, len(params))
+	for _, p := range params {
+		if p.Reference == "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// OwnParameters filters out the entries merged in from the
+// workflow-level defaults, keeping only what the step declares itself.
+func OwnParameters(params []Parameter) []Parameter {
+	out := make([]Parameter, 0, len(params))
+	for _, p := range params {
+		if !p.Inherited {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// OutputNames joins the declared output names for a comment or message.
+func OutputNames(outs []OutputEntry) string {
+	names := make([]string, len(outs))
+	for i, o := range outs {
+		names[i] = o.Name
+	}
+	return strings.Join(names, ", ")
+}
+
+// InlineValues lists the values a step emits inline (parameter values
+// and the request body after replacements), so a generator's
+// unsupported-expression scan sees exactly what gets serialised.
+func InlineValues(s Step, effectiveBody any) []any {
+	values := make([]any, 0, len(s.Parameters)+1)
+	for _, p := range s.Parameters {
+		values = append(values, p.Value)
+	}
+	if s.RequestBody != nil {
+		values = append(values, effectiveBody)
+	}
+	return values
+}

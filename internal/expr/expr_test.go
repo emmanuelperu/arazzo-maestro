@@ -81,6 +81,12 @@ func TestRefs(t *testing.T) {
 		{"Bearer {$inputs.token}", []string{"$inputs.token"}},
 		{"a {$x} b {$y}", []string{"$x", "$y"}},
 		{"plain literal", nil},
+		// A '$'-leading literal that is not itself a recognised expression
+		// still reports its embedded refs: the generators interpolate them.
+		{"$10 off with {$inputs.coupon#/code}", []string{"$inputs.coupon#/code"}},
+		// ...and stays reported whole when it embeds nothing, so an
+		// unsupported expression form is still flagged.
+		{"$request.header.x-id", []string{"$request.header.x-id"}},
 	}
 	for _, tt := range tests {
 		got := Refs(tt.in)

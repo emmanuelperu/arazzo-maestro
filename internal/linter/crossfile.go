@@ -28,10 +28,6 @@ func lintCrossFile(doc *model.ArazzoDocument, basePath string) []Issue {
 		return nil
 	}
 	index, issues := buildOperationIndex(doc, basePath)
-	if len(index) == 0 {
-		// Nothing to check against, still surface any source-loading errors.
-		return issues
-	}
 	// When a single source is declared and a step uses the short
 	// `operationId: foo` form, we resolve `foo` against this source.
 	var implicitSource string
@@ -39,17 +35,32 @@ func lintCrossFile(doc *model.ArazzoDocument, basePath string) []Issue {
 		implicitSource = doc.SourceDescriptions[0].Name
 	}
 	multipleSources := len(doc.SourceDescriptions) > 1
-	declared := make(map[string]bool, len(doc.SourceDescriptions))
+	// Declared type per source: operation references must land on an
+	// openapi source, and LoadAll skips the other types without a
+	// SourceResult, so absence from the index is only benign (already
+	// reported as a loading error) for openapi sources.
+	sourceTypes := make(map[string]string, len(doc.SourceDescriptions))
 	for _, s := range doc.SourceDescriptions {
-		declared[s.Name] = true
+		sourceTypes[s.Name] = s.Type
 	}
 	for _, wf := range doc.Workflows {
 		for _, step := range wf.Steps {
-			issues = append(issues, checkStepOperation(step, &wf, index, implicitSource, multipleSources)...)
-			issues = append(issues, checkStepOperationPath(step, &wf, index, declared)...)
+			issues = append(issues, checkStepOperation(step, &wf, index, implicitSource, multipleSources, sourceTypes)...)
+			issues = append(issues, checkStepOperationPath(step, &wf, index, sourceTypes)...)
 		}
 	}
 	return issues
+}
+
+// nonOpenAPISource returns the declared type when it prevents operation
+// resolution (anything other than openapi, whose absence from the index
+// means a loading error that was already reported).
+func nonOpenAPISource(sourceTypes map[string]string, name string) (string, bool) {
+	typ, declared := sourceTypes[name]
+	if !declared || typ == "" || typ == "openapi" {
+		return "", false
+	}
+	return typ, true
 }
 
 func buildOperationIndex(doc *model.ArazzoDocument, basePath string) (operationIndex, []Issue) {
@@ -83,7 +94,7 @@ func sourceErrMessage(r oasresolver.SourceResult) string {
 // the operation index. `implicitSource` is the source name a short-form
 // (unqualified) operationId resolves to, empty when no single source
 // can disambiguate (either zero or multiple declared).
-func checkStepOperation(step model.Step, wf *model.Workflow, index operationIndex, implicitSource string, multipleSources bool) []Issue {
+func checkStepOperation(step model.Step, wf *model.Workflow, index operationIndex, implicitSource string, multipleSources bool, sourceTypes map[string]string) []Issue {
 	if step.OperationID == "" {
 		return nil
 	}
@@ -108,6 +119,20 @@ func checkStepOperation(step model.Step, wf *model.Workflow, index operationInde
 		// reported sourceDescriptions as missing/empty.
 		return nil
 	}
+	if _, declared := sourceTypes[sourceName]; !declared {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("operationId references source description %q which does not exist", sourceName),
+		}}
+	}
+	if typ, isOther := nonOpenAPISource(sourceTypes, sourceName); isOther {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("operationId references source %q of type %q; operations can only be resolved against an openapi source", sourceName, typ),
+		}}
+	}
 	src, ok := index[sourceName]
 	if !ok {
 		// The source is declared but couldn't be loaded, the
@@ -130,7 +155,7 @@ func checkStepOperation(step model.Step, wf *model.Workflow, index operationInde
 // must be the canonical '{$sourceDescriptions.<name>.url}#<pointer>'
 // form, name a declared source, and its JSON pointer must address an
 // operation that exists in that source.
-func checkStepOperationPath(step model.Step, wf *model.Workflow, index operationIndex, declared map[string]bool) []Issue {
+func checkStepOperationPath(step model.Step, wf *model.Workflow, index operationIndex, sourceTypes map[string]string) []Issue {
 	if step.OperationPath == "" {
 		return nil
 	}
@@ -146,11 +171,18 @@ func checkStepOperationPath(step model.Step, wf *model.Workflow, index operation
 			),
 		}}
 	}
-	if !declared[sourceName] {
+	if _, declared := sourceTypes[sourceName]; !declared {
 		return []Issue{{
 			Severity: SeverityError,
 			Path:     path,
 			Message:  fmt.Sprintf("operationPath references source description %q which does not exist", sourceName),
+		}}
+	}
+	if typ, isOther := nonOpenAPISource(sourceTypes, sourceName); isOther {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("operationPath references source %q of type %q; operations can only be resolved against an openapi source", sourceName, typ),
 		}}
 	}
 	src, loaded := index[sourceName]

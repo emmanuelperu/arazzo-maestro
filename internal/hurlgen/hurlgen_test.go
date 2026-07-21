@@ -262,6 +262,11 @@ func TestGenerateEmitsQueryAndHeaderParameters(t *testing.T) {
 		WorkflowID: "wf",
 		Steps: []model.Step{
 			{
+				StepID:      "prev",
+				OperationID: "listProducts",
+				Outputs:     []model.OutputEntry{{Name: "next", Expression: "$response.body#/next"}},
+			},
+			{
 				StepID:      "list",
 				OperationID: "listProducts",
 				Parameters: []model.Parameter{
@@ -442,6 +447,28 @@ func TestGenerateTranslatesExprsInsideJSONBody(t *testing.T) {
 			wf := model.Workflow{
 				WorkflowID: "wf",
 				Steps: []model.Step{
+					// Producing steps: only outputs that will be captured
+					// translate, so the fixtures declare them.
+					{
+						StepID:      "add-to-cart",
+						OperationID: "listProducts",
+						Outputs:     []model.OutputEntry{{Name: "cartId", Expression: "$response.body#/id"}},
+					},
+					{
+						StepID:      "list",
+						OperationID: "listProducts",
+						Outputs:     []model.OutputEntry{{Name: "first", Expression: "$response.body#/items/0"}},
+					},
+					{
+						StepID:      "prev",
+						OperationID: "listProducts",
+						Outputs:     []model.OutputEntry{{Name: "id", Expression: "$response.body#/id"}},
+					},
+					{
+						StepID:      "s",
+						OperationID: "listProducts",
+						Outputs:     []model.OutputEntry{{Name: "user.name", Expression: "$response.body#/user/name"}},
+					},
 					{
 						StepID:      "create",
 						OperationID: "createOrder",
@@ -570,17 +597,24 @@ func TestGenerateFallsBackWhenJSONBodyUnmarshalable(t *testing.T) {
 func TestGenerateTranslatesExprsInNonJSONBodyDump(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",
-		Steps: []model.Step{{
-			StepID:      "create",
-			OperationID: "createOrder",
-			RequestBody: &model.RequestBody{
-				ContentType: "text/plain",
-				Payload: map[string]any{
-					"id":   "$inputs.productId",
-					"tags": []any{"$steps.s.outputs.o"},
+		Steps: []model.Step{
+			{
+				StepID:      "s",
+				OperationID: "listProducts",
+				Outputs:     []model.OutputEntry{{Name: "o", Expression: "$response.body#/id"}},
+			},
+			{
+				StepID:      "create",
+				OperationID: "createOrder",
+				RequestBody: &model.RequestBody{
+					ContentType: "text/plain",
+					Payload: map[string]any{
+						"id":   "$inputs.productId",
+						"tags": []any{"$steps.s.outputs.o"},
+					},
 				},
 			},
-		}},
+		},
 	}
 	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
 	assertContains(t, out, "{{productId}}")
@@ -841,6 +875,11 @@ func TestGenerateDoesNotFlagTranslatableInlineExpr(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",
 		Steps: []model.Step{
+			{
+				StepID:      "prev",
+				OperationID: "listProducts",
+				Outputs:     []model.OutputEntry{{Name: "next", Expression: "$response.body#/next"}},
+			},
 			{
 				StepID:      "list",
 				OperationID: "listProducts",
@@ -1214,4 +1253,80 @@ func TestGenerateDerivedCaptureNameCollisionGetsSuffix(t *testing.T) {
 	assertContains(t, out, `list_pets_0_id: jsonpath "$.first"`)
 	assertContains(t, out, `list_pets_0_id_2: jsonpath "$.items[0].id"`)
 	assertContains(t, out, "GET {{baseUrl}}/products/{{list_pets_0_id_2}}")
+}
+
+func TestGenerateWorkflowStepOutputRefsStayLiteral(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{
+				StepID:     "A",
+				WorkflowID: "other-wf",
+				Outputs:    []model.OutputEntry{{Name: "token", Expression: "$response.body#/token"}},
+			},
+			{
+				StepID:      "B",
+				OperationID: "listProducts",
+				Parameters:  []model.Parameter{{Name: "Authorization", In: "header", Value: "$steps.A.outputs.token"}},
+			},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	// Step A emits no request and no [Captures]; a {{A_token}} template
+	// would make hurl abort on an undefined variable.
+	assertNotContains(t, out, "{{A_token}}")
+	assertContains(t, out, "Authorization: $steps.A.outputs.token")
+	assertContains(t, out, "# unsupported expression (not translated): $steps.A.outputs.token")
+}
+
+func TestGenerateDroppedParameterValueIsNotFlagged(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:      "list",
+			OperationID: "listProducts",
+			Parameters: []model.Parameter{
+				{Reference: "$components.parameters.ghost", Value: "$method"},
+			},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertContains(t, out, "# unresolved component reference (parameter dropped): $components.parameters.ghost")
+	// The dropped entry's value is never serialised, so it must not be
+	// flagged as an unsupported expression.
+	assertNotContains(t, out, "# unsupported expression")
+}
+
+func TestGenerateWorkflowStepInheritedParametersDoNotWarn(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{{
+			StepID:     "sub",
+			WorkflowID: "nested",
+			Parameters: []model.Parameter{{Name: "api-key", In: "header", Value: "k", Inherited: true}},
+		}},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	assertNotContains(t, out, "parameters are not forwarded")
+}
+
+func TestGenerateEmbeddedRefInsideDollarLeadingLiteral(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "list", OperationID: "listProducts",
+				Outputs: []model.OutputEntry{{Name: "pets", Expression: "$response.body#/items"}}},
+			{StepID: "create", OperationID: "createOrder",
+				RequestBody: &model.RequestBody{
+					ContentType: "application/json",
+					Payload:     map[string]any{"ref": "$ref-{$steps.list.outputs.pets#/0/id}"},
+				}},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+	// The '$'-leading literal used to hide the embedded reference from
+	// the pre-scan: no derived capture was planned while the serialiser
+	// still tried to interpolate.
+	assertContains(t, out, `list_pets_0_id: jsonpath "$.items[0].id"`)
+	assertContains(t, out, `"ref": "$ref-{{list_pets_0_id}}"`)
 }

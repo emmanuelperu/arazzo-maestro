@@ -22,7 +22,7 @@ arazzo-maestro test gen e2e examples/shop.arazzo.yaml -o dist/
 
 The `e2e/<format>/<arazzo-name>/` prefix is added by the CLI so a single output directory can hold artifacts for several Arazzo files and several kinds (e2e, perf, ...) without collisions, and so the on-disk layout mirrors the subcommand grammar.
 
-The generator delegates `operationId` resolution to the OpenAPI sources declared under `sourceDescriptions` (loaded as local files only; HTTP/HTTPS URLs are rejected, same eco-design rule as the linter). Resolved steps emit real `METHOD {{baseUrl}}/path` request lines with path parameters substituted; unresolvable steps emit a Hurl comment and a placeholder so the file stays valid for the target tool.
+The generator delegates `operationId` and `operationPath` resolution to the OpenAPI sources declared under `sourceDescriptions` (loaded as local files only; HTTP/HTTPS URLs are rejected, same eco-design rule as the linter). Resolved steps emit real `METHOD {{baseUrl}}/path` request lines with path parameters substituted; unresolvable steps emit a Hurl comment and a placeholder so the file stays valid for the target tool. Steps that invoke another workflow (`workflowId`) emit an explicit not-supported comment and no request at all, and references to their outputs stay visibly untranslated (no capture would ever define them).
 
 The request host is never hard-coded. Every request line is prefixed with the `{{baseUrl}}` Hurl variable, so the **same** `.hurl` file runs unchanged against staging, pre-production or a local mock by passing the endpoint at run time. The OpenAPI `servers:` URL, when present, is surfaced in the file header as the documented default.
 
@@ -38,6 +38,8 @@ Arazzo step features translated:
 | `parameters` in=querystring | appended to the request URL                  |
 | `step.outputs`             | `[Captures]` with `jsonpath` / `status`       |
 | `step.successCriteria`     | comments inside `[Asserts]`                   |
+| `requestBody.contentType`  | `Content-Type:` header (falls back to the operation's declared type when omitted) |
+| `requestBody.replacements` | applied to the payload (RFC 6901 target) before substitution, echoed as comments |
 | `$inputs.foo`              | `{{foo}}` (Hurl variable)                     |
 | `{$inputs.foo}` embedded in text | `{{foo}}` inside the string             |
 | `$steps.s.outputs.o`       | `{{s_o}}` (capture-chained)                   |
@@ -53,7 +55,7 @@ per-reference `asJson()` parse instead.
 
 ## Running against your environment: `test run e2e`
 
-It generates the tests on the fly and executes them with [Hurl](https://hurl.dev) against the endpoint you pass, optionally writing Hurl's HTML report. You choose the target at run time, so the same workflow validates staging, then pre-prod, then prod:
+It generates the tests on the fly and executes them with [Hurl](https://hurl.dev) against the endpoint you pass, optionally writing Hurl's HTML report. You choose the target at run time, so the same workflow validates staging, then pre-prod, then prod. No environment at hand? `./mocking/start-mock-server.sh` boots a local [Microcks](https://microcks.io) instance, imports the example contracts and prints the exact commands to run the e2e and perf suites against the mocks (see [`mocking/README.md`](../mocking/README.md)):
 
 ```bash
 # Run against a pre-production endpoint
@@ -89,7 +91,7 @@ k6 run -e BASE_URL=https://staging.example.com -e productId=p-001 \
   dist/perf/k6/shop/happy-path-checkout.k6.js
 ```
 
-Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are substituted too (`"$inputs.productId"` becomes the `productId` constant; the e2e generator emits `{{productId}}`, unquoted when the input's declared type is numeric or boolean), as is the spec's embedded form: `"Bearer {$inputs.token}"` becomes a JS template literal in k6 and `"Bearer {{token}}"` in Hurl. Only whole-string expressions and braced `{$expr}` occurrences resolving to a declared input or earlier step output are substituted; anything else stays a literal. Drill is a planned lighter alternative.
+Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are substituted too (`"$inputs.productId"` becomes the `productId` constant; the e2e generator emits `{{productId}}`, unquoted when the input's declared type is numeric or boolean), as is the spec's embedded form: `"Bearer {$inputs.token}"` becomes a JS template literal in k6 and `"Bearer {{token}}"` in Hurl. Payload `replacements` are applied (JSON-pointer target) before substitution, in both generators. Only whole-string expressions and braced `{$expr}` occurrences resolving to a declared input or earlier step output are substituted; anything else stays a literal. k6 constants are assigned at declaration time in one table: when two names sanitise to the same JS identifier (`user.name` vs `user_name`), the later one gets a numeric suffix (`user_name_2`) so each input keeps its own environment variable, and references translate by exact Arazzo name, never by identifier coincidence. Drill is a planned lighter alternative.
 
 The perf-only flags (`--vus`, `--duration`, `--threshold`) live on `test gen perf` so `test gen perf --help` documents exactly what makes sense for load testing; `test gen e2e --help` stays focused on functional concerns. Both subcommands share the same underlying workflow IR, so adding a new format is a per-template change, not a CLI redesign.
 
