@@ -51,17 +51,17 @@ Pull the published image `ghcr.io/emmanuelperu/arazzo-maestro:latest`
 
 ```bash
 # Build locally
-docker build --build-arg VERSION=0.0.1 \
-  -t ghcr.io/emmanuelperu/arazzo-maestro:0.0.1 .
+docker build --build-arg VERSION=0.4.0 \
+  -t ghcr.io/emmanuelperu/arazzo-maestro:0.4.0 .
 
 # Lint a file from the current directory
 docker run --rm -v "$PWD":/work -w /work \
-  ghcr.io/emmanuelperu/arazzo-maestro:0.0.1 \
+  ghcr.io/emmanuelperu/arazzo-maestro:0.4.0 \
   lint workflows/checkout.yaml
 
 # Render to ./dist/ on the host
 docker run --rm -v "$PWD":/work -w /work \
-  ghcr.io/emmanuelperu/arazzo-maestro:0.0.1 \
+  ghcr.io/emmanuelperu/arazzo-maestro:0.4.0 \
   view workflows/checkout.yaml
 ```
 

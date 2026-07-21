@@ -431,7 +431,7 @@
 Error: 2 issue(s) found
 
 <span class="pr">$</span> arazzo-maestro view workflow.yaml -o dist/
-<span class="cmt"># dist/happy-path-checkout.html  (~3 kB gzipped)</span>
+<span class="cmt"># dist/happy-path-checkout.html  (~4.5 kB gzipped)</span>
 
 <span class="pr">$</span> arazzo-maestro view workflow.yaml --format mermaid -o dist/
 <span class="cmt"># dist/happy-path-checkout.mmd  (paste into any .md, GitHub renders it)</span>
@@ -472,7 +472,7 @@ Error: 2 issue(s) found
             <h3>Render to standalone HTML</h3>
             <p>
               One self-contained page per workflow: START → steps → END, runtime
-              expressions highlighted, success criteria, request bodies. ~3 kB gzipped,
+              expressions highlighted, success criteria, request bodies. ~4.5 kB gzipped,
               opens offline in any browser. Portrait or <code>--layout landscape</code>;
               or <code>--format mermaid</code> for a flowchart GitHub renders natively.
               Commit it, or ship it to GitHub Pages.
@@ -525,7 +525,8 @@ Error: 2 issue(s) found
         <div class="specimens">
           <div class="spec-wrap">
             <p class="spec-label">Theme: light, live `view` output</p>
-            <iframe class="preview-frame" title="happy-path-checkout rendered with the light theme" loading="lazy" sandbox srcdoc="<!doctype html>
+            <iframe class="preview-frame" title="happy-path-checkout rendered with the light theme" loading="lazy" sandbox srcdoc="
+<!doctype html>
 <html lang=&quot;en&quot;>
 <head>
   <meta charset=&quot;utf-8&quot;>
@@ -927,6 +928,15 @@ Error: 2 issue(s) found
       margin-right: 0.375rem;
       font-weight: 700;
     }
+    .replacements-block {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 0.82rem;
+    }
+    .replacements-block li {
+      padding: 0.125rem 0;
+    }
 
      
     .actions {
@@ -1124,12 +1134,14 @@ resulting order with a valid card. Assertions check each HTTP code and
 the final payment status.</p>
       
       
+      
         <p class=&quot;block-label terminus-muted&quot;>Inputs</p>
         <ul class=&quot;kv&quot;>
           
             <li>
               <code class=&quot;kv-key&quot;>productId</code>
               <span class=&quot;kv-in&quot;>string</span>
+              
               
                 <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
                 <code>prod-001</code>
@@ -1140,6 +1152,7 @@ the final payment status.</p>
               <code class=&quot;kv-key&quot;>orderId</code>
               <span class=&quot;kv-in&quot;>string</span>
               
+              
                 <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
                 <code>order-001</code>
               
@@ -1148,6 +1161,7 @@ the final payment status.</p>
             <li>
               <code class=&quot;kv-key&quot;>acceptLanguage</code>
               <span class=&quot;kv-in&quot;>string</span>
+              
               
                 <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
                 <code>fr-FR</code>
@@ -1188,26 +1202,35 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>page</code>
-                    <span class=&quot;kv-in&quot;>query</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;font-mono text-primary&quot;>0</code>
+                    
+                      <code class=&quot;kv-key&quot;>page</code>
+                      <span class=&quot;kv-in&quot;>query</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;font-mono text-primary&quot;>0</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>size</code>
-                    <span class=&quot;kv-in&quot;>query</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;font-mono text-primary&quot;>10</code>
+                    
+                      <code class=&quot;kv-key&quot;>size</code>
+                      <span class=&quot;kv-in&quot;>query</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;font-mono text-primary&quot;>10</code>
+                    
                   </li>
                 
               </ul>
@@ -1219,7 +1242,10 @@ the final payment status.</p>
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200
+                    
+                  </li>
                 
               </ul>
             
@@ -1271,18 +1297,24 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>productId</code>
-                    <span class=&quot;kv-in&quot;>path</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$steps.list-catalog.outputs.firstProductId</code>
+                    
+                      <code class=&quot;kv-key&quot;>productId</code>
+                      <span class=&quot;kv-in&quot;>path</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$steps.list-catalog.outputs.firstProductId</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
               </ul>
@@ -1294,7 +1326,10 @@ the final payment status.</p>
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200
+                    
+                  </li>
                 
               </ul>
             
@@ -1346,10 +1381,13 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
               </ul>
@@ -1363,15 +1401,22 @@ the final payment status.</p>
   &amp;#34;productId&amp;#34;: &amp;#34;<span class=&quot;runtime&quot;>$inputs.productId</span>&amp;#34;,
   &amp;#34;quantity&amp;#34;: 2
 }</pre>
+              
             
 
             
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 201</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 201
+                    
+                  </li>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/totalPrice &amp;gt; 0</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/totalPrice &amp;gt; 0
+                    
+                  </li>
                 
               </ul>
             
@@ -1423,18 +1468,24 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>orderId</code>
-                    <span class=&quot;kv-in&quot;>path</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.orderId</code>
+                    
+                      <code class=&quot;kv-key&quot;>orderId</code>
+                      <span class=&quot;kv-in&quot;>path</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.orderId</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
               </ul>
@@ -1452,15 +1503,22 @@ the final payment status.</p>
   &amp;#34;expiryDate&amp;#34;: &amp;#34;12/26&amp;#34;,
   &amp;#34;method&amp;#34;: &amp;#34;card&amp;#34;
 }</pre>
+              
             
 
             
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200
+                    
+                  </li>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/status == &amp;#34;OK&amp;#34;</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/status == &amp;#34;OK&amp;#34;
+                    
+                  </li>
                 
               </ul>
             
@@ -1525,7 +1583,8 @@ the final payment status.</p>
           </div>
           <div class="spec-wrap">
             <p class="spec-label">Theme: dark, live `view` output</p>
-            <iframe class="preview-frame" title="happy-path-checkout rendered with the dark theme" loading="lazy" sandbox srcdoc="<!doctype html>
+            <iframe class="preview-frame" title="happy-path-checkout rendered with the dark theme" loading="lazy" sandbox srcdoc="
+<!doctype html>
 <html lang=&quot;en&quot;>
 <head>
   <meta charset=&quot;utf-8&quot;>
@@ -1927,6 +1986,15 @@ the final payment status.</p>
       margin-right: 0.375rem;
       font-weight: 700;
     }
+    .replacements-block {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 0.82rem;
+    }
+    .replacements-block li {
+      padding: 0.125rem 0;
+    }
 
      
     .actions {
@@ -2124,12 +2192,14 @@ resulting order with a valid card. Assertions check each HTTP code and
 the final payment status.</p>
       
       
+      
         <p class=&quot;block-label terminus-muted&quot;>Inputs</p>
         <ul class=&quot;kv&quot;>
           
             <li>
               <code class=&quot;kv-key&quot;>productId</code>
               <span class=&quot;kv-in&quot;>string</span>
+              
               
                 <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
                 <code>prod-001</code>
@@ -2140,6 +2210,7 @@ the final payment status.</p>
               <code class=&quot;kv-key&quot;>orderId</code>
               <span class=&quot;kv-in&quot;>string</span>
               
+              
                 <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
                 <code>order-001</code>
               
@@ -2148,6 +2219,7 @@ the final payment status.</p>
             <li>
               <code class=&quot;kv-key&quot;>acceptLanguage</code>
               <span class=&quot;kv-in&quot;>string</span>
+              
               
                 <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
                 <code>fr-FR</code>
@@ -2188,26 +2260,35 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>page</code>
-                    <span class=&quot;kv-in&quot;>query</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;font-mono text-primary&quot;>0</code>
+                    
+                      <code class=&quot;kv-key&quot;>page</code>
+                      <span class=&quot;kv-in&quot;>query</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;font-mono text-primary&quot;>0</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>size</code>
-                    <span class=&quot;kv-in&quot;>query</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;font-mono text-primary&quot;>10</code>
+                    
+                      <code class=&quot;kv-key&quot;>size</code>
+                      <span class=&quot;kv-in&quot;>query</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;font-mono text-primary&quot;>10</code>
+                    
                   </li>
                 
               </ul>
@@ -2219,7 +2300,10 @@ the final payment status.</p>
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200
+                    
+                  </li>
                 
               </ul>
             
@@ -2271,18 +2355,24 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>productId</code>
-                    <span class=&quot;kv-in&quot;>path</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$steps.list-catalog.outputs.firstProductId</code>
+                    
+                      <code class=&quot;kv-key&quot;>productId</code>
+                      <span class=&quot;kv-in&quot;>path</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$steps.list-catalog.outputs.firstProductId</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
               </ul>
@@ -2294,7 +2384,10 @@ the final payment status.</p>
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200
+                    
+                  </li>
                 
               </ul>
             
@@ -2346,10 +2439,13 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
               </ul>
@@ -2363,15 +2459,22 @@ the final payment status.</p>
   &amp;#34;productId&amp;#34;: &amp;#34;<span class=&quot;runtime&quot;>$inputs.productId</span>&amp;#34;,
   &amp;#34;quantity&amp;#34;: 2
 }</pre>
+              
             
 
             
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 201</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 201
+                    
+                  </li>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/totalPrice &amp;gt; 0</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/totalPrice &amp;gt; 0
+                    
+                  </li>
                 
               </ul>
             
@@ -2423,18 +2526,24 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>orderId</code>
-                    <span class=&quot;kv-in&quot;>path</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.orderId</code>
+                    
+                      <code class=&quot;kv-key&quot;>orderId</code>
+                      <span class=&quot;kv-in&quot;>path</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.orderId</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
               </ul>
@@ -2452,15 +2561,22 @@ the final payment status.</p>
   &amp;#34;expiryDate&amp;#34;: &amp;#34;12/26&amp;#34;,
   &amp;#34;method&amp;#34;: &amp;#34;card&amp;#34;
 }</pre>
+              
             
 
             
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200
+                    
+                  </li>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/status == &amp;#34;OK&amp;#34;</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/status == &amp;#34;OK&amp;#34;
+                    
+                  </li>
                 
               </ul>
             
@@ -2526,7 +2642,8 @@ the final payment status.</p>
         </div>
         <div class="spec-wrap spec-wide">
           <p class="spec-label">Layout: landscape (--layout landscape), scrolls sideways, live `view` output</p>
-          <iframe class="preview-frame preview-frame-wide" title="happy-path-checkout rendered in landscape layout" loading="lazy" sandbox srcdoc="<!doctype html>
+          <iframe class="preview-frame preview-frame-wide" title="happy-path-checkout rendered in landscape layout" loading="lazy" sandbox srcdoc="
+<!doctype html>
 <html lang=&quot;en&quot;>
 <head>
   <meta charset=&quot;utf-8&quot;>
@@ -2928,6 +3045,15 @@ the final payment status.</p>
       margin-right: 0.375rem;
       font-weight: 700;
     }
+    .replacements-block {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 0.82rem;
+    }
+    .replacements-block li {
+      padding: 0.125rem 0;
+    }
 
      
     .actions {
@@ -3125,12 +3251,14 @@ resulting order with a valid card. Assertions check each HTTP code and
 the final payment status.</p>
       
       
+      
         <p class=&quot;block-label terminus-muted&quot;>Inputs</p>
         <ul class=&quot;kv&quot;>
           
             <li>
               <code class=&quot;kv-key&quot;>productId</code>
               <span class=&quot;kv-in&quot;>string</span>
+              
               
                 <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
                 <code>prod-001</code>
@@ -3141,6 +3269,7 @@ the final payment status.</p>
               <code class=&quot;kv-key&quot;>orderId</code>
               <span class=&quot;kv-in&quot;>string</span>
               
+              
                 <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
                 <code>order-001</code>
               
@@ -3149,6 +3278,7 @@ the final payment status.</p>
             <li>
               <code class=&quot;kv-key&quot;>acceptLanguage</code>
               <span class=&quot;kv-in&quot;>string</span>
+              
               
                 <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
                 <code>fr-FR</code>
@@ -3189,26 +3319,35 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>page</code>
-                    <span class=&quot;kv-in&quot;>query</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;font-mono text-primary&quot;>0</code>
+                    
+                      <code class=&quot;kv-key&quot;>page</code>
+                      <span class=&quot;kv-in&quot;>query</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;font-mono text-primary&quot;>0</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>size</code>
-                    <span class=&quot;kv-in&quot;>query</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;font-mono text-primary&quot;>10</code>
+                    
+                      <code class=&quot;kv-key&quot;>size</code>
+                      <span class=&quot;kv-in&quot;>query</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;font-mono text-primary&quot;>10</code>
+                    
                   </li>
                 
               </ul>
@@ -3220,7 +3359,10 @@ the final payment status.</p>
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200
+                    
+                  </li>
                 
               </ul>
             
@@ -3272,18 +3414,24 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>productId</code>
-                    <span class=&quot;kv-in&quot;>path</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$steps.list-catalog.outputs.firstProductId</code>
+                    
+                      <code class=&quot;kv-key&quot;>productId</code>
+                      <span class=&quot;kv-in&quot;>path</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$steps.list-catalog.outputs.firstProductId</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
               </ul>
@@ -3295,7 +3443,10 @@ the final payment status.</p>
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200
+                    
+                  </li>
                 
               </ul>
             
@@ -3347,10 +3498,13 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
               </ul>
@@ -3364,15 +3518,22 @@ the final payment status.</p>
   &amp;#34;productId&amp;#34;: &amp;#34;<span class=&quot;runtime&quot;>$inputs.productId</span>&amp;#34;,
   &amp;#34;quantity&amp;#34;: 2
 }</pre>
+              
             
 
             
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 201</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 201
+                    
+                  </li>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/totalPrice &amp;gt; 0</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/totalPrice &amp;gt; 0
+                    
+                  </li>
                 
               </ul>
             
@@ -3424,18 +3585,24 @@ the final payment status.</p>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>orderId</code>
-                    <span class=&quot;kv-in&quot;>path</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.orderId</code>
+                    
+                      <code class=&quot;kv-key&quot;>orderId</code>
+                      <span class=&quot;kv-in&quot;>path</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.orderId</code>
+                    
                   </li>
                 
                   <li>
                     <span class=&quot;kv-connector&quot; aria-hidden=&quot;true&quot;>←</span>
-                    <code class=&quot;kv-key&quot;>Accept-Language</code>
-                    <span class=&quot;kv-in&quot;>header</span>
-                    <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
-                    <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
+                      <code class=&quot;kv-key&quot;>Accept-Language</code>
+                      <span class=&quot;kv-in&quot;>header</span>
+                      
+                      <span class=&quot;kv-sep&quot; aria-hidden=&quot;true&quot;>=</span>
+                      <code class=&quot;runtime&quot;>$inputs.acceptLanguage</code>
+                    
                   </li>
                 
               </ul>
@@ -3453,15 +3620,22 @@ the final payment status.</p>
   &amp;#34;expiryDate&amp;#34;: &amp;#34;12/26&amp;#34;,
   &amp;#34;method&amp;#34;: &amp;#34;card&amp;#34;
 }</pre>
+              
             
 
             
               <p class=&quot;block-label&quot;>Success Criteria</p>
               <ul class=&quot;success-block&quot;>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$statusCode == 200
+                    
+                  </li>
                 
-                  <li><span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/status == &amp;#34;OK&amp;#34;</li>
+                  <li>
+                    <span class=&quot;check&quot; aria-hidden=&quot;true&quot;>✓</span>$response.body#/status == &amp;#34;OK&amp;#34;
+                    
+                  </li>
                 
               </ul>
             
@@ -3629,7 +3803,7 @@ flowchart TD
           <div class="card">
             <div class="card-marker"><span class="num">02</span></div>
             <h3>Standalone HTML</h3>
-            <p>No server, no client-side rendering, no JavaScript. One file, ~18 kB raw / ~3 kB gzipped, viewable offline.</p>
+            <p>No server, no client-side rendering, no JavaScript. One file, ~29 kB raw / ~4.5 kB gzipped, viewable offline.</p>
           </div>
           <div class="card">
             <div class="card-marker"><span class="num">03</span></div>
@@ -3649,7 +3823,7 @@ flowchart TD
           <div class="card">
             <div class="card-marker"><span class="num">06</span></div>
             <h3>Themeable</h3>
-            <p>Light and dark built in; drop a <code>themes.yml</code> to set a default or add your own. Custom themes are contrast-audited at load time.</p>
+            <p>Three themes built in (light, dark, pb33f); drop a <code>themes.yml</code> to set a default or add your own. Custom themes are contrast-audited at load time.</p>
           </div>
           <div class="card">
             <div class="card-marker"><span class="num">07</span></div>
@@ -3683,12 +3857,12 @@ flowchart TD
         <table>
           <caption>arazzo-maestro at a glance</caption>
           <tbody>
-            <tr><th scope="row">Generated workflow HTML</th><td class="val">~18 kB raw · ~3 kB gzipped</td></tr>
+            <tr><th scope="row">Generated workflow HTML</th><td class="val">~29 kB raw · ~4.5 kB gzipped</td></tr>
             <tr><th scope="row">Requests at page load</th><td class="val">1 (output) · 0 (this page)</td></tr>
             <tr><th scope="row">Direct Go dependencies</th><td class="val">4</td></tr>
-            <tr><th scope="row">Binary size</th><td class="val">~19 MB, static, no cgo</td></tr>
+            <tr><th scope="row">Binary size</th><td class="val">~20 MB, static, no cgo</td></tr>
             <tr><th scope="row">Built-in themes passing WCAG AA</th><td class="val">11 / 11 critical pairs</td></tr>
-            <tr><th scope="row">Arazzo versions</th><td class="val">1.0 &amp; 1.1</td></tr>
+            <tr><th scope="row">Arazzo versions</th><td class="val">1.0 &middot; 1.1 (partial)</td></tr>
           </tbody>
         </table>
       </div>

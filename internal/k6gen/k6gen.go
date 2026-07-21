@@ -29,9 +29,12 @@
 // Arazzo runtime expressions are translated to JavaScript identifiers:
 // $inputs.foo becomes the foo constant (read from __ENV), and
 // $steps.s.outputs.o becomes the s_o capture from an earlier step; the
-// spec's embedded {$expr} form becomes a template literal. Names that
-// are not valid JS identifiers (hyphens, leading digits) are sanitised
-// consistently on both the declaration and the reference.
+// spec's embedded {$expr} form becomes a template literal. Identifiers
+// are assigned at declaration time (inputs first, then each step's
+// captures) in one table; sanitisation collisions get a numeric suffix,
+// and references translate by exact Arazzo name, so a name that is never
+// declared stays visibly untranslated instead of silently reading
+// another name that sanitises to the same identifier.
 //
 // The host is never hard-coded: every request is prefixed with the
 // BASE_URL constant, read from `__ENV.BASE_URL` so the same script runs
@@ -48,7 +51,6 @@ import (
 	"encoding/json"
 	"fmt"
 	neturl "net/url"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -74,13 +76,15 @@ type Options struct {
 // map is accepted, in which case every step is rendered with an
 // unresolved placeholder.
 func Generate(wf model.Workflow, sources map[string]*oasresolver.Source, opts Options) (string, error) {
+	base := oasresolver.DefaultBaseURL(wf, sources)
+	ids := declareInputs(wf.Inputs)
 	var b strings.Builder
-	writeHeader(&b, wf, defaultBaseURL(wf, sources))
+	writeHeader(&b, wf, base)
 	writeImports(&b)
-	writeBaseURL(&b, defaultBaseURL(wf, sources))
-	writeInputs(&b, wf.Inputs, subAccessedInputs(wf))
+	writeBaseURL(&b, base)
+	writeInputs(&b, wf.Inputs, ids, subAccessedInputs(wf, ids))
 	writeOptions(&b, opts)
-	writeDefaultFunc(&b, wf, sources)
+	writeDefaultFunc(&b, wf, sources, ids)
 	return b.String(), nil
 }
 
@@ -112,14 +116,67 @@ func writeBaseURL(b *strings.Builder, defaultBase string) {
 	fmt.Fprintf(b, "const BASE_URL = __ENV.BASE_URL || %s;\n\n", jsString(defaultBase))
 }
 
+// identTable assigns each declarable Arazzo name (workflow input, step
+// output capture) its JS identifier. Declarations claim identifiers in
+// document order; a sanitisation collision (e.g. "user.name" after
+// "user_name") gets a numeric suffix so every input keeps its own
+// constant and environment variable. References translate through the
+// table by exact Arazzo name: a name that is never declared stays
+// visibly untranslated instead of silently reading another name that
+// sanitises to the same identifier.
+type identTable struct {
+	exprs map[string]string // canonical expression -> declared identifier
+	taken map[string]bool
+}
+
+func newIdentTable() *identTable {
+	return &identTable{
+		exprs: make(map[string]string),
+		// Identifiers every generated script may declare itself.
+		taken: map[string]bool{"asJson": true, "http": true, "check": true, "BASE_URL": true},
+	}
+}
+
+// declare assigns key its sanitised identifier, suffixing a counter when
+// an earlier declaration already took it, and returns the identifier.
+func (t *identTable) declare(key, base string) string {
+	ident := base
+	for n := 2; t.taken[ident]; n++ {
+		ident = fmt.Sprintf("%s_%d", base, n)
+	}
+	t.taken[ident] = true
+	t.exprs[key] = ident
+	return ident
+}
+
+func (t *identTable) lookup(key string) (string, bool) {
+	ident, ok := t.exprs[key]
+	return ident, ok
+}
+
+func inputKey(name string) string { return "$inputs." + name }
+
+func stepOutputKey(stepID, output string) string {
+	return "$steps." + stepID + ".outputs." + output
+}
+
+// declareInputs registers every workflow input, in declaration order, so
+// the input constants and their references agree on the identifiers.
+func declareInputs(inputs []model.InputProperty) *identTable {
+	t := newIdentTable()
+	for _, in := range inputs {
+		t.declare(inputKey(in.Name), jsIdent(in.Name))
+	}
+	return t
+}
+
 // writeInputs declares one constant per workflow input, read from the
 // matching environment variable with the Arazzo default (or empty
-// string) as fallback. The constant name is the sanitised input name so
-// it matches what translateInlineExpr emits for $inputs.<name>. When
-// some reference sub-accesses an input with a #/<json-pointer> suffix,
-// the asJson helper is emitted: parsing happens per reference, so a
-// whole-value use of the same input keeps its plain string.
-func writeInputs(b *strings.Builder, inputs []model.InputProperty, subAccessed bool) {
+// string) as fallback. When some reference sub-accesses an input with a
+// #/<json-pointer> suffix, the asJson helper is emitted: parsing happens
+// per reference, so a whole-value use of the same input keeps its plain
+// string.
+func writeInputs(b *strings.Builder, inputs []model.InputProperty, ids *identTable, subAccessed bool) {
 	if subAccessed {
 		b.WriteString("// asJson parses string values so #/<json-pointer> sub-accesses can navigate them.\n")
 		b.WriteString("function asJson(v) { return typeof v === \"string\" ? JSON.parse(v) : v; }\n\n")
@@ -127,37 +184,36 @@ func writeInputs(b *strings.Builder, inputs []model.InputProperty, subAccessed b
 	if len(inputs) == 0 {
 		return
 	}
-	declared := make(map[string]bool, len(inputs))
 	for _, in := range inputs {
-		ident := jsIdent(in.Name)
-		if declared[ident] {
-			// Sanitisation can collide (e.g. "user.name" and "user_name"
-			// both become user_name); redeclaring would be a SyntaxError.
-			fmt.Fprintf(b, "// input %s collides with an earlier declaration after sanitisation\n", jsString(in.Name))
-			continue
+		ident, _ := ids.lookup(inputKey(in.Name))
+		if ident != jsIdent(in.Name) {
+			fmt.Fprintf(b, "// input %s: identifier %s was already taken, declared as %s\n", jsString(in.Name), jsIdent(in.Name), ident)
 		}
-		declared[ident] = true
 		fmt.Fprintf(b, "const %s = __ENV[%s] || %s;\n", ident, jsString(in.Name), jsDefault(in.Default))
 	}
 	b.WriteString("\n")
 }
 
-// subAccessedInputs reports whether any reference sub-accesses an input
-// with a #/<json-pointer> suffix, scanning the same post-replacement
-// values the steps serialise.
-func subAccessedInputs(wf model.Workflow) bool {
+// subAccessedInputs reports whether any reference sub-accesses a declared
+// input with a #/<json-pointer> suffix, scanning the same
+// post-replacement values the steps serialise.
+func subAccessedInputs(wf model.Workflow, ids *identTable) bool {
 	for _, step := range wf.Steps {
 		if step.WorkflowID != "" {
 			continue
 		}
-		step.Parameters = resolvedParameters(step.Parameters)
+		step.Parameters = model.ResolvedParameters(step.Parameters)
 		var effective any
 		if step.RequestBody != nil {
 			effective, _ = payload.Apply(step.RequestBody.Payload, step.RequestBody.Replacements)
 		}
-		for _, value := range inlineValues(step, effective) {
+		for _, value := range model.InlineValues(step, effective) {
 			for _, ref := range expr.CollectRefs(value) {
-				if e := expr.Parse(ref); e.Kind == expr.KindInput && e.HasPointer {
+				e := expr.Parse(ref)
+				if e.Kind != expr.KindInput || !e.HasPointer {
+					continue
+				}
+				if _, declared := ids.lookup(inputKey(e.Name)); declared {
 					return true
 				}
 			}
@@ -191,24 +247,18 @@ func writeOptions(b *strings.Builder, opts Options) {
 	b.WriteString("};\n\n")
 }
 
-func writeDefaultFunc(b *strings.Builder, wf model.Workflow, sources map[string]*oasresolver.Source) {
+func writeDefaultFunc(b *strings.Builder, wf model.Workflow, sources map[string]*oasresolver.Source, ids *identTable) {
 	b.WriteString("export default function () {\n")
-	// Inputs first, then each step's captures: body expressions only
-	// translate to identifiers in here, never to undeclared constants.
-	declared := make(map[string]bool, len(wf.Inputs))
-	for _, in := range wf.Inputs {
-		declared[jsIdent(in.Name)] = true
-	}
 	for i, step := range wf.Steps {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		writeStep(b, step, sources, declared)
+		writeStep(b, step, sources, ids)
 	}
 	b.WriteString("}\n")
 }
 
-func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source, declared map[string]bool) {
+func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver.Source, ids *identTable) {
 	fmt.Fprintf(b, "  // Step: %s\n", s.StepID)
 	if s.Description != "" {
 		for _, line := range strings.Split(strings.TrimSpace(s.Description), "\n") {
@@ -217,14 +267,27 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	}
 	if s.WorkflowID != "" {
 		fmt.Fprintf(b, "  // not supported: this step invokes workflow %q (workflowId); no request generated\n", s.WorkflowID)
-		if len(s.Parameters) > 0 {
+		// Workflow-level parameter defaults reach every step, so only the
+		// step's own parameters justify the warning.
+		if len(model.OwnParameters(s.Parameters)) > 0 {
 			b.WriteString("  // warning: parameters are not forwarded to the invoked workflow\n")
 		}
 		if len(s.Outputs) > 0 {
-			fmt.Fprintf(b, "  // warning: outputs %s are not captured; later references to them stay unresolved\n", outputNames(s.Outputs))
+			fmt.Fprintf(b, "  // warning: outputs %s are not captured; later references to them stay unresolved\n", model.OutputNames(s.Outputs))
 		}
 		return
 	}
+
+	for _, p := range s.Parameters {
+		if p.Reference != "" {
+			fmt.Fprintf(b, "  // unresolved component reference (parameter dropped): %s\n", p.Reference)
+		}
+	}
+	// s is a copy: dropping unresolved entries here, before the scan,
+	// keeps the unsupported-expression comments and every writer below
+	// (headers, query, path, cookies, body) consistent with the
+	// dropped-comment above.
+	s.Parameters = model.ResolvedParameters(s.Parameters)
 
 	// Apply payload replacements once, up front: the unsupported-expression
 	// scan and the serialised body must agree on the same payload.
@@ -233,20 +296,12 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	if s.RequestBody != nil {
 		effective, unresolved = payload.Apply(s.RequestBody.Payload, s.RequestBody.Replacements)
 	}
-	for _, e := range expr.UnsupportedInline(inlineValues(s, effective), translateInlineExpr) {
+	translate := func(r string) string { return translateInlineExpr(r, ids) }
+	for _, e := range expr.UnsupportedInline(model.InlineValues(s, effective), translate) {
 		fmt.Fprintf(b, "  // unsupported expression (not translated): %s\n", e)
 	}
-	for _, p := range s.Parameters {
-		if p.Reference != "" {
-			fmt.Fprintf(b, "  // unresolved component reference (parameter dropped): %s\n", p.Reference)
-		}
-	}
-	// s is a copy: dropping unresolved entries here keeps every writer
-	// below (headers, query, path, cookies, body scan) consistent with
-	// the dropped-comment above.
-	s.Parameters = resolvedParameters(s.Parameters)
 
-	op, method, url, ok := resolveRequestLine(s, sources, declared)
+	op, method, url, ok := resolveRequestLine(s, sources, ids)
 	if !ok {
 		method = "GET"
 		if s.OperationPath != "" {
@@ -260,8 +315,8 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 			url = "${BASE_URL}/__unresolved__/" + s.OperationID
 		}
 	}
-	url += queryString(s.Parameters, declared)
-	if qs := querystringValue(s.Parameters, declared); qs != "" {
+	url += queryString(s.Parameters, ids)
+	if qs := querystringValue(s.Parameters, ids); qs != "" {
 		sep := "?"
 		if strings.Contains(url, "?") {
 			sep = "&"
@@ -278,9 +333,9 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 	}
 
 	resVar := jsIdent(s.StepID) + "Res"
-	bodyArg := writeBody(b, s.StepID, s.RequestBody, effective, unresolved, ct, ctKnown, declared)
-	reqParams := "{ headers: " + headersObject(s.Parameters, ct, ctKnown, declared)
-	if c := cookiesObject(s.Parameters, declared); c != "" {
+	bodyArg := writeBody(b, s.StepID, s.RequestBody, effective, unresolved, ct, ctKnown, ids)
+	reqParams := "{ headers: " + headersObject(s.Parameters, ct, ctKnown, ids)
+	if c := cookiesObject(s.Parameters, ids); c != "" {
 		reqParams += ", cookies: " + c
 	}
 	reqParams += " }"
@@ -288,7 +343,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		resVar, method, url, bodyArg, reqParams)
 
 	writeChecks(b, resVar, s.StepID, s.SuccessCriteria)
-	writeCaptures(b, resVar, s.StepID, s.Outputs, declared)
+	writeCaptures(b, resVar, s.StepID, s.Outputs, ids)
 }
 
 // writeBody declares the request body constant when the step has one and
@@ -296,7 +351,7 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 // name for a raw string, JSON.stringify(...) for a structured payload,
 // or "null" when there is no body). Runtime expressions inside the
 // payload are translated to the JS identifiers holding their values.
-func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, effective any, unresolved []string, ct string, ctKnown bool, declared map[string]bool) string {
+func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, effective any, unresolved []string, ct string, ctKnown bool, ids *identTable) string {
 	if body == nil {
 		return "null"
 	}
@@ -314,11 +369,11 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, effec
 	}
 	name := jsIdent(stepID) + "Body"
 	if s, ok := effective.(string); ok {
-		value, _ := jsBodyValue(s, declared) // a string value never errors
+		value, _ := jsBodyValue(s, ids) // a string value never errors
 		fmt.Fprintf(b, "  const %s = %s;\n", name, value)
 		return name
 	}
-	if raw, err := jsBodyValue(effective, declared); err == nil {
+	if raw, err := jsBodyValue(effective, ids); err == nil {
 		fmt.Fprintf(b, "  const %s = %s;\n", name, raw)
 		return "JSON.stringify(" + name + ")"
 	}
@@ -330,7 +385,7 @@ func writeBody(b *strings.Builder, stepID string, body *model.RequestBody, effec
 // runtime expressions are swapped for sentinels before a single JSON
 // marshal (indented JSON is valid JS), then the quoted sentinels become
 // bare identifiers.
-func jsBodyValue(v any, declared map[string]bool) (string, error) {
+func jsBodyValue(v any, ids *identTable) (string, error) {
 	// A sentinel base absent from the payload guarantees a literal can
 	// never be mistaken for a swapped expression.
 	probe, err := jsonMarshal(v, "", "")
@@ -342,7 +397,7 @@ func jsBodyValue(v any, declared map[string]bool) (string, error) {
 		base = "_" + base
 	}
 	var idents []string
-	swapped := swapBodyExprs(v, declared, base, &idents)
+	swapped := swapBodyExprs(v, ids, base, &idents)
 	raw, err := jsonMarshal(swapped, "  ", "  ")
 	if err != nil {
 		return "", err
@@ -353,14 +408,14 @@ func jsBodyValue(v any, declared map[string]bool) (string, error) {
 	return raw, nil
 }
 
-func swapBodyExprs(v any, declared map[string]bool, base string, repls *[]string) any {
+func swapBodyExprs(v any, ids *identTable, base string, repls *[]string) any {
 	switch t := v.(type) {
 	case string:
-		if jsExpr, isExpr := exprIdent(t); isExpr && declared[baseIdent(jsExpr)] {
+		if jsExpr, isExpr := exprIdent(t, ids); isExpr {
 			*repls = append(*repls, jsExpr)
 			return bodyExprSentinel(base, len(*repls)-1)
 		}
-		if lit, ok := jsTemplateLiteral(t, declared); ok {
+		if lit, ok := jsTemplateLiteral(t, ids); ok {
 			*repls = append(*repls, lit)
 			return bodyExprSentinel(base, len(*repls)-1)
 		}
@@ -368,13 +423,13 @@ func swapBodyExprs(v any, declared map[string]bool, base string, repls *[]string
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			out[k] = swapBodyExprs(val, declared, base, repls)
+			out[k] = swapBodyExprs(val, ids, base, repls)
 		}
 		return out
 	case []any:
 		out := make([]any, len(t))
 		for i, val := range t {
-			out[i] = swapBodyExprs(val, declared, base, repls)
+			out[i] = swapBodyExprs(val, ids, base, repls)
 		}
 		return out
 	default:
@@ -382,16 +437,12 @@ func swapBodyExprs(v any, declared map[string]bool, base string, repls *[]string
 	}
 }
 
-// embeddedExprRe matches the spec's embedded form: a runtime expression
-// wrapped in {} curly braces inside a string value.
-var embeddedExprRe = regexp.MustCompile(`\{(\$[^{}]+)\}`)
-
 // jsTemplateLiteral renders a string carrying embedded {$expr}
 // occurrences as a JS template literal (`Total: ${total}`). Only
 // expressions resolving to a declared identifier are interpolated;
 // ok is false when none does.
-func jsTemplateLiteral(s string, declared map[string]bool) (string, bool) {
-	locs := embeddedExprRe.FindAllStringSubmatchIndex(s, -1)
+func jsTemplateLiteral(s string, ids *identTable) (string, bool) {
+	locs := expr.EmbeddedRe.FindAllStringSubmatchIndex(s, -1)
 	if len(locs) == 0 {
 		return "", false
 	}
@@ -400,9 +451,8 @@ func jsTemplateLiteral(s string, declared map[string]bool) (string, bool) {
 	last := 0
 	interpolated := false
 	for _, loc := range locs {
-		expr := s[loc[2]:loc[3]]
-		jsExpr, isExpr := exprIdent(expr)
-		if !isExpr || !declared[baseIdent(jsExpr)] {
+		jsExpr, isExpr := exprIdent(s[loc[2]:loc[3]], ids)
+		if !isExpr {
 			continue
 		}
 		b.WriteString(jsTemplateEscaper.Replace(s[last:loc[0]]))
@@ -466,79 +516,44 @@ func writeChecks(b *strings.Builder, resVar, stepID string, crits []model.Succes
 // writeCaptures declares one constant per output, namespaced by step id
 // (<stepId>_<outputName>) so a later step's $steps.<stepId>.outputs.<o>
 // reference resolves to the same identifier.
-func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.OutputEntry, declared map[string]bool) {
+func writeCaptures(b *strings.Builder, resVar, stepID string, outs []model.OutputEntry, ids *identTable) {
 	for _, o := range outs {
-		name := jsIdent(stepID) + "_" + jsIdent(o.Name)
+		name := ids.declare(stepOutputKey(stepID, o.Name), jsIdent(stepID)+"_"+jsIdent(o.Name))
 		fmt.Fprintf(b, "  const %s = %s;\n", name, translateCaptureExpr(resVar, o.Expression))
-		declared[name] = true
 	}
 }
 
 // resolveRequestLine returns the HTTP method and URL template (a JS
 // backtick-literal body, BASE_URL-prefixed) for the step, or ok=false
 // when its operation reference could not be resolved.
-func resolveRequestLine(s model.Step, sources map[string]*oasresolver.Source, declared map[string]bool) (op oasresolver.Operation, method, url string, ok bool) {
+func resolveRequestLine(s model.Step, sources map[string]*oasresolver.Source, ids *identTable) (op oasresolver.Operation, method, url string, ok bool) {
 	op, ok = oasresolver.ResolveStepOperation(s, sources)
 	if !ok {
 		return oasresolver.Operation{}, "", "", false
 	}
 	// Always BASE_URL, never op.BaseURL: requests stay environment-agnostic.
-	return op, op.Method, "${BASE_URL}" + substitutePathParams(op.Path, s.Parameters, declared), true
+	return op, op.Method, "${BASE_URL}" + substitutePathParams(op.Path, s.Parameters, ids), true
 }
 
-// defaultBaseURL returns the OpenAPI servers URL backing the workflow's
-// first resolvable step, or "" when none resolves. Documentation only:
-// requests always use the BASE_URL constant.
-func defaultBaseURL(wf model.Workflow, sources map[string]*oasresolver.Source) string {
-	for _, s := range wf.Steps {
-		op, ok := oasresolver.ResolveStepOperation(s, sources)
-		if ok && op.BaseURL != "" {
-			return op.BaseURL
-		}
-	}
-	return ""
-}
-
-// resolvedParameters filters out unresolved Reusable Object entries:
-// they are announced as dropped and must not reach the request.
-func resolvedParameters(params []model.Parameter) []model.Parameter {
-	out := make([]model.Parameter, 0, len(params))
-	for _, p := range params {
-		if p.Reference == "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-// outputNames joins the declared output names for a comment.
-func outputNames(outs []model.OutputEntry) string {
-	names := make([]string, len(outs))
-	for i, o := range outs {
-		names[i] = o.Name
-	}
-	return strings.Join(names, ", ")
-}
-
-func substitutePathParams(path string, params []model.Parameter, declared map[string]bool) string {
+func substitutePathParams(path string, params []model.Parameter, ids *identTable) string {
 	for _, p := range params {
 		if p.In != "path" {
 			continue
 		}
-		path = strings.ReplaceAll(path, "{"+p.Name+"}", urlValue(p.Value, declared))
+		path = strings.ReplaceAll(path, "{"+p.Name+"}", urlValue(p.Value, ids))
 	}
 	return path
 }
 
 // queryString builds the URL query suffix (?a=1&b=2) from the step's
 // query parameters, or "" when there are none.
-func queryString(params []model.Parameter, declared map[string]bool) string {
+func queryString(params []model.Parameter, ids *identTable) string {
 	var parts []string
 	for _, p := range params {
 		if p.In != "query" {
 			continue
 		}
-		parts = append(parts, p.Name+"="+urlValue(p.Value, declared))
+		parts = append(parts, p.Name+"="+urlValue(p.Value, ids))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -551,7 +566,7 @@ func queryString(params []model.Parameter, declared map[string]bool) string {
 // known and the step declares no explicit Content-Type header, it is
 // added so k6 does not fall back to text/plain for a string body. An
 // empty set yields "{}".
-func headersObject(params []model.Parameter, contentType string, ctKnown bool, declared map[string]bool) string {
+func headersObject(params []model.Parameter, contentType string, ctKnown bool, ids *identTable) string {
 	var entries []string
 	hasCT := false
 	for _, p := range params {
@@ -561,7 +576,7 @@ func headersObject(params []model.Parameter, contentType string, ctKnown bool, d
 		if strings.EqualFold(p.Name, "content-type") {
 			hasCT = true
 		}
-		entries = append(entries, fmt.Sprintf("%s: %s", jsString(p.Name), headerValue(p.Value, declared)))
+		entries = append(entries, fmt.Sprintf("%s: %s", jsString(p.Name), headerValue(p.Value, ids)))
 	}
 	if ctKnown && !hasCT {
 		entries = append([]string{fmt.Sprintf("%s: %s", jsString("Content-Type"), jsString(contentType))}, entries...)
@@ -574,13 +589,13 @@ func headersObject(params []model.Parameter, contentType string, ctKnown bool, d
 
 // cookiesObject renders the step's cookie parameters as a JS object
 // literal for the request params, or "" when there are none.
-func cookiesObject(params []model.Parameter, declared map[string]bool) string {
+func cookiesObject(params []model.Parameter, ids *identTable) string {
 	var entries []string
 	for _, p := range params {
 		if p.In != "cookie" {
 			continue
 		}
-		entries = append(entries, fmt.Sprintf("%s: %s", jsString(p.Name), headerValue(p.Value, declared)))
+		entries = append(entries, fmt.Sprintf("%s: %s", jsString(p.Name), headerValue(p.Value, ids)))
 	}
 	if len(entries) == 0 {
 		return ""
@@ -590,10 +605,10 @@ func cookiesObject(params []model.Parameter, declared map[string]bool) string {
 
 // querystringValue returns the rendered whole-query-string parameter
 // for interpolation inside the URL literal, or "".
-func querystringValue(params []model.Parameter, declared map[string]bool) string {
+func querystringValue(params []model.Parameter, ids *identTable) string {
 	for _, p := range params {
 		if p.In == "querystring" {
-			return urlValue(p.Value, declared)
+			return urlValue(p.Value, ids)
 		}
 	}
 	return ""
@@ -603,16 +618,16 @@ func querystringValue(params []model.Parameter, declared map[string]bool) string
 // backtick URL literal: declared runtime expressions become
 // ${identifier} (whole-string or embedded {$expr}), anything else is
 // inlined verbatim.
-func urlValue(v any, declared map[string]bool) string {
+func urlValue(v any, ids *identTable) string {
 	if s, ok := v.(string); ok {
-		if jsExpr, isExpr := exprIdent(s); isExpr && declared[baseIdent(jsExpr)] {
+		if jsExpr, isExpr := exprIdent(s, ids); isExpr {
 			return "${" + jsExpr + "}"
 		}
 		// The value lands inside the request's backtick URL literal, so
 		// literal text must be escaped; the {$expr} pattern survives the
 		// escaper untouched.
-		return embeddedExprRe.ReplaceAllStringFunc(jsTemplateEscaper.Replace(s), func(m string) string {
-			if jsExpr, isExpr := exprIdent(m[1 : len(m)-1]); isExpr && declared[baseIdent(jsExpr)] {
+		return expr.EmbeddedRe.ReplaceAllStringFunc(jsTemplateEscaper.Replace(s), func(m string) string {
+			if jsExpr, isExpr := exprIdent(m[1:len(m)-1], ids); isExpr {
 				return "${" + jsExpr + "}"
 			}
 			return m
@@ -624,12 +639,12 @@ func urlValue(v any, declared map[string]bool) string {
 // headerValue renders a header parameter as a JS expression: declared
 // runtime expressions become the bare identifier (whole-string) or a
 // template literal (embedded {$expr}), plain strings are quoted.
-func headerValue(v any, declared map[string]bool) string {
+func headerValue(v any, ids *identTable) string {
 	if s, ok := v.(string); ok {
-		if jsExpr, isExpr := exprIdent(s); isExpr && declared[baseIdent(jsExpr)] {
+		if jsExpr, isExpr := exprIdent(s, ids); isExpr {
 			return jsExpr
 		}
-		if lit, ok := jsTemplateLiteral(s, declared); ok {
+		if lit, ok := jsTemplateLiteral(s, ids); ok {
 			return lit
 		}
 		return jsString(s)
@@ -683,43 +698,34 @@ func translateCondition(cond string) (string, bool) {
 	return "", false
 }
 
-// exprIdent reports whether s is an inline Arazzo runtime expression and,
-// if so, the JS identifier it maps to.
-func exprIdent(s string) (string, bool) {
-	out := translateInlineExpr(s)
+// exprIdent reports whether s is an inline Arazzo runtime expression
+// whose name is declared and, if so, the JS expression it maps to.
+func exprIdent(s string, ids *identTable) (string, bool) {
+	out := translateInlineExpr(s, ids)
 	return out, out != s
-}
-
-// inlineValues lists the values a step emits inline (parameter values and
-// the request body after replacements) for the unsupported-expression
-// scan, so the scan sees exactly what gets serialised. A recognised form
-// that merely references an undeclared step is not flagged: that is a
-// linter concern, not an untranslatable form.
-func inlineValues(s model.Step, effectiveBody any) []any {
-	values := make([]any, 0, len(s.Parameters)+1)
-	for _, p := range s.Parameters {
-		values = append(values, p.Value)
-	}
-	if s.RequestBody != nil {
-		values = append(values, effectiveBody)
-	}
-	return values
 }
 
 // translateInlineExpr maps an inline runtime expression to the JS
 // expression reading its value ($inputs.foo -> foo, $steps.s.outputs.o
-// -> s_o); anything else is returned unchanged. A #/<json-pointer>
-// suffix becomes a bracket chain on the parsed value (arrays accept
-// string indices in JS, so every segment is emitted as a string key).
-func translateInlineExpr(s string) string {
+// -> s_o); an unrecognised form, or a name with no declared identifier
+// (undeclared input, output of a step that produces no captures), is
+// returned unchanged so it stays visible in the script. A
+// #/<json-pointer> suffix becomes a bracket chain on the parsed value
+// (arrays accept string indices in JS, so every segment is emitted as a
+// string key).
+func translateInlineExpr(s string, ids *identTable) string {
 	e := expr.Parse(s)
-	var base string
+	var key string
 	switch e.Kind {
 	case expr.KindInput:
-		base = jsIdent(e.Name)
+		key = inputKey(e.Name)
 	case expr.KindStepOutput:
-		base = jsIdent(e.Name) + "_" + jsIdent(e.OutputName)
+		key = stepOutputKey(e.Name, e.OutputName)
 	default:
+		return s
+	}
+	base, declared := ids.lookup(key)
+	if !declared {
 		return s
 	}
 	if !e.HasPointer {
@@ -737,17 +743,6 @@ func translateInlineExpr(s string) string {
 		b.WriteString("[" + jsString(expr.UnescapeJSONPointer(seg)) + "]")
 	}
 	return b.String()
-}
-
-// baseIdent returns the identifier a translated expression reads, which
-// is what must be declared: the bracket chain of a pointer sub-access
-// starts at the same base identifier, possibly wrapped in asJson().
-func baseIdent(jsExpr string) string {
-	if i := strings.IndexByte(jsExpr, '['); i >= 0 {
-		jsExpr = jsExpr[:i]
-	}
-	jsExpr = strings.TrimPrefix(jsExpr, "asJson(")
-	return strings.TrimSuffix(jsExpr, ")")
 }
 
 // jsonPointerToGJSON converts the body of a JSON Pointer (after '#/')

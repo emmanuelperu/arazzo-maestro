@@ -188,7 +188,10 @@ func buildTemplate() (*template.Template, error) {
 		"hasDefault":    func(v any) bool { return v != nil },
 		"requestContentType": func(b *model.RequestBody) string {
 			if b == nil || b.ContentType == "" {
-				return "application/json"
+				// The renderer is OpenAPI-blind, so it cannot resolve the
+				// operation's declared type the way the generators do;
+				// saying so beats fabricating application/json.
+				return "content type per the operation"
 			}
 			return b.ContentType
 		},

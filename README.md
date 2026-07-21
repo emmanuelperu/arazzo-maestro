@@ -68,7 +68,7 @@ themes.yml (opt.)        ──┘                       └─►  test perf �
 | Share workflows with non-devs | ✅ Standalone HTML, no IDE, no auth | A live editor |
 | Cross-file integrity (operationId exists?) | ✅ Reads `sourceDescriptions.url`, indexes operations, validates references | A full OpenAPI validator |
 | Turn a workflow into runnable tests | ✅ `test gen/run e2e` emits Hurl files (`{{baseUrl}}`, captures, asserts), runs them, writes an HTML report; `test gen perf` emits k6 scripts | A workflow runtime/orchestrator |
-| Eco-designed output | ✅ 1 network request, system fonts, ~23 kB HTML | A pixel-perfect design system |
+| Eco-designed output | ✅ 1 network request, system fonts, ~29 kB HTML | A pixel-perfect design system |
 | Accessibility-first | ✅ WCAG 2.2 AA contrasts, semantic HTML, `aria-hidden` on decoratives | An a11y testing tool |
 
 See ["What makes us different"](#what-makes-us-different) below for the longer take.
@@ -79,11 +79,11 @@ See ["What makes us different"](#what-makes-us-different) below for the longer t
 # Install (Go 1.25+)
 go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
 
-# Or build the Docker image locally (~19 MB FROM scratch)
-docker build --build-arg VERSION=0.0.1 -t arazzo-maestro:0.0.1 .
+# Or build the Docker image locally (~20 MB FROM scratch)
+docker build --build-arg VERSION=0.4.0 -t arazzo-maestro:0.4.0 .
 # Mount cwd into /work AND set it as workdir, so relative paths
 # (e.g. examples/shop.arazzo.yaml, dist/) resolve against your host cwd.
-docker run --rm -v "$PWD":/work -w /work arazzo-maestro:0.0.1 \
+docker run --rm -v "$PWD":/work -w /work arazzo-maestro:0.4.0 \
   view examples/shop.arazzo.yaml
 
 # Lint
@@ -142,7 +142,7 @@ The Makefile iterates over `examples/*.arazzo.yaml`: adding a new file requires 
 
 1. **JSON Schema**: embedded official OAI Arazzo schema (1.0, patched at load to accept 1.0.x **and** 1.1.x). Catches types, required fields, enums, formats, regex.
 2. **Semantic rules**: uniqueness of `workflowId` / `stepId`, resolution of `$steps.X.outputs.Y` references, no forward references between steps.
-3. **Cross-file**: loads each `sourceDescriptions[].url` from local disk, indexes `operationId`s, validates that every step `operationId` (short form or qualified `$sourceDescriptions.<name>.<op>`) actually points at an operation that exists. HTTP/HTTPS URLs are intentionally refused (offline-first).
+3. **Cross-file**: loads each `sourceDescriptions[].url` from local disk, indexes operations, validates that every step reference (`operationId`, short form or qualified `$sourceDescriptions.<name>.<op>`, and `operationPath` JSON pointers) points at an operation that exists in an `openapi`-typed source. HTTP/HTTPS URLs are intentionally refused (offline-first).
 
 ```text
 $ arazzo-maestro lint examples/shop.arazzo.yaml
@@ -241,7 +241,7 @@ Parameters, outputs, success criteria and runtime expressions (including the emb
 
 These are **engineering constraints**, not afterthoughts. The rules are formalised in [`.agents/rules/`](./.agents/rules/) and enforced by reviews and tests:
 
-- **Eco-design**: 1 network request at page load (Tailwind CDN), ~23 kB HTML, ~4 kB gzipped, no JavaScript, no fonts loaded from third parties, single Go binary (~19 MB) packaged in a `FROM scratch` Docker image.
+- **Eco-design**: 1 network request at page load (Tailwind CDN), ~29 kB HTML, ~4.5 kB gzipped, no JavaScript, no fonts loaded from third parties, single Go binary (~20 MB) packaged in a `FROM scratch` Docker image.
 - **Accessibility**: WCAG 2.2 AA contrasts (4.5:1 on body text), semantic HTML (`<main>`, `<section>`, `<h1>`→`<h2>`→`<h3>`), `aria-hidden` on decorative icons, visible focus, `prefers-reduced-motion` honoured, no info conveyed by colour alone, fluid `rem` sizing.
 
 ### 🧰 Built-in CLI
@@ -289,14 +289,16 @@ test gen perf flags:
 
 ```
 internal/
-├── model/         Pure data types (no behaviour)
+├── model/         Pure data types + small shared helpers on them
 ├── parser/        YAML → model.ArazzoDocument
+├── expr/          Runtime-expression parsing shared by both generators
 ├── oasresolver/   Loads a local OpenAPI 3.x doc (via pb33f/libopenapi)
 │                  and resolves operationIds → (Method, Path, BaseURL, Spec)
 ├── linter/        Validates a document, three passes:
 │                  schema.go (official JSON Schema, via santhosh-tekuri/jsonschema)
 │                  linter.go (uniqueness, $steps.X.outputs.Y references)
 │                  crossfile.go (sourceDescriptions[].url → oasresolver, opId checks)
+├── payload/       Applies requestBody replacements (RFC 6901 targets)
 ├── hurlgen/       model.Workflow + oasresolver → Hurl (.hurl) e2e test text
 ├── k6gen/         model.Workflow + oasresolver → k6 (.k6.js) perf test script
 ├── theme/         Loads built-in + user themes, validates, audits WCAG contrast
@@ -305,7 +307,7 @@ internal/
 cmd/arazzo-maestro/   Cobra CLI entry point
 ```
 
-Dependency graph: `model` → ∅, `parser` → `model`, `oasresolver` → `model` (external: `pb33f/libopenapi`), `linter` → `parser` + `model` + `oasresolver`, `hurlgen` → `model` + `oasresolver`, `k6gen` → `model` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `mermaidgen` → `model`, `cmd` → all. No cycles.
+Dependency graph: `model` → ∅, `expr` → ∅, `parser` → `model`, `oasresolver` → `model` + `expr` (external: `pb33f/libopenapi`), `payload` → `model` + `expr`, `linter` → `parser` + `model` + `oasresolver`, `hurlgen`/`k6gen` → `model` + `expr` + `payload` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `mermaidgen` → `model`, `cmd` → all. No cycles.
 
 ## What makes us different
 
@@ -324,11 +326,11 @@ These are complementary. The same user can have a VS Code plugin **and** `arazzo
 
 ## Examples
 
-Ready-to-copy recipes for **CI** (GitHub Actions + Pages), a **pre-commit hook**, and **Docker** (`FROM scratch`, ~19 MB) live in [`RECIPES`](./docs/RECIPES.md).
+Ready-to-copy recipes for **CI** (GitHub Actions + Pages), a **pre-commit hook**, and **Docker** (`FROM scratch`, ~20 MB) live in [`RECIPES`](./docs/RECIPES.md).
 
 ## Roadmap
 
-Core (parse, lint, render, themes, e2e + perf test generation, landscape and Mermaid `view` outputs) is shipped. What's next: the OpenSSF `passing` badge, binary-size shrink, nested workflows, `dependsOn`, SVG/PNG export. Full checklist of done and planned items in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
+Core (parse, lint, render, themes, e2e + perf test generation, landscape and Mermaid `view` outputs) is shipped, and so is the spec-compliance wave (components, workflow-level defaults and `dependsOn`, `operationPath`, criterion `context`/`type`, JSON-pointer sub-access). What's next: the OpenSSF `passing` badge, binary-size shrink, nested workflow execution, SVG/PNG export. Full checklist of done and planned items in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
 
 ## Documentation
 
@@ -349,13 +351,13 @@ Core (parse, lint, render, themes, e2e + perf test generation, landscape and Mer
 
 | Metric | Value |
 |---|---|
-| Generated HTML (`happy-path-checkout.html`) | ~23 kB raw, ~4 kB gzipped |
+| Generated HTML (`happy-path-checkout.html`) | ~29 kB raw, ~4.5 kB gzipped |
 | Network requests at page load | 1 (Tailwind CDN, to be internalised) |
-| Binary size (`-s -w -trimpath`) | ~19 MB |
-| Docker image (`FROM scratch`) | ~19 MB |
+| Binary size (`-s -w -trimpath`) | ~20 MB |
+| Docker image (`FROM scratch`) | ~20 MB |
 | Direct dependencies | 4 (`cobra`, `yaml.v3`, `jsonschema`, `libopenapi`) |
-| Lines of Go (excl. tests) | ~3,800 |
-| Test coverage | parser 82 %, linter 84 %, oasresolver 100 %, hurlgen 100 %, k6gen 100 %, theme 86 %, renderer 81 %, cmd 76 % |
+| Lines of Go (excl. tests) | ~6,200 |
+| Test coverage | parser 86 %, linter 87 %, oasresolver 77 %, hurlgen 97 %, k6gen 98 %, expr 86 %, payload 86 %, mermaidgen 93 %, theme 86 %, renderer 82 %, cmd 78 % |
 | Built-in themes WCAG AA conformance | 100 % on critical pairs (11/11, incl. `jsonRuntime` on `jsonBg`) |
 
 ## Feedback

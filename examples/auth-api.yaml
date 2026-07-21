@@ -23,9 +23,14 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/Credentials"
-            example:
-              username: demo
-              password: demo-password
+            # Named examples drive mock servers (Microcks): a request example
+            # and the response example with the SAME name form one mockable
+            # exchange.
+            examples:
+              success:
+                value:
+                  username: demo
+                  password: demo-password
       responses:
         "200":
           description: Authenticated
@@ -33,9 +38,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Session"
-              example:
-                token: eyJhbGciOiJIUzI1NiJ9.demo.signature
-                expiresIn: 3600
+              examples:
+                success:
+                  value:
+                    token: eyJhbGciOiJIUzI1NiJ9.demo.signature
+                    expiresIn: 3600
         "401":
           description: Invalid credentials
   /orders:
@@ -51,6 +58,9 @@ paths:
             type: integer
             default: 0
             example: 0
+          examples:
+            success:
+              value: 0
       responses:
         "200":
           description: A page of orders
@@ -58,11 +68,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrderList"
-              example:
-                items:
-                  - id: ord-001
-                    status: shipped
-                    total: 49.99
+              examples:
+                success:
+                  value:
+                    items:
+                      - id: ord-001
+                        status: shipped
+                        total: 49.99
         "401":
           description: Missing or expired token on the listing call
   /orders/{orderId}:
@@ -78,6 +90,11 @@ paths:
           schema:
             type: string
             example: ord-001
+          # Same id the listOrders `success` example returns in items[0].id,
+          # so the workflow's capture chain resolves against the mock.
+          examples:
+            success:
+              value: ord-001
       responses:
         "200":
           description: The order
@@ -85,10 +102,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Order"
-              example:
-                id: ord-001
-                status: shipped
-                total: 49.99
+              examples:
+                success:
+                  value:
+                    id: ord-001
+                    status: shipped
+                    total: 49.99
         "401":
           description: Missing or expired token
         "404":

@@ -46,6 +46,12 @@ paths:
             minimum: 0
             default: 0
             example: 0
+          # Named examples drive mock servers (Microcks): a request example
+          # and the response example with the SAME name form one mockable
+          # exchange, query values becoming the dispatch criteria.
+          examples:
+            success:
+              value: 0
         - name: size
           in: query
           description: Page size (1–100).
@@ -55,6 +61,9 @@ paths:
             maximum: 100
             default: 10
             example: 10
+          examples:
+            success:
+              value: 10
       responses:
         "200":
           description: Paginated catalog page.
@@ -70,14 +79,16 @@ paths:
                     items:
                       $ref: "#/components/schemas/Product"
                     example:
-                      - id: prod-001
+                      - id: p-001
                         name: Espresso machine
                         price: 249.90
-              example:
-                items:
-                  - id: prod-001
-                    name: Espresso machine
-                    price: 249.90
+              examples:
+                success:
+                  value:
+                    items:
+                      - id: p-001
+                        name: Espresso machine
+                        price: 249.90
 
   /products/{productId}:
     # Shared parameter declared once at the Path Item level: it applies to
@@ -104,6 +115,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Product"
+              # Name-matched with the ProductId parameter's `success` example
+              # (p-001), so a mock server can pair request and response.
+              examples:
+                success:
+                  value:
+                    id: p-001
+                    name: Espresso machine
+                    price: 249.90
         "404":
           description: No product matches the given id.
 
@@ -138,9 +157,11 @@ paths:
                   description: Quantity to add (≥1).
                   minimum: 1
                   example: 2
-            example:
-              productId: prod-001
-              quantity: 2
+            examples:
+              success:
+                value:
+                  productId: p-001
+                  quantity: 2
       responses:
         "201":
           description: Cart updated. Returns the new total.
@@ -155,8 +176,10 @@ paths:
                     format: float
                     description: New total amount of the cart.
                     example: 499.80
-              example:
-                totalPrice: 499.80
+              examples:
+                success:
+                  value:
+                    totalPrice: 499.80
 
   /orders/{orderId}/payment:
     post:
@@ -175,6 +198,11 @@ paths:
           schema:
             type: string
             example: order-001
+          examples:
+            success:
+              value: ord-1
+            refused:
+              value: ord-1
         - name: Accept-Language
           in: header
           description: Preferred locale for the payment receipt and error labels.
@@ -188,13 +216,26 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CardPayment"
-            example:
-              method: card
-              amount: 49.99
-              cardNumber: "4111111111111111"
-              cardHolder: John Doe
-              expiryDate: "12/26"
-              cvv: "123"
+            # Two mockable exchanges: the card ending 1111 is accepted, the
+            # card ending 0002 is refused. A mock server dispatching on
+            # /cardNumber pairs each body with the same-named response.
+            examples:
+              success:
+                value:
+                  method: card
+                  amount: 49.99
+                  cardNumber: "4111111111111111"
+                  cardHolder: John Doe
+                  expiryDate: "12/26"
+                  cvv: "123"
+              refused:
+                value:
+                  method: card
+                  amount: 49.99
+                  cardNumber: "4111111111110002"
+                  cardHolder: Jane Doe
+                  expiryDate: "06/25"
+                  cvv: "456"
       responses:
         "200":
           description: Payment processed. Inspect `status` to know the outcome.
@@ -213,9 +254,14 @@ paths:
                     type: string
                     description: Bank transaction identifier (present on success).
                     example: tx-9f2c1
-              example:
-                status: OK
-                transactionId: tx-9f2c1
+              examples:
+                success:
+                  value:
+                    status: OK
+                    transactionId: tx-9f2c1
+                refused:
+                  value:
+                    status: REFUSED
 
 components:
   parameters:
@@ -246,7 +292,7 @@ components:
         id:
           type: string
           description: Stable product identifier.
-          example: prod-001
+          example: p-001
         name:
           type: string
           description: Display name of the product.
@@ -257,7 +303,7 @@ components:
           description: Unit price, in the catalog's reference currency.
           example: 249.90
       example:
-        id: prod-001
+        id: p-001
         name: Espresso machine
         price: 249.90
 

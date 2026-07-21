@@ -40,6 +40,12 @@ paths:
           schema:
             type: string
             example: order-001
+          # Named examples drive mock servers (Microcks): a request example
+          # and the response example with the SAME name form one mockable
+          # exchange.
+          examples:
+            success:
+              value: ord-1
         - name: Accept-Language
           in: header
           description: Preferred locale for the payment receipt and error labels.
@@ -53,13 +59,15 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CardPayment"
-            example:
-              method: card
-              amount: 49.99
-              cardNumber: "4111111111111111"
-              cardHolder: John Doe
-              expiryDate: "12/26"
-              cvv: "123"
+            examples:
+              success:
+                value:
+                  method: card
+                  amount: 49.99
+                  cardNumber: "4111111111111111"
+                  cardHolder: John Doe
+                  expiryDate: "12/26"
+                  cvv: "123"
       responses:
         "200":
           description: Payment processed. Inspect `status` to know the outcome.
@@ -78,9 +86,11 @@ paths:
                     type: string
                     description: Bank transaction identifier (present on success).
                     example: tx-9f2c1
-              example:
-                status: OK
-                transactionId: tx-9f2c1
+              examples:
+                success:
+                  value:
+                    status: OK
+                    transactionId: tx-9f2c1
 
   /orders/{orderId}/confirm:
     post:
@@ -98,6 +108,9 @@ paths:
           schema:
             type: string
             example: order-001
+          examples:
+            success:
+              value: ord-1
       responses:
         "200":
           description: Order confirmed.
@@ -111,8 +124,10 @@ paths:
                     type: string
                     description: Confirmation identifier for the receipt.
                     example: conf-7b3e2
-              example:
-                confirmationId: conf-7b3e2
+              examples:
+                success:
+                  value:
+                    confirmationId: conf-7b3e2
 
   /orders/{orderId}/cancel:
     post:
@@ -130,6 +145,9 @@ paths:
           schema:
             type: string
             example: order-001
+          examples:
+            success:
+              value: ord-1
       responses:
         "200":
           description: Order cancelled and stock released.
@@ -143,8 +161,10 @@ paths:
                     type: string
                     description: Why the order was cancelled.
                     example: payment_refused
-              example:
-                reason: payment_refused
+              examples:
+                success:
+                  value:
+                    reason: payment_refused
 
 components:
   schemas:

@@ -196,3 +196,19 @@ func TestGenerateInheritedActionsKeepImplicitChain(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateBrokenGotoIsADeadEnd(t *testing.T) {
+	// A step's own goto to an unknown stepId draws no edge at all: the
+	// implicit continue must not be fabricated in its place.
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "a", OnSuccess: []model.SuccessAction{{Type: "goto", StepID: "does-not-exist"}}},
+			{StepID: "b"},
+		},
+	}
+	out := Generate(wf)
+	if strings.Contains(out, "s0 --> s1") {
+		t.Errorf("broken goto must not fall back to the implicit continue edge:\n%s", out)
+	}
+}
