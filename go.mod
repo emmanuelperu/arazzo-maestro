@@ -1,9 +1,9 @@
 module github.com/emmanuelperu/arazzo-maestro
 
-go 1.25.12
+go 1.26.9
 
 require (
-	github.com/pb33f/libopenapi v0.38.7
+	github.com/pb33f/libopenapi v0.40.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -14,10 +14,10 @@ require (
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/pb33f/jsonpath v0.8.2 // indirect
+	github.com/pb33f/jsonpath v0.8.3 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
-	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
 )
