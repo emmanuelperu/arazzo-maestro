@@ -76,7 +76,7 @@ See ["What makes us different"](#what-makes-us-different) below for the longer t
 ## Quick start
 
 ```bash
-# Install (Go 1.25+)
+# Install (Go 1.26+)
 go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
 
 # Or build the Docker image locally (~20 MB FROM scratch)

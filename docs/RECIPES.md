@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.25' }
+        with: { go-version: '1.26' }
       - run: |
           go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
           arazzo-maestro lint workflows/checkout.yaml
