@@ -56,6 +56,7 @@ type testGenE2EOptions struct {
 	output     string
 	workflowID string
 	format     string
+	remote     remoteFlags
 }
 
 func newTestGenE2ECmd() *cobra.Command {
@@ -79,8 +80,9 @@ Supported formats:
   hurl    declarative .hurl files; runs via the single 'hurl' binary
 
 Operation resolution uses the OpenAPI documents declared under
-'sourceDescriptions' in the Arazzo file (loaded as local files only;
-HTTP/HTTPS URLs are rejected). Steps whose operationId cannot be
+'sourceDescriptions' in the Arazzo file. Local files are loaded as is;
+HTTPS URLs are fetched only with --allow-remote (plain HTTP is always
+refused). Steps whose operationId cannot be
 resolved emit a placeholder request line and a comment naming the
 missing id, so the output stays valid Hurl that a human can patch.
 
@@ -102,6 +104,7 @@ Examples:
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "dist", "Output directory")
 	cmd.Flags().StringVar(&opts.workflowID, "workflow", "", "Only generate this workflow (default: all)")
 	cmd.Flags().StringVar(&opts.format, "format", "hurl", "Output format (currently only 'hurl')")
+	addRemoteFlags(cmd, &opts.remote)
 	return cmd
 }
 
@@ -112,6 +115,7 @@ type testGenPerfOptions struct {
 	vus        int
 	duration   string
 	thresholds []string
+	remote     remoteFlags
 }
 
 func newTestGenPerfCmd() *cobra.Command {
@@ -146,7 +150,8 @@ environment:
   k6 run -e BASE_URL=https://staging.example.com -e productId=p-001 out.k6.js
 
 Operation resolution uses the OpenAPI documents declared under
-'sourceDescriptions' (local files only). Steps whose operationId cannot
+'sourceDescriptions': local files, or HTTPS URLs with --allow-remote.
+Steps whose operationId cannot
 be resolved emit a placeholder request and a comment naming the missing
 id, so the script stays valid JavaScript a human can patch.
 
@@ -166,11 +171,16 @@ Examples:
 	cmd.Flags().IntVar(&opts.vus, "vus", 1, "Concurrent virtual users")
 	cmd.Flags().StringVar(&opts.duration, "duration", "30s", "Test duration (e.g. 30s, 5m)")
 	cmd.Flags().StringArrayVar(&opts.thresholds, "threshold", nil, "k6 threshold as 'metric=expression' (repeatable)")
+	addRemoteFlags(cmd, &opts.remote)
 	return cmd
 }
 
 func runTestGenPerf(cmd *cobra.Command, path string, opts *testGenPerfOptions) error {
-	files, err := generatePerfFiles(opts, path)
+	remote, err := opts.remote.options(cmd)
+	if err != nil {
+		return err
+	}
+	files, err := generatePerfFiles(opts, remote, path)
 	if err != nil {
 		return err
 	}
@@ -187,7 +197,7 @@ func runTestGenPerf(cmd *cobra.Command, path string, opts *testGenPerfOptions) e
 // generatePerfFiles parses the Arazzo file, resolves its OpenAPI sources,
 // and writes one k6 script per selected workflow under
 // <output>/perf/<format>/<arazzo-name>/.
-func generatePerfFiles(opts *testGenPerfOptions, path string) ([]string, error) {
+func generatePerfFiles(opts *testGenPerfOptions, remote oasresolver.RemoteOptions, path string) ([]string, error) {
 	if opts.format != "k6" {
 		return nil, fmt.Errorf("unsupported format %q (supported: k6)", opts.format)
 	}
@@ -199,7 +209,7 @@ func generatePerfFiles(opts *testGenPerfOptions, path string) ([]string, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 	}
-	sources, err := loadArazzoSources(doc, filepath.Dir(path))
+	sources, err := loadArazzoSources(doc, filepath.Dir(path), remote)
 	if err != nil {
 		return nil, err
 	}
@@ -267,6 +277,7 @@ type testRunE2EOptions struct {
 	workflowID string
 	format     string
 	variables  []string
+	remote     remoteFlags
 }
 
 func newTestRunE2ECmd() *cobra.Command {
@@ -310,6 +321,7 @@ The process exit status mirrors hurl: non-zero when any test fails. When
 	cmd.Flags().StringVar(&opts.workflowID, "workflow", "", "Only run this workflow (default: all)")
 	cmd.Flags().StringVar(&opts.format, "format", "hurl", "Test format (currently only 'hurl')")
 	cmd.Flags().StringArrayVar(&opts.variables, "variable", nil, "Extra Hurl variable as name=value for workflow inputs (repeatable)")
+	addRemoteFlags(cmd, &opts.remote)
 	_ = cmd.MarkFlagRequired("base-url")
 	return cmd
 }
@@ -319,6 +331,10 @@ func runTestRunE2E(cmd *cobra.Command, path string, opts *testRunE2EOptions) err
 		return fmt.Errorf("unsupported format %q (supported: hurl)", opts.format)
 	}
 	if err := validateBaseURL(opts.baseURL); err != nil {
+		return err
+	}
+	remote, err := opts.remote.options(cmd)
+	if err != nil {
 		return err
 	}
 	if _, err := exec.LookPath("hurl"); err != nil {
@@ -338,6 +354,7 @@ func runTestRunE2E(cmd *cobra.Command, path string, opts *testRunE2EOptions) err
 		output:     tmp,
 		workflowID: opts.workflowID,
 		format:     opts.format,
+		remote:     remote,
 	}, path)
 	if err != nil {
 		return err
@@ -387,10 +404,15 @@ func validateBaseURL(raw string) error {
 }
 
 func runTestGenE2E(cmd *cobra.Command, path string, opts *testGenE2EOptions) error {
+	remote, err := opts.remote.options(cmd)
+	if err != nil {
+		return err
+	}
 	files, err := generateE2EFiles(e2eGenSpec{
 		output:     opts.output,
 		workflowID: opts.workflowID,
 		format:     opts.format,
+		remote:     remote,
 	}, path)
 	if err != nil {
 		return err
@@ -413,6 +435,7 @@ type e2eGenSpec struct {
 	output     string
 	workflowID string
 	format     string
+	remote     oasresolver.RemoteOptions
 }
 
 // generateE2EFiles parses the Arazzo file, resolves its OpenAPI sources,
@@ -427,7 +450,7 @@ func generateE2EFiles(spec e2eGenSpec, path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 	}
-	sources, err := loadArazzoSources(doc, filepath.Dir(path))
+	sources, err := loadArazzoSources(doc, filepath.Dir(path), spec.remote)
 	if err != nil {
 		return nil, err
 	}
@@ -489,9 +512,9 @@ func arazzoBaseName(path string) string {
 	return strings.TrimSuffix(name, filepath.Ext(name))
 }
 
-func loadArazzoSources(doc *model.ArazzoDocument, basePath string) (map[string]*oasresolver.Source, error) {
+func loadArazzoSources(doc *model.ArazzoDocument, basePath string, remote oasresolver.RemoteOptions) (map[string]*oasresolver.Source, error) {
 	sources := make(map[string]*oasresolver.Source, len(doc.SourceDescriptions))
-	for _, r := range oasresolver.LoadAll(doc.SourceDescriptions, basePath) {
+	for _, r := range oasresolver.LoadAll(doc.SourceDescriptions, basePath, remote) {
 		if r.Err != nil {
 			if errors.Is(r.Err, fs.ErrNotExist) {
 				return nil, fmt.Errorf("source %q: file not found (resolved to %s)", r.Name, r.Path)

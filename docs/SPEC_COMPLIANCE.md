@@ -41,7 +41,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `arazzo` version 1.0.x / 1.1.x | ✅ | ✅ | n/a | n/a | ✅ | Version pattern patched at schema load |
 | `$self` (1.1) | ❌ | 😶 accepted | ❌ | ❌ | 😶 | Accepted structurally since #47; no base-URI / identity-based reference resolution |
 | `info` | ✅ | ✅ | 🟡 | n/a | 🟡 | `description` and `version` parsed but never rendered |
-| `sourceDescriptions` | ✅ | ✅ | ❌ | 🟡 | 🟡 | Never rendered; `type: arazzo` and `type: asyncapi` sources accepted but never resolved; HTTP/HTTPS URLs rejected by design (offline-first) |
+| `sourceDescriptions` | ✅ | ✅ | ❌ | 🟡 | 🟡 | Never rendered; `type: arazzo` and `type: asyncapi` sources accepted but never resolved; HTTPS URLs fetched only with the opt-in `--allow-remote` ([#106](https://github.com/emmanuelperu/arazzo-maestro/issues/106)), plain HTTP always rejected |
 | `components` + Reusable Objects | ✅ | ✅ refs checked | ✅ inlined | ✅ inlined | 🟡 | `parameters`/`successActions`/`failureActions` parsed, `$components.*` references inlined at parse time (`value` override honoured), dangling/malformed/kind-mismatched refs linted, unresolved entries surfaced instead of blank (#52); reusable `inputs` schemas still schema-only (tied to [#57](https://github.com/emmanuelperu/arazzo-maestro/issues/57)) |
 | `x-` extensions | 😶 | ✅ | ❌ | ❌ | 🟡 | Accepted, never surfaced |
 
@@ -104,7 +104,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 - AsyncAPI source resolution and message steps (the linter should still
   accept them structurally: [#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47))
 - Executing workflows (we generate tests; runners exist elsewhere)
-- HTTP/HTTPS source URLs (offline-first eco-design rule; documented)
+- Plain HTTP source URLs, and HTTPS ones unless `--allow-remote` is passed (offline-first eco-design rule; documented)
 
 ## Method
 

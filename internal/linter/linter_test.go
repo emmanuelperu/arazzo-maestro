@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
 )
 
@@ -12,7 +13,7 @@ import (
 // (which references openapi.yaml in the same dir) should produce zero
 // findings through all three passes.
 func TestLintFileCleanExample(t *testing.T) {
-	issues, err := LintFile(filepath.Join("..", "..", "examples", "shop.arazzo.yaml"))
+	issues, err := LintFile(filepath.Join("..", "..", "examples", "shop.arazzo.yaml"), oasresolver.DefaultRemoteOptions())
 	if err != nil {
 		t.Fatalf("LintFile: %v", err)
 	}

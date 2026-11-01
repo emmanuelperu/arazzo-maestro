@@ -1,9 +1,10 @@
-// Package oasresolver loads a local OpenAPI 3.x document and resolves
+// Package oasresolver loads an OpenAPI 3.x document and resolves
 // operationIds to their HTTP method, path template, and effective base
 // server URL.
 //
-// Backed by github.com/pb33f/libopenapi. Only local files are loaded.
-// Rejection of HTTP/HTTPS sources is left to the caller.
+// Backed by github.com/pb33f/libopenapi. Sources are local files, or
+// HTTPS URLs when remote loading is explicitly allowed. External $refs
+// are never followed.
 package oasresolver
 
 import (
@@ -95,13 +96,19 @@ func Load(path string) (*Source, error) {
 	if err != nil {
 		return nil, fmt.Errorf("oasresolver: read %s: %w", path, err)
 	}
+	return parse(raw, path)
+}
+
+// parse builds a Source from raw OpenAPI bytes; origin names the file or
+// URL in error messages.
+func parse(raw []byte, origin string) (*Source, error) {
 	doc, err := libopenapi.NewDocument(raw)
 	if err != nil {
-		return nil, fmt.Errorf("oasresolver: parse %s: %w", path, err)
+		return nil, fmt.Errorf("oasresolver: parse %s: %w", origin, err)
 	}
 	model, err := doc.BuildV3Model()
 	if err != nil {
-		return nil, fmt.Errorf("oasresolver: build model from %s: %w", path, err)
+		return nil, fmt.Errorf("oasresolver: build model from %s: %w", origin, err)
 	}
 	s := &Source{doc: &model.Model}
 	s.indexOperations()

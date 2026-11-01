@@ -22,7 +22,7 @@ arazzo-maestro test gen e2e examples/shop.arazzo.yaml -o dist/
 
 The `e2e/<format>/<arazzo-name>/` prefix is added by the CLI so a single output directory can hold artifacts for several Arazzo files and several kinds (e2e, perf, ...) without collisions, and so the on-disk layout mirrors the subcommand grammar.
 
-The generator delegates `operationId` and `operationPath` resolution to the OpenAPI sources declared under `sourceDescriptions` (loaded as local files only; HTTP/HTTPS URLs are rejected, same eco-design rule as the linter). Resolved steps emit real `METHOD {{baseUrl}}/path` request lines with path parameters substituted; unresolvable steps emit a Hurl comment and a placeholder so the file stays valid for the target tool. Steps that invoke another workflow (`workflowId`) emit an explicit not-supported comment and no request at all, and references to their outputs stay visibly untranslated (no capture would ever define them).
+The generator delegates `operationId` and `operationPath` resolution to the OpenAPI sources declared under `sourceDescriptions` (local files, or HTTPS URLs with `--allow-remote`: see [Remote OpenAPI sources](#remote-openapi-sources)). Resolved steps emit real `METHOD {{baseUrl}}/path` request lines with path parameters substituted; unresolvable steps emit a Hurl comment and a placeholder so the file stays valid for the target tool. Steps that invoke another workflow (`workflowId`) emit an explicit not-supported comment and no request at all, and references to their outputs stay visibly untranslated (no capture would ever define them).
 
 The request host is never hard-coded. Every request line is prefixed with the `{{baseUrl}}` Hurl variable, so the **same** `.hurl` file runs unchanged against staging, pre-production or a local mock by passing the endpoint at run time. The OpenAPI `servers:` URL, when present, is surfaced in the file header as the documented default.
 
@@ -94,6 +94,23 @@ k6 run -e BASE_URL=https://staging.example.com -e productId=p-001 \
 Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are substituted too (`"$inputs.productId"` becomes the `productId` constant; the e2e generator emits `{{productId}}`, unquoted when the input's declared type is numeric or boolean), as is the spec's embedded form: `"Bearer {$inputs.token}"` becomes a JS template literal in k6 and `"Bearer {{token}}"` in Hurl. Payload `replacements` are applied (JSON-pointer target) before substitution, in both generators. Only whole-string expressions and braced `{$expr}` occurrences resolving to a declared input or earlier step output are substituted; anything else stays a literal. k6 constants are assigned at declaration time in one table: when two names sanitise to the same JS identifier (`user.name` vs `user_name`), the later one gets a numeric suffix (`user_name_2`) so each input keeps its own environment variable, and references translate by exact Arazzo name, never by identifier coincidence. Drill is a planned lighter alternative.
 
 The perf-only flags (`--vus`, `--duration`, `--threshold`) live on `test gen perf` so `test gen perf --help` documents exactly what makes sense for load testing; `test gen e2e --help` stays focused on functional concerns. Both subcommands share the same underlying workflow IR, so adding a new format is a per-template change, not a CLI redesign.
+
+## Remote OpenAPI sources
+
+Sources are loaded from local files by default and no request is ever sent. To fetch a contract published over HTTPS, opt in explicitly; the same flags exist on `lint`, `test gen e2e`, `test gen perf` and `test run e2e`:
+
+```sh
+arazzo-maestro test gen e2e workflow.arazzo.yaml -o dist/ --allow-remote
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--allow-remote` | `false` | Fetch `https://` sources |
+| `--remote-max-size` | `2MiB` | Maximum response size (bytes, `KiB` or `MiB`) |
+| `--remote-timeout` | `5s` | Timeout for fetching one source |
+| `--remote-max-redirects` | `2` | Redirects followed (`0` follows none) |
+
+Plain `http://` sources, and redirects leaving HTTPS, are always refused. TLS certificates are verified with Go's defaults and cannot be skipped. A tuning flag without `--allow-remote` is a usage error. A fetched contract is parsed exactly like a local one: external `$ref`s are not followed, and nothing is cached (each run fetches again).
 
 ## Where does test data come from?
 

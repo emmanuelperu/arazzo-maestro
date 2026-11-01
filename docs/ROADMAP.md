@@ -21,6 +21,7 @@
 - [x] Landscape layout (`view --layout landscape`), portrait stays the default
 - [x] Mermaid export (`view --format mermaid`): one `.mmd` flowchart per workflow
 - [x] Spec-compliance wave (PRs #78 to #90): shared runtime-expression parser (`internal/expr`), requestBody `contentType` + `replacements` (`internal/payload`), `operationPath` resolution, honest degradation of `workflowId` steps, `components` reusable objects inlined at parse time, workflow-level `parameters`/`successActions`/`failureActions` defaults, `workflow.dependsOn` (parse + lint + render), criterion `context`/`type` badges, JSON-pointer sub-access on `$inputs`/`$steps` references
+- [x] HTTPS `sourceDescriptions` behind the opt-in `--allow-remote` (bounded size, timeout and redirects; plain HTTP always refused)
 
 ## Planned
 
@@ -30,5 +31,5 @@
 - [ ] Parallel-branch rendering for `workflow.dependsOn` (the field is parsed, linted and displayed; the diagram does not lay branches out in parallel)
 - [ ] SVG / PNG export (pure-Go layout pass, no headless browser)
 - [ ] Internalise Tailwind CSS (zero network requests at page load)
-- [ ] HTTPS source URLs with deterministic caching (opt-in)
+- [ ] Deterministic caching of HTTPS sources (fetching itself shipped behind `--allow-remote`)
 - [ ] Watch mode (`--watch`) using `fsnotify`

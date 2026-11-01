@@ -64,18 +64,25 @@ func newRootCmd() *cobra.Command {
 }
 
 func newLintCmd() *cobra.Command {
-	return &cobra.Command{
+	remote := &remoteFlags{}
+	cmd := &cobra.Command{
 		Use:   "lint <file>",
 		Short: "Validate an Arazzo YAML file against built-in rules",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLint(cmd, args[0])
+			return runLint(cmd, args[0], remote)
 		},
 	}
+	addRemoteFlags(cmd, remote)
+	return cmd
 }
 
-func runLint(cmd *cobra.Command, path string) error {
-	issues, err := linter.LintFile(path)
+func runLint(cmd *cobra.Command, path string, remote *remoteFlags) error {
+	remoteOpts, err := remote.options(cmd)
+	if err != nil {
+		return err
+	}
+	issues, err := linter.LintFile(path, remoteOpts)
 	if err != nil {
 		return fmt.Errorf("failed to read %s: %w", path, err)
 	}

@@ -4,9 +4,8 @@
 // reference (`operationId` or `operationPath`) points at an operation
 // that actually exists in the right source.
 //
-// HTTP/HTTPS URLs are intentionally rejected (eco-design rule: lint
-// must stay offline and deterministic). HTTPS support would require
-// caching, TLS handling and is out of scope for v1.
+// HTTPS URLs are fetched only when remote loading is explicitly allowed:
+// by default lint stays offline and deterministic (eco-design rule).
 
 package linter
 
@@ -23,11 +22,11 @@ import (
 // operationIndex maps a source name → its loaded OpenAPI source.
 type operationIndex map[string]*oasresolver.Source
 
-func lintCrossFile(doc *model.ArazzoDocument, basePath string) []Issue {
+func lintCrossFile(doc *model.ArazzoDocument, basePath string, remote oasresolver.RemoteOptions) []Issue {
 	if doc == nil || basePath == "" {
 		return nil
 	}
-	index, issues := buildOperationIndex(doc, basePath)
+	index, issues := buildOperationIndex(doc, basePath, remote)
 	// When a single source is declared and a step uses the short
 	// `operationId: foo` form, we resolve `foo` against this source.
 	var implicitSource string
@@ -63,10 +62,10 @@ func nonOpenAPISource(sourceTypes map[string]string, name string) (string, bool)
 	return typ, true
 }
 
-func buildOperationIndex(doc *model.ArazzoDocument, basePath string) (operationIndex, []Issue) {
+func buildOperationIndex(doc *model.ArazzoDocument, basePath string, remote oasresolver.RemoteOptions) (operationIndex, []Issue) {
 	index := make(operationIndex, len(doc.SourceDescriptions))
 	var issues []Issue
-	for _, r := range oasresolver.LoadAll(doc.SourceDescriptions, basePath) {
+	for _, r := range oasresolver.LoadAll(doc.SourceDescriptions, basePath, remote) {
 		if r.Err != nil {
 			issues = append(issues, Issue{
 				Severity: SeverityError,
