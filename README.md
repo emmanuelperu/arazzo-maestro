@@ -142,7 +142,7 @@ The Makefile iterates over `examples/*.arazzo.yaml`: adding a new file requires 
 
 1. **JSON Schema**: embedded official OAI Arazzo schema (1.0, patched at load to accept 1.0.x **and** 1.1.x). Catches types, required fields, enums, formats, regex.
 2. **Semantic rules**: uniqueness of `workflowId` / `stepId`, resolution of `$steps.X.outputs.Y` references, no forward references between steps.
-3. **Cross-file**: loads each `sourceDescriptions[].url` from local disk, indexes operations, validates that every step reference (`operationId`, short form or qualified `$sourceDescriptions.<name>.<op>`, and `operationPath` JSON pointers) points at an operation that exists in an `openapi`-typed source. HTTP/HTTPS URLs are intentionally refused (offline-first).
+3. **Cross-file**: loads each `sourceDescriptions[].url` from local disk (or over HTTPS with the opt-in `--allow-remote`), indexes operations, validates that every step reference (`operationId`, short form or qualified `$sourceDescriptions.<name>.<op>`, and `operationPath` JSON pointers) points at an operation that exists in an `openapi`-typed source. Offline by default; plain HTTP is always refused.
 
 ```text
 $ arazzo-maestro lint examples/shop.arazzo.yaml

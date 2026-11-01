@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
+	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
 )
 
@@ -53,7 +54,7 @@ var stepsRefRe = regexp.MustCompile(`\$steps\.([A-Za-z0-9_\-]+)\.outputs\.([A-Za
 
 // LintFile is the high-level entry point used by the CLI. It reads the
 // file, parses it, and runs the full three-pass linter.
-func LintFile(path string) ([]Issue, error) {
+func LintFile(path string, remote oasresolver.RemoteOptions) ([]Issue, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -61,7 +62,7 @@ func LintFile(path string) ([]Issue, error) {
 	doc, parseErr := parser.ParseBytes(raw)
 	// We deliberately don't bail on parse errors: the JSON Schema pass
 	// can give a more precise diagnosis on a malformed document.
-	issues := Lint(raw, doc, filepath.Dir(path))
+	issues := Lint(raw, doc, filepath.Dir(path), remote)
 	if parseErr != nil && len(issues) == 0 {
 		issues = append(issues, Issue{
 			Severity: SeverityError,
@@ -74,11 +75,11 @@ func LintFile(path string) ([]Issue, error) {
 
 // Lint runs all passes. An empty raw skips the schema pass; an empty
 // basePath skips cross-file validation.
-func Lint(raw []byte, doc *model.ArazzoDocument, basePath string) []Issue {
+func Lint(raw []byte, doc *model.ArazzoDocument, basePath string, remote oasresolver.RemoteOptions) []Issue {
 	var issues []Issue
 	issues = append(issues, lintSchema(raw)...)
 	issues = append(issues, lintSemantic(doc)...)
-	issues = append(issues, lintCrossFile(doc, basePath)...)
+	issues = append(issues, lintCrossFile(doc, basePath, remote)...)
 	return issues
 }
 

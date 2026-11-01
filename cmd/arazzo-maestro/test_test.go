@@ -163,8 +163,8 @@ workflows:
 	if err == nil {
 		t.Fatal("expected an error for HTTPS sourceDescription URL")
 	}
-	if !strings.Contains(err.Error(), "HTTP source URLs are not supported") {
-		t.Errorf("error should mention HTTP source rejection, got %v", err)
+	if !strings.Contains(err.Error(), "--allow-remote") {
+		t.Errorf("error should hint --allow-remote, got %v", err)
 	}
 }
 

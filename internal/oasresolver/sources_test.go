@@ -14,7 +14,7 @@ func TestLoadAllLoadsOpenAPISources(t *testing.T) {
 	path := writeSpec(t, basicSpec)
 	results := LoadAll([]model.SourceDescription{
 		{Name: "api", Type: "openapi", URL: filepath.Base(path)},
-	}, filepath.Dir(path))
+	}, filepath.Dir(path), DefaultRemoteOptions())
 	if len(results) != 1 {
 		t.Fatalf("want 1 result, got %d", len(results))
 	}
@@ -30,7 +30,7 @@ func TestLoadAllLoadsOpenAPISources(t *testing.T) {
 func TestLoadAllSkipsNonOpenAPISources(t *testing.T) {
 	results := LoadAll([]model.SourceDescription{
 		{Name: "wf", Type: "arazzo", URL: "other.yaml"},
-	}, t.TempDir())
+	}, t.TempDir(), DefaultRemoteOptions())
 	if len(results) != 0 {
 		t.Fatalf("want 0 results, got %d", len(results))
 	}
@@ -40,7 +40,7 @@ func TestLoadAllReportsMissingFile(t *testing.T) {
 	dir := t.TempDir()
 	results := LoadAll([]model.SourceDescription{
 		{Name: "api", URL: "missing.yaml"},
-	}, dir)
+	}, dir, DefaultRemoteOptions())
 	if len(results) != 1 {
 		t.Fatalf("want 1 result, got %d", len(results))
 	}
@@ -53,18 +53,25 @@ func TestLoadAllReportsMissingFile(t *testing.T) {
 	}
 }
 
-func TestLoadAllRejectsHTTPURL(t *testing.T) {
+func TestLoadAllRejectsRemoteURLByDefault(t *testing.T) {
 	results := LoadAll([]model.SourceDescription{
 		{Name: "api", URL: "https://example.com/spec.yaml"},
-	}, t.TempDir())
+	}, t.TempDir(), DefaultRemoteOptions())
 	if len(results) != 1 || results[0].Err == nil {
 		t.Fatalf("want 1 errored result, got %+v", results)
 	}
-	if !strings.Contains(results[0].Err.Error(), "HTTP source URLs are not supported") {
+	if !strings.Contains(results[0].Err.Error(), "--allow-remote") {
 		t.Errorf("unexpected error: %v", results[0].Err)
 	}
 	if results[0].Path != "" {
 		t.Errorf("path should be empty on resolution failure, got %q", results[0].Path)
+	}
+}
+
+func TestLoadAllReportsInvalidURL(t *testing.T) {
+	results := LoadAll([]model.SourceDescription{{Name: "api", URL: ":"}}, t.TempDir(), DefaultRemoteOptions())
+	if len(results) != 1 || results[0].Err == nil || !strings.Contains(results[0].Err.Error(), "invalid url") {
+		t.Fatalf("want an invalid url error, got %+v", results)
 	}
 }
 
@@ -80,7 +87,7 @@ func TestResolveURL(t *testing.T) {
 		{name: "file scheme", rawURL: "file:///tmp/api.yaml", want: "/tmp/api.yaml"},
 		{name: "empty", rawURL: "", wantErr: "missing url"},
 		{name: "unparseable", rawURL: ":", wantErr: "invalid url"},
-		{name: "http rejected", rawURL: "http://x/api.yaml", wantErr: "HTTP source URLs are not supported"},
+		{name: "http has no local path", rawURL: "http://x/api.yaml", wantErr: "remote url has no local path"},
 		{name: "unsupported scheme", rawURL: "ftp://x/api.yaml", wantErr: `unsupported url scheme "ftp"`},
 	}
 	for _, tt := range tests {

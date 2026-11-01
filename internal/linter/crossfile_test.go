@@ -1,10 +1,14 @@
 package linter
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/emmanuelperu/arazzo-maestro/internal/oasresolver"
 	"github.com/emmanuelperu/arazzo-maestro/internal/parser"
 )
 
@@ -93,7 +97,7 @@ workflows:
 `
 	_, base := setupArazzoProject(t, src, openAPIWithPathLevelParams)
 	doc, _ := parser.ParseBytes([]byte(src))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	for _, issue := range issues {
 		t.Errorf("unexpected finding (path-level parameters must be tolerated): %s", issue)
 	}
@@ -102,7 +106,7 @@ workflows:
 func TestCrossFileAcceptsValidReference(t *testing.T) {
 	_, base := setupArazzoProject(t, arazzoSingleSource, tinyOpenAPI)
 	doc, _ := parser.ParseBytes([]byte(arazzoSingleSource))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	for _, issue := range issues {
 		t.Errorf("unexpected finding: %s", issue)
 	}
@@ -124,7 +128,7 @@ workflows:
 `
 	_, base := setupArazzoProject(t, src, tinyOpenAPI)
 	doc, _ := parser.ParseBytes([]byte(src))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	if !containsMessage(issues, `operation "nope" not found`) {
 		t.Errorf("expected unknown-operation issue, got %v", issues)
 	}
@@ -133,7 +137,7 @@ workflows:
 func TestCrossFileRejectsMissingSourceFile(t *testing.T) {
 	_, base := setupArazzoProject(t, arazzoSingleSource, "") // openapi.yaml not written
 	doc, _ := parser.ParseBytes([]byte(arazzoSingleSource))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	if !containsMessage(issues, "file not found") {
 		t.Errorf("expected file-not-found issue, got %v", issues)
 	}
@@ -146,7 +150,7 @@ func TestCrossFileRejectsMissingSourceFile(t *testing.T) {
 func TestCrossFileDoesNotReportRedundantSourceErrors(t *testing.T) {
 	_, base := setupArazzoProject(t, arazzoSingleSource, "") // openapi.yaml not written
 	doc, _ := parser.ParseBytes([]byte(arazzoSingleSource))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	for _, issue := range issues {
 		if containsMessage([]Issue{issue}, `source "" is not declared`) {
 			t.Errorf("unexpected secondary error: %s", issue)
@@ -157,7 +161,7 @@ func TestCrossFileDoesNotReportRedundantSourceErrors(t *testing.T) {
 	}
 }
 
-func TestCrossFileRejectsHTTPSURL(t *testing.T) {
+func TestCrossFileRejectsHTTPSURLByDefault(t *testing.T) {
 	src := `
 arazzo: "1.1.0"
 info: { title: t, version: "1.0.0" }
@@ -172,9 +176,39 @@ workflows:
         operationId: ping
 `
 	doc, _ := parser.ParseBytes([]byte(src))
-	issues := lintCrossFile(doc, t.TempDir())
-	if !containsMessage(issues, "HTTP source URLs are not supported") {
-		t.Errorf("expected HTTPS rejection, got %v", issues)
+	issues := lintCrossFile(doc, t.TempDir(), oasresolver.DefaultRemoteOptions())
+	if !containsMessage(issues, "--allow-remote") {
+		t.Errorf("expected HTTPS rejection hinting --allow-remote, got %v", issues)
+	}
+}
+
+func TestCrossFileResolvesHTTPSSourceWhenAllowed(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, tinyOpenAPI)
+	}))
+	t.Cleanup(srv.Close)
+	src := fmt.Sprintf(`
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+sourceDescriptions:
+  - name: api
+    url: %s/openapi.yaml
+    type: openapi
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: a
+        operationId: ping
+      - stepId: b
+        operationId: nope
+`, srv.URL)
+	doc, _ := parser.ParseBytes([]byte(src))
+	remote := oasresolver.DefaultRemoteOptions()
+	remote.Allow = true
+	remote.Transport = srv.Client().Transport
+	issues := lintCrossFile(doc, t.TempDir(), remote)
+	if len(issues) != 1 || !containsMessage(issues, `operation "nope" not found`) {
+		t.Errorf("want only the unknown-operation issue, got %v", issues)
 	}
 }
 
@@ -197,7 +231,7 @@ workflows:
 `
 	_, base := setupArazzoProject(t, src, tinyOpenAPI)
 	doc, _ := parser.ParseBytes([]byte(src))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	if !containsMessage(issues, "unqualified operationId") {
 		t.Errorf("expected qualified-form requirement, got %v", issues)
 	}
@@ -222,7 +256,7 @@ workflows:
 `
 	_, base := setupArazzoProject(t, src, tinyOpenAPI)
 	doc, _ := parser.ParseBytes([]byte(src))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	for _, issue := range issues {
 		t.Errorf("unexpected finding: %s", issue)
 	}
@@ -266,7 +300,7 @@ workflows:
 `
 	_, base := setupArazzoProject(t, src, tinyOpenAPI)
 	doc, _ := parser.ParseBytes([]byte(src))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	for _, issue := range issues {
 		t.Errorf("unexpected finding: %s", issue)
 	}
@@ -316,7 +350,7 @@ workflows:
 `
 			_, base := setupArazzoProject(t, src, tinyOpenAPI)
 			doc, _ := parser.ParseBytes([]byte(src))
-			issues := lintCrossFile(doc, base)
+			issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 			if !containsMessage(issues, tc.wantMsg) {
 				t.Errorf("expected an issue containing %q, got %v", tc.wantMsg, issues)
 			}
@@ -348,7 +382,7 @@ workflows:
 `
 	_, base := setupArazzoProject(t, src, tinyOpenAPI)
 	doc, _ := parser.ParseBytes([]byte(src))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	if !containsMessage(issues, `operationPath references source "other" of type "arazzo"`) {
 		t.Errorf("expected non-openapi operationPath issue, got %v", issues)
 	}
@@ -373,7 +407,7 @@ workflows:
 `
 	_, base := setupArazzoProject(t, src, tinyOpenAPI)
 	doc, _ := parser.ParseBytes([]byte(src))
-	issues := lintCrossFile(doc, base)
+	issues := lintCrossFile(doc, base, oasresolver.DefaultRemoteOptions())
 	if !containsMessage(issues, `operationId references source description "ghost" which does not exist`) {
 		t.Errorf("expected unknown-source issue, got %v", issues)
 	}
