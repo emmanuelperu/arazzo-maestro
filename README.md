@@ -292,8 +292,9 @@ internal/
 ├── model/         Pure data types + small shared helpers on them
 ├── parser/        YAML → model.ArazzoDocument
 ├── expr/          Runtime-expression parsing shared by both generators
-├── oasresolver/   Loads a local OpenAPI 3.x doc (via pb33f/libopenapi)
-│                  and resolves operationIds → (Method, Path, BaseURL, Spec)
+├── oasresolver/   Loads an OpenAPI 3.x doc (via pb33f/libopenapi), local or
+│                  HTTPS behind --allow-remote, and resolves
+│                  operationIds → (Method, Path, BaseURL, Spec)
 ├── linter/        Validates a document, three passes:
 │                  schema.go (official JSON Schema, via santhosh-tekuri/jsonschema)
 │                  linter.go (uniqueness, $steps.X.outputs.Y references)
@@ -307,7 +308,7 @@ internal/
 cmd/arazzo-maestro/   Cobra CLI entry point
 ```
 
-Dependency graph: `model` → ∅, `expr` → ∅, `parser` → `model`, `oasresolver` → `model` + `expr` (external: `pb33f/libopenapi`), `payload` → `model` + `expr`, `linter` → `parser` + `model` + `oasresolver`, `hurlgen`/`k6gen` → `model` + `expr` + `payload` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `theme`, `mermaidgen` → `model`, `cmd` → all. No cycles.
+Dependency graph: `model` → ∅, `expr` → ∅, `parser` → `model`, `oasresolver` → `model` + `expr` (external: `pb33f/libopenapi`), `payload` → `model` + `expr`, `linter` → `parser` + `model` + `oasresolver`, `hurlgen`/`k6gen` → `model` + `expr` + `payload` + `oasresolver`, `theme` → ∅, `renderer` → `model` + `oasresolver` + `theme`, `mermaidgen` → `model` + `oasresolver`, `cmd` → all. No cycles.
 
 ## What makes us different
 
@@ -330,7 +331,7 @@ Ready-to-copy recipes for **CI** (GitHub Actions + Pages), a **pre-commit hook**
 
 ## Roadmap
 
-Core (parse, lint, render, themes, e2e + perf test generation, landscape and Mermaid `view` outputs) is shipped, and so is the spec-compliance wave (components, workflow-level defaults and `dependsOn`, `operationPath`, criterion `context`/`type`, JSON-pointer sub-access). What's next: the OpenSSF `passing` badge, binary-size shrink, nested workflow execution, SVG/PNG export. Full checklist of done and planned items in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
+Core (parse, lint, render, themes, e2e + perf test generation, landscape and Mermaid `view` outputs) is shipped, as are opt-in HTTPS sources (`--allow-remote`) and the spec-compliance wave (components, workflow-level defaults and `dependsOn`, `operationPath`, criterion `context`/`type`, JSON-pointer sub-access). What's next: the OpenSSF `passing` badge, binary-size shrink, nested workflow execution, SVG/PNG export. Full checklist of done and planned items in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
 
 ## Documentation
 
@@ -344,7 +345,7 @@ Core (parse, lint, render, themes, e2e + perf test generation, landscape and Mer
 - [`.agents/rules/`](./.agents/rules/), eco-design, accessibility, and code-style rules
 - [`themes.yml.example`](./themes.yml.example), annotated theme template
 - [`examples/`](./examples/), `*.arazzo.yaml` (Arazzo files, picked up by `make dist` / `make lint`) + their referenced OpenAPI contracts
-- [`Makefile`](./Makefile), the canonical `make help|build|test|vet|lint|dist|clean` targets
+- [`Makefile`](./Makefile), the canonical `make help|build|test|vet|lint|dist|hurl|perf|clean` targets
 - [`Dockerfile`](./Dockerfile), multi-stage `FROM scratch` build, accepts `--build-arg VERSION=…`
 
 ## Metrics
@@ -356,8 +357,8 @@ Core (parse, lint, render, themes, e2e + perf test generation, landscape and Mer
 | Binary size (`-s -w -trimpath`) | ~20 MB |
 | Docker image (`FROM scratch`) | ~20 MB |
 | Direct dependencies | 4 (`cobra`, `yaml.v3`, `jsonschema`, `libopenapi`) |
-| Lines of Go (excl. tests) | ~6,200 |
-| Test coverage | parser 86 %, linter 87 %, oasresolver 77 %, hurlgen 97 %, k6gen 98 %, expr 86 %, payload 86 %, mermaidgen 93 %, theme 86 %, renderer 82 %, cmd 78 % |
+| Lines of Go (excl. tests) | ~6,500 |
+| Test coverage | parser 86 %, linter 87 %, oasresolver 82 %, hurlgen 97 %, k6gen 98 %, expr 86 %, payload 86 %, mermaidgen 93 %, theme 86 %, renderer 82 %, cmd 81 % |
 | Built-in themes WCAG AA conformance | 100 % on critical pairs (11/11, incl. `jsonRuntime` on `jsonBg`) |
 
 ## Feedback

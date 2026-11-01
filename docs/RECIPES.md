@@ -72,5 +72,5 @@ Without `-w`, the container's cwd is `/` and `view`'s default output
 (`./dist/`) is written to `/dist/` inside the container, then discarded
 by `--rm`.
 
-The image is `FROM scratch` (~19 MB): no shell, no libc, no package
+The image is `FROM scratch` (~20 MB): no shell, no libc, no package
 manager. The binary is the entire userland.

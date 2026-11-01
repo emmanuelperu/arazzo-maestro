@@ -8,8 +8,10 @@ Aider, …) working on this project.
 1. Read [`.agents/rules/`](./.agents/rules/) (eco-design, accessibility,
    code-style) **before touching any code**. These rules are
    non-negotiable.
-2. The truth-source for decisions, history, and roadmap is
-   [`Plan.md`](./Plan.md). Read it for the "why" of any design choice.
+2. The public roadmap is [`docs/ROADMAP.md`](./docs/ROADMAP.md) and the
+   spec coverage matrix is [`docs/SPEC_COMPLIANCE.md`](./docs/SPEC_COMPLIANCE.md).
+   The maintainer's `Plan.md` (gitignored, local only) holds the long-form
+   decision history when present.
 3. Run `go test ./...` and `go vet ./...`: both must stay clean.
 4. All committed text is in **English** (see Language rule below).
 
@@ -37,7 +39,7 @@ Non-negotiable rules live in [`.agents/rules/`](./.agents/rules/):
   stacks; Google Fonts and `@font-face` are forbidden.
 - [`accessibility.md`](./.agents/rules/accessibility.md), WCAG 2.2 AA
   target, semantic HTML, contrast checks. **Hard example**: every
-  built-in theme must pass 4.5:1 contrast on the 10 critical
+  built-in theme must pass 4.5:1 contrast on the 11 critical
   foreground/background pairs (enforced by `theme.Audit()` + tests).
 - [`code-style.md`](./.agents/rules/code-style.md), Go conventions,
   comments policy (default: no comments), tests, git.
@@ -62,7 +64,7 @@ Originally a Python POC (now removed), migrated to Go in May 2026.
 
 ### Stack
 
-- **Go 1.25+** (no cgo; see `go.mod` for the exact version)
+- **Go 1.26+** (no cgo; see `go.mod` for the exact version)
 - [`spf13/cobra`](https://github.com/spf13/cobra), CLI framework
 - [`gopkg.in/yaml.v3`](https://pkg.go.dev/gopkg.in/yaml.v3), YAML parsing
   with `yaml.Node` (we walk the tree manually to preserve insertion
@@ -71,8 +73,10 @@ Originally a Python POC (now removed), migrated to Go in May 2026.
   pure-Go JSON Schema validator (first pass of the linter)
 - [`pb33f/libopenapi`](https://github.com/pb33f/libopenapi), pure-Go
   OpenAPI parser used by `internal/oasresolver` to resolve
-  `operationId` → `(method, path, server, parameters)` for both the
-  cross-file linter pass and the Hurl test generator (adopted in #28)
+  `operationId` → `(method, path, server, parameters)` for the
+  cross-file linter pass and both test generators (adopted in #28).
+  Sources are local files by default; HTTPS sources need the opt-in
+  `--allow-remote` (#106)
 - Stdlib `html/template` for HTML rendering
 - Stdlib `embed` for templates + JSON Schema + built-in themes
 - Tailwind CSS via CDN (the only external runtime dep of the generated
@@ -94,7 +98,11 @@ internal/
 │   │                        exists?), built on internal/oasresolver
 │   └── schemas/arazzo-1.0.json   Embedded schema (patched at load)
 ├── oasresolver/             OpenAPI source loader (pb33f/libopenapi):
-│                            operationId → method/path/server/params
+│                            operationId → method/path/server/params;
+│                            local files, HTTPS behind --allow-remote
+├── expr/                    Arazzo runtime-expression parser shared by
+│                            the linter and the generators
+├── payload/                 requestBody contentType + replacements
 ├── hurlgen/                 model.Workflow + oasresolver → .hurl e2e
 │                            tests ([Captures], [Asserts], {{baseUrl}})
 ├── k6gen/                   model.Workflow + oasresolver → .k6.js perf
@@ -111,11 +119,17 @@ examples/                    Naming convention:
 ├── shop.arazzo.yaml         Sample Arazzo, happy path + onFailure retry
 ├── shop-openapi.yaml        OpenAPI contract for shop.arazzo.yaml (Vacuum 100/100)
 ├── checkout-branching.arazzo.yaml   Sample Arazzo, onSuccess/onFailure goto branching
-└── checkout-branching-api.yaml      OpenAPI contract for checkout-branching.arazzo.yaml
+├── checkout-branching-api.yaml      OpenAPI contract for checkout-branching.arazzo.yaml
+├── auth.arazzo.yaml         Sample Arazzo, login token chained into authenticated calls
+├── auth-api.yaml            OpenAPI contract for auth.arazzo.yaml
+└── generated/               `make hurl` / `make perf` output (checked in)
+docs/                        Deep guides: ROADMAP, SPEC_COMPLIANCE,
+                             TEST_GENERATION, RECIPES
+mocking/                     Local Microcks mock server for the examples
 .agents/rules/               Non-negotiable rules (see above)
 themes.yml.example           Annotated theme template
 Makefile                     `make help` lists targets
-Plan.md                      Decisions, history, roadmap, feature specs
+Plan.md                      Maintainer working notes (gitignored, local only)
 LICENSE                      Apache 2.0
 ```
 
@@ -123,13 +137,15 @@ LICENSE                      Apache 2.0
 The Makefile's `dist` and `lint` targets glob `examples/*.arazzo.yaml`
 and pick it up automatically, no changes needed elsewhere.
 
-Dependency graph (no cycles): `model` → ∅, `parser` → `model`,
-`oasresolver` → libopenapi, `linter` → `parser` + `model` + `oasresolver`,
-`hurlgen` → `model` + `oasresolver`, `k6gen` → `model` + `oasresolver`,
-`theme` → ∅, `renderer` → `model` + `theme`, `mermaidgen` → `model`,
-`cmd` → all.
+Dependency graph (no cycles): `model` → ∅, `expr` → ∅, `theme` → ∅,
+`parser` → `model`, `payload` → `expr` + `model`,
+`oasresolver` → `expr` + `model` + libopenapi,
+`linter` → `parser` + `model` + `oasresolver`,
+`hurlgen` / `k6gen` → `expr` + `model` + `oasresolver` + `payload`,
+`renderer` → `model` + `oasresolver` + `theme`,
+`mermaidgen` → `model` + `oasresolver`, `cmd` → all.
 
-### State as of 2026-06-26
+### State as of 2026-11-01
 
 | Area | Status | Where |
 |---|---|---|
@@ -142,17 +158,18 @@ Dependency graph (no cycles): `model` → ∅, `parser` → `model`,
 | Linter pass 2: semantic rules | ✅ done | `internal/linter/linter.go` |
 | Linter pass 3: cross-file (operationId in OpenAPI) | ✅ done | `internal/linter/crossfile.go` |
 | OpenAPI source resolution (libopenapi) | ✅ done (#28) | `internal/oasresolver/` |
+| HTTPS sources (opt-in `--allow-remote`) | ✅ done (#106) | `internal/oasresolver/remote.go` |
 | Test gen: e2e → Hurl (`test gen/run e2e`) | ✅ done (#21, merged) | `internal/hurlgen/` |
 | Test gen: perf → k6 (`test gen perf`) | ✅ done (#22, merged) | `internal/k6gen/` |
-| Test coverage | ✅ ≥80 % all packages | `*_test.go` |
+| Test coverage | ✅ ≥80 % on every package except `model` (~61 %, plain data types) | `*_test.go` |
 | README | ✅ structurally done, ⏭️ visual hero pending | `README.md` |
 | CI (GitHub Actions) | ✅ done | `.github/workflows/ci.yml` |
-| Releases (goreleaser, cosign-signed, SBOM) | ✅ shipped (latest v0.3.0) | `.github/workflows/release.yml` |
-| OpenSSF Best Practices badge | ✅ Phases 1-2 done; registered on bestpractices.dev | see Plan.md |
-| Logo / demo GIF / screenshots | ❌ pending | see Plan.md README polish |
+| Releases (goreleaser, cosign-signed, SBOM) | ✅ shipped (latest v0.5.0) | `.github/workflows/release.yml` |
+| OpenSSF Best Practices badge | 🟡 Phases 1-3 done; `passing` badge still `in_progress` | `docs/ROADMAP.md` |
+| Logo / demo GIF / screenshots | ❌ pending | |
 
-See [`Plan.md`](./Plan.md) for the full roadmap, including the OpenSSF
-3-phase plan and the README polish checklist.
+See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the full list of done and
+planned items.
 
 ## Useful commands
 
@@ -212,7 +229,7 @@ go mod tidy                                                 # keep go.mod clean
 ## When in doubt
 
 1. Re-read the relevant rule in `.agents/rules/`
-2. Check `Plan.md` for prior context on the topic
+2. Check `docs/ROADMAP.md`, `docs/SPEC_COMPLIANCE.md` and, when present, the local `Plan.md` for prior context on the topic
 3. If a rule blocks a user request, **flag the conflict** in the
    conversation before acting, never silently bypass a rule
 4. If no rule covers the topic and the decision has impact, ask

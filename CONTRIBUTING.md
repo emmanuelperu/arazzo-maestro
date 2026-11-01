@@ -5,35 +5,37 @@ you need to file an issue or send a pull request.
 
 ## Ground rules
 
-Before changing code, read these three rule files — they are
+Before changing code, read these three rule files: they are
 non-negotiable for any contribution:
 
-1. [`.agents/rules/eco-design.md`](./.agents/rules/eco-design.md) —
+1. [`.agents/rules/eco-design.md`](./.agents/rules/eco-design.md):
    why the generated HTML has 1 network request and uses only system
    fonts.
-2. [`.agents/rules/accessibility.md`](./.agents/rules/accessibility.md) —
+2. [`.agents/rules/accessibility.md`](./.agents/rules/accessibility.md):
    why every built-in theme passes WCAG 2.2 AA on its critical colour
    pairs.
-3. [`.agents/rules/code-style.md`](./.agents/rules/code-style.md) —
+3. [`.agents/rules/code-style.md`](./.agents/rules/code-style.md):
    Go conventions, comments policy, English-only documentation.
 
 For high-level project context, decisions, and roadmap:
 
-- [`Plan.md`](./Plan.md) — full history and the live roadmap.
-- [`AGENTS.md`](./AGENTS.md) — entry point for any coding agent (and a
+- [`docs/ROADMAP.md`](./docs/ROADMAP.md): done and planned items.
+- [`docs/SPEC_COMPLIANCE.md`](./docs/SPEC_COMPLIANCE.md): what the tool
+  covers of the Arazzo spec, and the gaps kept on purpose.
+- [`AGENTS.md`](./AGENTS.md): entry point for any coding agent (and a
   good orientation for humans, too).
 
 ## Setting up a development environment
 
 Requirements:
 
-- **Go 1.25+** (see `go.mod` for the exact version we test against).
-- **GNU Make** for the `make` targets — any recent macOS or Linux
+- **Go 1.26+** (see `go.mod` for the exact version we test against).
+- **GNU Make** for the `make` targets; any recent macOS or Linux
   shell ships one.
-- *(Optional)* [`golangci-lint`](https://golangci-lint.run/) for local
-  linting:
+- *(Optional)* [`golangci-lint`](https://golangci-lint.run/) v2 for local
+  linting (CI pins the version in `.github/workflows/ci.yml`):
   ```sh
-  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+  go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
   ```
 
 Clone, build, run the demos:
@@ -57,8 +59,8 @@ make lint          # lint every examples/*.arazzo.yaml with the binary
 make dist          # render every examples/*.arazzo.yaml into dist/
 ```
 
-The Makefile's `dist` and `lint` targets glob `examples/*.arazzo.yaml`
-— adding a new example file requires no change to the build command.
+The Makefile's `dist` and `lint` targets glob `examples/*.arazzo.yaml`,
+so adding a new example file requires no change to the build command.
 
 ## Pull request checklist
 
@@ -99,7 +101,7 @@ Before sending a PR, please confirm:
   structured diffs are unavoidable.
 - Table-driven tests for sets of similar cases; one `t.Run` per case
   otherwise.
-- Golden files for HTML rendering — one per theme, byte-for-byte
+- Golden files for HTML rendering: one per theme, byte-for-byte
   comparison.
 
 ### Comments
@@ -126,8 +128,8 @@ Before sending a PR, please confirm:
 - **Feature requests**: please cross-reference the relevant section
   of the [Arazzo specification](https://spec.openapis.org/arazzo/latest.html)
   if the request relates to spec coverage, or to
-  [`Plan.md`](./Plan.md) if it overlaps an open decision.
-- **Security**: see [`SECURITY.md`](./SECURITY.md) — please do not
+  [`docs/ROADMAP.md`](./docs/ROADMAP.md) if it overlaps a planned item.
+- **Security**: see [`SECURITY.md`](./SECURITY.md); please do not
   file public issues for vulnerability reports.
 
 ## Code of conduct
@@ -138,7 +140,7 @@ By participating, you agree to uphold this code.
 
 To report unacceptable behaviour privately, please
 [open a GitHub Security Advisory](https://github.com/emmanuelperu/arazzo-maestro/security/advisories/new)
-on this repository — the advisory mechanism handles confidential
+on this repository: the advisory mechanism handles confidential
 reports without requiring an email exchange.
 
 ## License

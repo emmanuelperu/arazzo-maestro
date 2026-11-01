@@ -21,15 +21,18 @@
 - [x] Landscape layout (`view --layout landscape`), portrait stays the default
 - [x] Mermaid export (`view --format mermaid`): one `.mmd` flowchart per workflow
 - [x] Spec-compliance wave (PRs #78 to #90): shared runtime-expression parser (`internal/expr`), requestBody `contentType` + `replacements` (`internal/payload`), `operationPath` resolution, honest degradation of `workflowId` steps, `components` reusable objects inlined at parse time, workflow-level `parameters`/`successActions`/`failureActions` defaults, `workflow.dependsOn` (parse + lint + render), criterion `context`/`type` badges, JSON-pointer sub-access on `$inputs`/`$steps` references
-- [x] HTTPS `sourceDescriptions` behind the opt-in `--allow-remote` (bounded size, timeout and redirects; plain HTTP always refused)
+- [x] HTTPS `sourceDescriptions` behind the opt-in `--allow-remote` (bounded size, timeout and redirects; plain HTTP always refused) ([#106](https://github.com/emmanuelperu/arazzo-maestro/issues/106))
 
 ## Planned
 
 - [ ] Reach OpenSSF Best Practices `passing` badge ([project 12929](https://www.bestpractices.dev/projects/12929), currently `in_progress`)
-- [ ] Shrink the binary (~5 MB before libopenapi, ~20 MB after: its `index` package links the whole `net/http`/TLS stack for remote `$ref` support we deliberately refuse)
+- [ ] Shrink the binary (~5 MB before libopenapi, ~20 MB after: its `index` package links the whole `net/http`/TLS stack for remote `$ref` support we deliberately refuse; `--allow-remote` now needs that stack too, so the gain would come from libopenapi itself)
 - [ ] Nested workflow execution (`step.workflowId` rendering + honest test-gen degradation shipped; expanding/inlining the invoked workflow is not)
 - [ ] Parallel-branch rendering for `workflow.dependsOn` (the field is parsed, linted and displayed; the diagram does not lay branches out in parallel)
-- [ ] SVG / PNG export (pure-Go layout pass, no headless browser)
+- [ ] SVG / PNG export (pure-Go layout pass, no headless browser) ([#26](https://github.com/emmanuelperu/arazzo-maestro/issues/26))
 - [ ] Internalise Tailwind CSS (zero network requests at page load)
 - [ ] Deterministic caching of HTTPS sources (fetching itself shipped behind `--allow-remote`)
 - [ ] Watch mode (`--watch`) using `fsnotify`
+- [ ] Test generation: wire authentication from OpenAPI `securitySchemes` ([#45](https://github.com/emmanuelperu/arazzo-maestro/issues/45))
+- [ ] Hurl generation: literal `{{` in request bodies collides with Hurl templating ([#33](https://github.com/emmanuelperu/arazzo-maestro/issues/33))
+- [ ] AsyncAPI: parse locally, add an async example and render it ([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75))
