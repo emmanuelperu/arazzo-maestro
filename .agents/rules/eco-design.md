@@ -91,6 +91,6 @@ If a `watch` mode is added, it must be **opt-in** (`--watch`) and use
 
 ## Current baseline
 
-- HTML `happy-path-checkout.html`: ~18 kB raw, ~3 kB gzipped
+- HTML `happy-path-checkout.html`: ~29 kB raw, ~4.5 kB gzipped
 - Requests at page load: 1 (Tailwind CDN)
-- Binary: ~6.7 MB (Go 1.23, without `-s -w`)
+- Binary: ~20 MB with `-s -w -trimpath` (~30 MB without)

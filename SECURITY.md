@@ -59,8 +59,8 @@ In scope:
 
 Out of scope:
 
-- Issues in Tailwind CSS (CDN dependency — report upstream).
-- Issues in third-party Go modules — please report directly to the
+- Issues in Tailwind CSS (CDN dependency, report upstream).
+- Issues in third-party Go modules: please report directly to the
   module maintainer. We will pick up the fix via `go mod tidy` once a
   patched version is available.
 - Social engineering, physical access, or denial of service requiring
@@ -71,19 +71,21 @@ Out of scope:
 The project applies the following defensive practices, audited by CI
 on every pull request:
 
-- `govulncheck` runs against every change and the latest stable Go
-  release.
+- `govulncheck` runs against every change, with the Go version pinned
+  in `go.mod` (bumped as soon as a standard-library advisory lands).
 - `golangci-lint` (with `gosec`, `errcheck`, `errorlint`, etc.) gates
   merges.
 - All HTML output is auto-escaped through `html/template`, with
   explicit `html.EscapeString` calls on any string injected into
   raw-HTML constructors (`template.HTML`, `template.CSS`).
 - The Go binary is built with no cgo and reproducible flags. Release
-  artefacts will be signed via Sigstore once `goreleaser` is enabled
-  (see [`Plan.md`](./Plan.md) > OpenSSF Phase 2).
-- Cross-file resolution refuses HTTP/HTTPS URLs in `sourceDescriptions[].url`
-  — the linter only reads from local disk to keep the supply chain
-  predictable.
+  artefacts are built by `goreleaser`, signed with cosign keyless
+  (Sigstore, GitHub OIDC) and shipped with a Syft SBOM.
+- `sourceDescriptions[].url` is read from local disk by default, to keep
+  the supply chain predictable. HTTPS sources are fetched only with the
+  explicit `--allow-remote` flag, with bounded size, timeout and
+  redirects; TLS certificates are always verified, and plain HTTP
+  (including a redirect to it) is always refused.
 
 ## Acknowledgements
 
