@@ -49,3 +49,10 @@ Probe a mock URL with `curl` before blaming the tests:
   response example (or the dispatcher points at a missing name).
 - `404`: dispatch criteria mismatch, the request's path/query values do
   not match any parameter example of the same name.
+- `404` on every Shop API payment, whatever the card: Microcks bound no
+  resource path to `POST /orders/{orderId}/payment`, so the request
+  never reaches the `JSON_BODY` dispatcher. This happened when the
+  dispatcher was pushed before the import had settled; the start
+  script now waits for the binding, smoke-checks the payment mock and
+  fails loudly instead of announcing a broken server. Re-run the
+  script if it reports this error.

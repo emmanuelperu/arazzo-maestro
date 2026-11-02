@@ -56,11 +56,54 @@ import json, sys
 services = json.load(sys.stdin)
 print(next(s['id'] for s in services if s['name'] == 'Shop API'))
 ")
+
+# Prints the resource paths Microcks bound to the payment operation
+# (empty when none). Without them Microcks cannot route the request
+# and every payment answers 404.
+payment_resource_paths() {
+  curl -s "$MICROCKS_API/services/$shop_id?messages=false" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+service = data.get('service', data)
+for op in service['operations']:
+    if op['name'] == 'POST /orders/{orderId}/payment':
+        print(' '.join(op.get('resourcePaths') or []))
+"
+}
+
+# The upload answers before Microcks has finished binding the operation
+# paths; pushing the dispatcher too early leaves the operation without
+# any. Wait for the import to settle first.
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  [ -n "$(payment_resource_paths)" ] && break
+  echo "Waiting for the Shop API import to settle ($attempt/10)..."
+  sleep 2
+done
+
 curl -s -X PUT "$MICROCKS_API/services/$shop_id/operation?operationName=POST%20/orders/%7BorderId%7D/payment" \
   -H 'Content-Type: application/json' \
   --data-raw '{"defaultDelay":0,"dispatcher":"JSON_BODY","dispatcherRules":"{\"exp\": \"/cardNumber\", \"operator\": \"equals\", \"cases\": {\"4111111111111111\": \"success\", \"4111111111110002\": \"refused\", \"default\": \"success\"}}","parameterConstraints":[]}' \
   > /dev/null
 echo "JSON_BODY dispatcher pushed on POST /orders/{orderId}/payment."
+
+# Smoke-check the payment mock: announcing a ready server whose payment
+# step answers 404 would make every generated test fail downstream.
+payment_status=""
+for attempt in 1 2 3 4 5; do
+  payment_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+    'http://localhost:8082/rest/Shop+API/1.0.0/orders/ord-1/payment' \
+    -H 'Content-Type: application/json' \
+    -d '{"method":"card","cardNumber":"4111111111111111"}')
+  [ "$payment_status" = "200" ] && break
+  sleep 2
+done
+if [ "$payment_status" != "200" ]; then
+  echo "Error: the payment mock answers HTTP $payment_status instead of 200."
+  echo "  resourcePaths bound to the operation: '$(payment_resource_paths)'"
+  echo "  Re-run ./mocking/start-mock-server.sh; see mocking/README.md (Troubleshooting)."
+  exit 1
+fi
+echo "Payment mock checked: HTTP 200."
 
 echo ""
 echo "=== Mock server ready ==="
