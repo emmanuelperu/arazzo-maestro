@@ -34,5 +34,5 @@
 - [ ] Deterministic caching of HTTPS sources (fetching itself shipped behind `--allow-remote`)
 - [ ] Watch mode (`--watch`) using `fsnotify`
 - [ ] Test generation: wire authentication from OpenAPI `securitySchemes` ([#45](https://github.com/emmanuelperu/arazzo-maestro/issues/45))
-- [ ] Hurl generation: literal `{{` in request bodies collides with Hurl templating ([#33](https://github.com/emmanuelperu/arazzo-maestro/issues/33))
+- [ ] Hurl generation: literal double braces in request bodies collide with Hurl templating ([#33](https://github.com/emmanuelperu/arazzo-maestro/issues/33))
 - [ ] AsyncAPI: parse locally, add an async example and render it ([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75))
