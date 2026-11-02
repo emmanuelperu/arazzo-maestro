@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the "Blueprint render" preview in docs/index.html.
+"""Regenerate the "Blueprint render" preview in docs/index-v0.html.
 
 The preview must always reflect what `arazzo-maestro view` actually
 produces, so it is *generated*, never hand-written. This script:
@@ -20,7 +20,7 @@ produces, so it is *generated*, never hand-written. This script:
   3. Inlines each adapted page into an <iframe srcdoc>, iframes give
      perfect CSS isolation, so the embedded render is byte-faithful to
      `view` with no risk of the landing page's own styles leaking in.
-  4. Writes the two iframes into docs/index.html between the
+  4. Writes the two iframes into docs/index-v0.html between the
      PREVIEW:BEGIN / PREVIEW:END markers.
 
 Usage:  python3 docs/gen-preview.py
@@ -35,7 +35,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-INDEX = REPO / "docs" / "index.html"
+INDEX = REPO / "docs" / "index-v0.html"
 WORKFLOW_FILE = "examples/shop.arazzo.yaml"
 # dist/ is organised per example: dist/<example>/<theme>/<workflow>.html
 EXAMPLE = Path(WORKFLOW_FILE).name.split(".")[0]
@@ -205,7 +205,7 @@ def main() -> None:
     index_html = INDEX.read_text(encoding="utf-8")
     for marker in (BEGIN, END, MERMAID_BEGIN, MERMAID_END, SVG_BEGIN, SVG_END):
         if marker not in index_html:
-            sys.exit(f"ERROR: marker not found in index.html: {marker}")
+            sys.exit(f"ERROR: marker not found in {INDEX.name}: {marker}")
 
     previews = []
     with tempfile.TemporaryDirectory() as td:
