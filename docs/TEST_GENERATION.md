@@ -8,7 +8,7 @@ arazzo-maestro test run e2e  <file> [flags]      Generate + run them against an 
 arazzo-maestro test gen perf <file> [flags]      Load / performance tests (k6)
 ```
 
-The kind (`e2e` / `perf`) is a subcommand so each one declares its own flags: e2e doesn't pretend to know about virtual users, perf doesn't pretend to know about response assertions. The target technology is picked through `--format`, with a sensible default per kind. Cobra validates the combination, so `--format=drill` on `e2e` is rejected at parse time; no manual validation code.
+The kind (`e2e` / `perf`) is a subcommand so each one declares its own flags: e2e doesn't pretend to know about virtual users, perf doesn't pretend to know about response assertions. The target technology is picked through `--format`, with a sensible default per kind. Each command checks the combination before generating anything, so `--format=drill` on `e2e` is rejected with `unsupported format`.
 
 ## e2e: `--format=hurl` (default)
 
@@ -78,7 +78,7 @@ arazzo-maestro test run e2e examples/shop.arazzo.yaml \
 Each workflow becomes one k6 script (issue #22):
 
 ```bash
-arazzo-maestro test gen perf shop.arazzo.yaml -o dist/ \
+arazzo-maestro test gen perf examples/shop.arazzo.yaml -o dist/ \
   --vus=10 --duration=30s \
   --threshold='http_req_duration=p(95)<500' --threshold='http_req_failed=rate<0.01'
 # → wrote dist/perf/k6/shop/happy-path-checkout.k6.js
