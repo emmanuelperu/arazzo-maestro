@@ -466,8 +466,8 @@
             <div><h3>Tests drift</h3><p>The Postman collection and the load test were written by hand and stopped matching the workflow months ago.</p></div>
           </div>
           <div class="vs-panel vs-with">
-            <div><h3>CI fails first</h3><p><code>lint</code> resolves every <code>operationId</code> against the contract and exits 1 on the first broken reference.</p></div>
-            <div><h3>One page per workflow</h3><p><code>view</code> writes a page anyone can open offline, inputs to outputs, every expression visible.</p></div>
+            <div><h3>CI fails first</h3><p><code>lint</code> resolves every <code>operationId</code> against the contract, reports each broken reference and exits 1.</p></div>
+            <div><h3>One page per workflow</h3><p><code>view</code> writes a page anyone can open in a browser, inputs to outputs, every expression visible.</p></div>
             <div><h3>Tests from the source</h3><p><code>test</code> regenerates Hurl and k6 from the workflow itself, so they cannot drift.</p></div>
           </div>
         </div>
@@ -489,8 +489,7 @@
           <div class="pane console" role="group" aria-label="lint console, before and after the fix">
             <pre><span class="p">$</span> <span class="type t1">arazzo-maestro lint shop.arazzo.yaml</span>
 <span class="o1"><span class="err">[error]</span> workflows[happy-path-checkout].steps[pay].operationId: operation "processPaymnet" not found in source "shop-api"
-<span class="err">[error]</span> workflows[payment-refused-path].steps[pay-refused].operationId: operation "processPaymnet" not found in source "shop-api"
-Error: 2 issue(s) found</span><span class="later">
+Error: 1 issue(s) found</span><span class="later">
 <span class="p">$</span> <span class="type t2">arazzo-maestro lint shop.arazzo.yaml</span>
 <span class="o2"><span class="ok">OK:</span> shop.arazzo.yaml, no issues found</span></span></pre>
             <p class="exit"><span class="x1" aria-hidden="true">exit 1</span><span class="x0">exit 0</span></p>
@@ -532,12 +531,14 @@ Error: 1 issue(s) found</pre>
         <div class="band c-e2e">
           <div>
             <h3><code>test run e2e</code> replays it for real</h3>
-            <p>Each step becomes a <a href="https://hurl.dev">Hurl</a> request, outputs become captures, criteria become asserts. Point it at staging, a mock or production, with <code>hurl</code> on your PATH.</p>
+            <p>Each step becomes a <a href="https://hurl.dev">Hurl</a> request and outputs become captures that feed the next step. Point it at staging, a mock or production, with <code>hurl</code> on your PATH; workflow inputs come in as variables.</p>
             <pre class="mini" tabindex="0" role="group" aria-label="test run command"><span class="p">$</span> arazzo-maestro test run e2e shop.arazzo.yaml \
-    --base-url https://staging.example.com/api/v1</pre>
+    --base-url https://staging.example.com/api/v1 \
+    --variable productId=p-001 --variable orderId=ord-1 \
+    --variable acceptLanguage=en</pre>
           </div>
           <figure class="board" aria-label="Hurl run of shop.arazzo.yaml">
-            <div role="img" aria-label="The steps of happy-path-checkout (list-catalog, get-product, add-to-cart, pay) then payment-refused-path (add-to-cart, pay-refused) run one after another and each turns green with its expected status code.">
+            <div role="img" aria-label="The steps of happy-path-checkout (list-catalog, get-product, add-to-cart, pay) then payment-refused-path (add-to-cart, pay-refused) run one after another and each turns green with the status code it returned.">
             <div class="board-top"><span><span class="live"></span>shop.arazzo.yaml</span><span class="tally">requests <b></b>/6</span></div>
             <p class="wf">happy-path-checkout.hurl</p>
             <ol class="pods"><li><span class="sid">list-catalog</span><span class="call">GET /<wbr>products</span><span class="code">200</span><i></i></li><li><span class="sid">get-product</span><span class="call">GET /<wbr>products/<wbr>{productId}</span><span class="code">200</span><i></i></li><li><span class="sid">add-to-cart</span><span class="call">POST /<wbr>cart/<wbr>items</span><span class="code">201</span><i></i></li><li><span class="sid">pay</span><span class="call">POST /<wbr>orders/<wbr>{orderId}/<wbr>payment</span><span class="code">200</span><i></i></li></ol>
@@ -653,13 +654,15 @@ Failed files:      0 (0.0%)</pre>
           </figure>
           <figure>
             <figcaption><code>.pre-commit-config.yaml</code></figcaption>
-            <pre class="term" tabindex="0" role="group" aria-label="pre-commit hook">- repo: local
-  hooks:
-    - id: arazzo-lint
-      name: arazzo-maestro lint
-      entry: arazzo-maestro lint
-      language: system
-      files: '\.arazzo\.ya?ml$'</pre>
+            <pre class="term" tabindex="0" role="group" aria-label="pre-commit hook">repos:
+  - repo: local
+    hooks:
+      - id: arazzo-lint
+        name: arazzo-maestro lint
+        entry: arazzo-maestro lint workflows/checkout.yaml
+        language: system
+        files: '^workflows/.*\.ya?ml$'
+        pass_filenames: false</pre>
           </figure>
         </div>
         <p class="intro">Copy-paste versions in the <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/RECIPES.md">recipes</a>, including the two extra jobs that publish the rendered pages to GitHub Pages.</p>
@@ -675,7 +678,7 @@ Failed files:      0 (0.0%)</pre>
           <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>Sources</dt><dd>Local OpenAPI files. HTTPS on <code>--allow-remote</code>: 2 MiB, 5 s, 2 redirects, plain HTTP always refused.</dd></div>
           <div class="c-lint"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>lint</dt><dd>Official JSON Schema, semantic rules, then <code>operationId</code> resolution against the contract. Exit 0 or 1.</dd></div>
           <div class="c-view"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>view</dt><dd>HTML or Mermaid. Light, dark and pb33f themes, or your own <code>themes.yml</code>, contrast-audited at load. Portrait or landscape.</dd></div>
-          <div class="c-e2e"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>test e2e</dt><dd><a href="https://hurl.dev">Hurl</a> files with captures and asserts, run against any <code>--base-url</code>, with an optional HTML report.</dd></div>
+          <div class="c-e2e"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>test e2e</dt><dd><a href="https://hurl.dev">Hurl</a> files with captures chained step to step, run against any <code>--base-url</code>, with an optional HTML report.</dd></div>
           <div class="c-perf"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18a9 9 0 0 1 18 0"/><path d="M12 18l4.5-6M6 18h0M18 18h0"/><circle cx="12" cy="18" r="1.3"/></svg>test perf</dt><dd><a href="https://k6.io">k6</a> scripts with virtual users, duration and thresholds, <code>BASE_URL</code> read from the environment.</dd></div>
           <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>Runtime</dt><dd>Go, no cgo, four direct dependencies. One static binary of about 20 MB.</dd></div>
           <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Supply chain</dt><dd>cosign keyless signatures, SBOM, SHA-256 checksums, <a href="https://scorecard.dev/viewer/?uri=github.com/emmanuelperu/arazzo-maestro">OpenSSF Scorecard</a>.</dd></div>
