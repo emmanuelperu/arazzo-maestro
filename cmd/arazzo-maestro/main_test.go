@@ -57,6 +57,27 @@ func TestLintExitsNonZeroOnError(t *testing.T) {
 	}
 }
 
+func TestLintSeveralFilesPrefixesFindingsAndFails(t *testing.T) {
+	good := filepath.Join(examplesDir(t), "shop.arazzo.yaml")
+	bad := filepath.Join(t.TempDir(), "broken.yaml")
+	if err := os.WriteFile(bad, []byte(`arazzo: "2.0.0"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, _, err := runCmd(t, "lint", good, bad)
+	if err == nil {
+		t.Fatal("expected non-zero exit when one of the files is broken")
+	}
+	if !strings.Contains(out, "OK: "+good) {
+		t.Errorf("expected the clean file to be reported OK, got %q", out)
+	}
+	if !strings.Contains(out, bad+": [error]") {
+		t.Errorf("expected findings prefixed with their file, got %q", out)
+	}
+	if single, _, _ := runCmd(t, "lint", bad); strings.Contains(single, bad+": [error]") {
+		t.Errorf("a single file must keep the unprefixed output, got %q", single)
+	}
+}
+
 func TestLintReportsMissingFile(t *testing.T) {
 	_, _, err := runCmd(t, "lint", "/no/such/file.yaml")
 	if err == nil {

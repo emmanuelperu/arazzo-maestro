@@ -307,7 +307,8 @@ expects:
 
   arazzo-maestro test run e2e shop.arazzo.yaml \
     --base-url http://localhost:8080 \
-    --variable productId=p-001 --variable orderId=ord-1
+    --variable productId=p-001 --variable orderId=ord-1 \
+    --variable acceptLanguage=en
 
 The process exit status mirrors hurl: non-zero when any test fails. When
 --report-html is set the report is written even on failure.`,

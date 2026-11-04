@@ -66,39 +66,53 @@ func newRootCmd() *cobra.Command {
 func newLintCmd() *cobra.Command {
 	remote := &remoteFlags{}
 	cmd := &cobra.Command{
-		Use:   "lint <file>",
-		Short: "Validate an Arazzo YAML file against built-in rules",
-		Args:  cobra.ExactArgs(1),
+		Use:   "lint <file>...",
+		Short: "Validate Arazzo YAML files against built-in rules",
+		Long: `Validate one or more Arazzo YAML files against the JSON Schema, the
+semantic rules and the OpenAPI sources they declare.
+
+With several files, every finding is prefixed with its file so the
+output stays readable when a pre-commit hook passes all staged files at
+once. The exit status is 1 as soon as one file has an error.`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLint(cmd, args[0], remote)
+			return runLint(cmd, args, remote)
 		},
 	}
 	addRemoteFlags(cmd, remote)
 	return cmd
 }
 
-func runLint(cmd *cobra.Command, path string, remote *remoteFlags) error {
+func runLint(cmd *cobra.Command, paths []string, remote *remoteFlags) error {
 	remoteOpts, err := remote.options(cmd)
 	if err != nil {
 		return err
 	}
-	issues, err := linter.LintFile(path, remoteOpts)
-	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", path, err)
-	}
-	if len(issues) == 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "OK: %s, no issues found\n", path)
-		return nil
-	}
+	prefix := ""
+	total := 0
 	hasError := false
-	for _, issue := range issues {
-		fmt.Fprintln(cmd.OutOrStdout(), issue.String())
-		if issue.Severity == linter.SeverityError {
-			hasError = true
+	for _, path := range paths {
+		if len(paths) > 1 {
+			prefix = path + ": "
+		}
+		issues, err := linter.LintFile(path, remoteOpts)
+		if err != nil {
+			return fmt.Errorf("failed to read %s: %w", path, err)
+		}
+		if len(issues) == 0 {
+			fmt.Fprintf(cmd.OutOrStdout(), "OK: %s, no issues found\n", path)
+			continue
+		}
+		total += len(issues)
+		for _, issue := range issues {
+			fmt.Fprintln(cmd.OutOrStdout(), prefix+issue.String())
+			if issue.Severity == linter.SeverityError {
+				hasError = true
+			}
 		}
 	}
 	if hasError {
-		return fmt.Errorf("%d issue(s) found", len(issues))
+		return fmt.Errorf("%d issue(s) found", total)
 	}
 	return nil
 }
