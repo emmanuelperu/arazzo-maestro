@@ -19,7 +19,7 @@ EMBED_ASSETS := $(shell find cmd internal -name '*.html' -o -name '*.yml' -o -na
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build test vet lint dist hurl perf clean
+.PHONY: help build test vet lint dist hurl perf clean landing-sync landing-check
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -62,6 +62,12 @@ perf: $(BIN) ## Generate k6 perf tests for every examples/*.arazzo.yaml under ex
 		echo "→ $$f"; \
 		$(BIN) test gen perf $$f -o examples/generated; \
 	done
+
+landing-sync: ## Rewrite the release-bound facts of the landing, README and recipes from the latest release and go.mod.
+	scripts/landing-sync.sh
+
+landing-check: ## Fail when the landing, README or recipes lag behind the latest release or go.mod.
+	scripts/landing-sync.sh --check
 
 clean: ## Remove dist/, bin/, and examples/generated/.
 	rm -rf dist bin examples/generated
