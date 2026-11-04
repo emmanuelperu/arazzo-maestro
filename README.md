@@ -80,10 +80,10 @@ See ["What makes us different"](#what-makes-us-different) below for the longer t
 go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
 
 # Or build the Docker image locally (~20 MB FROM scratch)
-docker build --build-arg VERSION=0.6.0 -t arazzo-maestro:0.6.0 .
+docker build --build-arg VERSION=0.7.0 -t arazzo-maestro:0.7.0 .
 # Mount cwd into /work AND set it as workdir, so relative paths
 # (e.g. examples/shop.arazzo.yaml, dist/) resolve against your host cwd.
-docker run --rm -v "$PWD":/work -w /work arazzo-maestro:0.6.0 \
+docker run --rm -v "$PWD":/work -w /work arazzo-maestro:0.7.0 \
   view examples/shop.arazzo.yaml
 
 # Lint

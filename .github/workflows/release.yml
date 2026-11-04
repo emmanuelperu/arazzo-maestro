@@ -25,6 +25,8 @@ jobs:
       packages: write
       # Cosign keyless signing via GitHub OIDC.
       id-token: write
+      # Dispatch the Pages workflow once the release is published.
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,3 +66,10 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A release published with GITHUB_TOKEN raises no `release` event in
+      # other workflows; workflow_dispatch is the documented exception.
+      - name: Redeploy the landing page with the new release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main

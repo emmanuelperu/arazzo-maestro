@@ -1,7 +1,9 @@
 # Deploy the promotional landing page (docs/index.html, static) and its
 # screenshots to GitHub Pages. The only build step stamps the release-bound
 # facts (version, banner, Go minor, dependency count) from the latest
-# release and go.mod, so a new release refreshes the page without a commit.
+# release and go.mod, so a new release refreshes the page without a commit:
+# the release workflow dispatches this one once goreleaser is done (a
+# release published with GITHUB_TOKEN raises no `release` event here).
 #
 # One-time setup: repo Settings → Pages → "Build and deployment" →
 # Source: "GitHub Actions".
@@ -21,8 +23,6 @@ on:
       - "docs/screenshots/**"
       - ".github/workflows/pages.yml"
       - "scripts/landing-sync.sh"
-  release:
-    types: [published]
   workflow_dispatch:
 
 # Least privilege by default; the deploy job widens what it needs.
