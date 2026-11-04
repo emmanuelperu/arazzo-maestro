@@ -650,7 +650,7 @@ Failed files:      0 (0.0%)</pre>
         with: { go-version: '1.26' }
       - run: |
           go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
-          arazzo-maestro lint workflows/checkout.yaml</pre>
+          arazzo-maestro lint workflows/checkout.arazzo.yaml</pre>
           </figure>
           <figure>
             <figcaption><code>.pre-commit-config.yaml</code></figcaption>
@@ -659,10 +659,9 @@ Failed files:      0 (0.0%)</pre>
     hooks:
       - id: arazzo-lint
         name: arazzo-maestro lint
-        entry: arazzo-maestro lint workflows/checkout.yaml
+        entry: arazzo-maestro lint
         language: system
-        files: '^workflows/.*\.ya?ml$'
-        pass_filenames: false</pre>
+        files: '\.arazzo\.ya?ml$'</pre>
           </figure>
         </div>
         <p class="intro">Copy-paste versions in the <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/RECIPES.md">recipes</a>, including the two extra jobs that publish the rendered pages to GitHub Pages.</p>

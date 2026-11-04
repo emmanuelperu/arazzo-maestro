@@ -12,7 +12,7 @@ VERSION  ?= 0.0.1
 LDFLAGS  := -s -w -X main.version=$(VERSION)
 
 # Files the binary depends on. Beyond Go sources, embedded assets
-# referenced via //go:embed must trigger a rebuild — otherwise `make
+# referenced via //go:embed must trigger a rebuild, otherwise `make
 # dist` would silently render with a stale binary.
 GO_SOURCES   := $(shell find cmd internal -name '*.go')
 EMBED_ASSETS := $(shell find cmd internal -name '*.html' -o -name '*.yml' -o -name '*.json')
@@ -36,12 +36,7 @@ vet: ## Run go vet on every package.
 	go vet ./...
 
 lint: $(BIN) ## Lint every examples/*.arazzo.yaml.
-	@status=0; \
-	for f in $(ARAZZO_FILES); do \
-		echo "→ lint $$f"; \
-		$(BIN) lint $$f || status=$$?; \
-	done; \
-	exit $$status
+	$(BIN) lint $(ARAZZO_FILES)
 
 dist: $(BIN) ## Render every examples/*.arazzo.yaml in every built-in + user theme under dist/<workflow>/<theme>/.
 	@rm -rf dist
