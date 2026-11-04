@@ -2,17 +2,17 @@
 #
 # Multi-stage build producing a `FROM scratch` final image.
 # A static `arazzo-maestro` binary, nothing else. No shell, no libc,
-# no package manager — the smallest possible attack surface.
+# no package manager: the smallest possible attack surface.
 #
 # Build with:
-#   docker build --build-arg VERSION=0.0.1 \
-#     -t ghcr.io/emmanuelperu/arazzo-maestro:0.0.1 .
+#   docker build --build-arg VERSION=0.6.0 \
+#     -t ghcr.io/emmanuelperu/arazzo-maestro:0.6.0 .
 #
-# In OpenSSF Phase 2 (see Plan.md) `goreleaser` will produce the
-# release images and sign them with cosign; this Dockerfile is the
-# local-dev / opt-out path.
+# Release images are built by goreleaser from Dockerfile.release and
+# signed with cosign; this Dockerfile is the local build path. Keep
+# GO_VERSION in step with the `go` directive of go.mod.
 
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.26
 
 # ---- builder ------------------------------------------------------------
 FROM golang:${GO_VERSION}-alpine AS builder

@@ -247,7 +247,7 @@ These are **engineering constraints**, not afterthoughts. The rules are formalis
 
 ```text
 arazzo-maestro --version                         Print version and exit
-arazzo-maestro lint <file>                       Validate against schema + rules + cross-file
+arazzo-maestro lint <file>...                    Validate against schema + rules + cross-file
 arazzo-maestro view <file> [flags]               Render to HTML or Mermaid
 arazzo-maestro test gen e2e  <file> [flags]      Generate e2e tests (hurl)
 arazzo-maestro test run e2e  <file> [flags]      Generate + run e2e tests, optional HTML report
