@@ -31,12 +31,12 @@ deps=$(awk '/^require \(/{f=1; next} /^\)/{f=0} f && NF && !/indirect/' go.mod |
 words=(zero one two three four five six seven eight nine ten)
 deps_word=${words[$deps]:-$deps}
 
-# Banner headline: the first feature of the release notes, without the commit
-# hash, the conventional prefix and the author; an empty headline keeps the
-# banner to "vX.Y.Z is out".
+# Banner headline: the first feature of the release notes, else its first bug
+# fix, without the commit hash, the conventional prefix, the PR number and the
+# author; an empty headline keeps the banner to "vX.Y.Z is out".
 headline=$(gh release view "v$version" --json body -q .body 2>/dev/null \
-  | awk '/^### Features/{f=1; next} /^###/{f=0} f && /^\* /{print; exit}' \
-  | sed -E 's/^\* [0-9a-f]+: feat(\([^)]*\))?: //; s/ \(@[^)]*\)$//' || true)
+  | awk '/^### (Features|Bug fixes)/{f=1; next} /^###/{f=0} f && /^\* /{print; exit}' \
+  | sed -E 's/^\* [0-9a-f]+: (feat|fix)(\([^)]*\))?: //; s/ \(@[^)]*\)$//; s/ \(#[0-9]+\)$//' || true)
 
 export version go_minor deps_word headline
 rewrite() {
