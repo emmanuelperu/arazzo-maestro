@@ -35,7 +35,7 @@ jobs:
         with: { go-version: '1.26' }
       - run: |
           go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
-          arazzo-maestro lint workflows/checkout.arazzo.yaml
+          arazzo-maestro lint workflows/*.arazzo.yaml
 
   publish:
     needs: lint

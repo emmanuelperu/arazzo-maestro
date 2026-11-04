@@ -85,8 +85,13 @@
     .flow .pulse { fill: none; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 22; }
     .flow .node { fill: var(--bg-2); stroke: var(--line); stroke-width: 1.5; }
     .flow .core { fill: var(--bg); stroke-width: 2.5; }
-    .flow .t { fill: var(--text); font-size: 17px; font-weight: 700; }
-    .flow .s { fill: var(--muted); font-size: 14px; }
+    /* the wide diagram is drawn at 1000 units and shown at 0.88 to 0.98 scale, so its text is set
+       a little above 14 px; the tall one is drawn at 260 units and never shown below 1:1 */
+    .flow .t { fill: var(--text); font-size: 18px; font-weight: 700; }
+    .flow .s { fill: var(--muted); font-size: 16px; }
+    .flow .tall { display: none; }
+    .flow .tall .t { font-size: 17px; }
+    .flow .tall .s { font-size: 14px; }
     .flow figcaption { margin-top: 1rem; color: var(--muted); font-size: 0.95rem; text-align: center; }
 
     /* pillars: what the tool is made of, no figures here (the real ones live in the spec sheet) */
@@ -136,6 +141,12 @@
     /* e2e board: each step lights up as the Hurl run reaches it */
     @property --req { syntax: "<integer>"; inherits: false; initial-value: 6; }
     .band pre.mini { margin-top: 1.25rem; font-size: 0.875rem; }
+    /* lint band: the rule groups span both columns, one card per pass, each ending with a real message */
+    .rules { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 0.5rem 0 0; padding: 0; list-style: none; }
+    .rules li { padding: 1.1rem 1.2rem; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-term); color: var(--muted); font-size: 0.95rem; line-height: 1.55; }
+    .rules b { display: block; margin-bottom: 0.4rem; color: var(--c); font: 800 1.05rem var(--mono); }
+    .rules li > code:last-child { display: block; margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px dashed var(--line); color: var(--text); font-size: 0.875rem; overflow-wrap: anywhere; }
+    .policy { grid-column: 1 / -1; margin: 0; }
     .board { margin: 0; padding: 1.25rem 1.4rem; border-radius: 16px; background: var(--bg-term); border: 1px solid var(--line); font-family: var(--mono); }
     .board-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; color: var(--muted); font-size: 0.9rem; }
     .live { display: inline-block; width: 8px; height: 8px; margin-right: 0.55rem; border-radius: 50%; background: var(--teal); vertical-align: middle; }
@@ -216,13 +227,14 @@
     .sheet dd { margin: 0; color: var(--muted); }
     .sheet dd code { color: var(--text); font-size: 0.92em; }
 
-    /* lint demo: typo caught then fixed. At rest (reduced motion, or once the loop is over) the
-       editor shows the typo struck through next to the fix, so the console errors still make sense */
+    /* lint demo: three stale references caught then fixed. At rest (reduced motion, or once the loop
+       is over) the editor shows each old name struck through next to the new one, so the console
+       errors still make sense */
     .demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; margin: 2.5rem 0 0; align-items: start; }
     .pane { margin: 0; padding: 1.25rem 1.4rem; border-radius: 16px; background: var(--bg-term); border: 1px solid var(--line); font: 0.875rem/1.7 var(--mono); }
     .pane-tab { margin: -0.3rem 0 0.8rem; color: var(--muted); font: 700 0.875rem var(--mono); }
     .pane pre { margin: 0; font: inherit; }
-    .editor pre { white-space: pre; overflow-x: auto; }
+    .editor pre { white-space: pre-wrap; overflow-wrap: anywhere; }
     .console pre { white-space: pre-wrap; overflow-wrap: anywhere; }
     .ln { display: inline-block; width: 3ch; color: var(--muted); }
     .typo { display: inline-flex; column-gap: 0.6ch; vertical-align: bottom; }
@@ -331,12 +343,33 @@
       }
       @keyframes flow { to { stroke-dashoffset: -24; } }
     }
+    @media (max-width: 960px) {
+      /* below this width the wide diagram would scale its text under 14 px: swap it for the tall one */
+      .flow { margin-left: 1rem; margin-right: 1rem; padding: 0.75rem; }
+      .flow-scroll { display: none; }
+      .flow .tall { display: block; width: 100%; max-width: 340px; min-width: 0; margin: 0 auto; }
+    }
+    @media (max-width: 900px) {
+      /* two-column bands get too narrow for their code before the phone breakpoint */
+      .band, .recipes, .demo { grid-template-columns: minmax(0, 1fr); }
+      /* code wraps instead of scrolling: long tokens break at their <wbr> marks or anywhere as a
+         last resort, and the continuation of a wrapped line hangs 2ch to the right of its start */
+      pre, .install { white-space: pre-wrap; overflow-wrap: anywhere; text-indent: 2ch hanging each-line; }
+      .install { text-align: left; }
+      /* YAML indentation is meaning: the recipes keep their lines whole and scroll sideways instead */
+      .recipes .term { white-space: pre; text-indent: 0; }
+    }
+    @media (max-width: 370px) {
+      /* the typed lint command is 36ch, wider than the console on the narrowest phones */
+      .type, .t1, .t2 { display: inline; animation: none; width: auto; white-space: pre-wrap; }
+    }
     @media (max-width: 760px) {
       .pillars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .pillars div:nth-child(3) { border-left: 0; }
       .pillars div:nth-child(n+3) { border-top: 1px solid var(--line); }
       .vs-panel { grid-template-columns: minmax(0, 1fr); }
       .band, .tab-panel, .recipes, .sheet, .demo { grid-template-columns: minmax(0, 1fr); }
+      .rules { grid-template-columns: minmax(0, 1fr); }
       .pane { padding: 1rem; }
       .editor pre { white-space: pre-wrap; overflow-wrap: anywhere; }
       .pods { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -355,7 +388,7 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
-  <div class="strip">v0.6.0 is out: HTTPS OpenAPI sources behind <code>--allow-remote</code>. <a href="https://github.com/emmanuelperu/arazzo-maestro/releases/tag/v0.6.0">Read the release notes</a></div>
+  <div class="strip"><span class="rel">v0.6.0 is out: Load HTTPS sourceDescriptions behind opt-in --allow-remote.</span> <a href="https://github.com/emmanuelperu/arazzo-maestro/releases/tag/v0.6.0">Read the release notes</a></div>
   <div class="wrap">
     <header class="bar">
       <a class="logo" href="./">
@@ -390,11 +423,11 @@
         <a class="btn btn-main" href="#install">Get started</a>
         <a class="btn btn-alt" href="https://github.com/emmanuelperu/arazzo-maestro">Star on GitHub</a>
       </div>
-      <div class="install" role="group" aria-label="Install command"><b>$</b>go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest</div>
+      <div class="install" role="group" aria-label="Install command"><b>$</b>go install github.com/<wbr>emmanuelperu/<wbr>arazzo-maestro/<wbr>cmd/<wbr>arazzo-maestro@latest</div>
 
       <figure class="flow" id="how">
         <div class="flow-scroll" tabindex="0" role="region" aria-label="How arazzo-maestro works, scrollable diagram">
-          <svg viewBox="0 0 1000 430" role="img" aria-labelledby="flow-title flow-desc">
+          <svg class="wide" viewBox="0 0 1000 430" role="img" aria-labelledby="flow-title flow-desc">
             <title id="flow-title">How arazzo-maestro works</title>
             <desc id="flow-desc">A workflow file and its OpenAPI contracts go into arazzo-maestro (AsyncAPI contracts are coming soon), which produces four outputs: lint findings with exit code 0 or 1, standalone HTML or Mermaid pages, Hurl end-to-end tests, and k6 load tests.</desc>
             <!-- rails -->
@@ -416,23 +449,62 @@
             <rect class="node" x="20" y="50" width="260" height="70" rx="14"/>
             <text class="t" x="40" y="81">workflow.arazzo.yaml</text><text class="s" x="40" y="103">steps, inputs, outputs</text>
             <rect class="node" x="20" y="180" width="260" height="70" rx="14"/>
-            <text class="t" x="40" y="211">openapi.yaml</text><text class="s" x="40" y="233">local, or HTTPS on opt-in</text>
+            <text class="t" x="40" y="211">openapi.yaml</text><text class="s" x="40" y="233">local, or HTTPS opt-in</text>
             <rect class="node soon" x="20" y="310" width="260" height="70" rx="14"/>
-            <text class="t" x="40" y="341">asyncapi.yaml</text><text class="s" x="40" y="363">event steps, coming soon</text>
+            <text class="t" x="40" y="341">asyncapi.yaml</text><text class="s" x="40" y="363">events, coming soon</text>
             <!-- core -->
             <rect class="core" x="410" y="170" width="190" height="90" rx="18" stroke="#fde047"/>
             <text class="t" x="505" y="210" text-anchor="middle">arazzo-maestro</text><text class="s" x="505" y="234" text-anchor="middle">one static binary</text>
             <!-- outputs -->
             <rect class="node" x="760" y="28" width="230" height="64" rx="14" stroke="#2dd4bf"/>
-            <text class="t" x="782" y="57" style="fill:#2dd4bf">lint</text><text class="s" x="782" y="78">findings, exit 0 or 1</text>
+            <text class="t" x="778" y="57" style="fill:#2dd4bf">lint</text><text class="s" x="778" y="78">findings, exit 0 or 1</text>
             <rect class="node" x="760" y="133" width="230" height="64" rx="14" stroke="#a78bfa"/>
-            <text class="t" x="782" y="162" style="fill:#a78bfa">view</text><text class="s" x="782" y="183">.html or .mmd pages</text>
+            <text class="t" x="778" y="162" style="fill:#a78bfa">view</text><text class="s" x="778" y="183">.html or .mmd pages</text>
             <rect class="node" x="760" y="238" width="230" height="64" rx="14" stroke="#60a5fa"/>
-            <text class="t" x="782" y="267" style="fill:#60a5fa">test e2e</text><text class="s" x="782" y="288">Hurl files, run anywhere</text>
+            <text class="t" x="778" y="267" style="fill:#60a5fa">test e2e</text><text class="s" x="778" y="288">Hurl, run anywhere</text>
             <rect class="node" x="760" y="343" width="230" height="64" rx="14" stroke="#fb923c"/>
-            <text class="t" x="782" y="372" style="fill:#fb923c">test perf</text><text class="s" x="782" y="393">k6 load scripts</text>
+            <text class="t" x="778" y="372" style="fill:#fb923c">test perf</text><text class="s" x="778" y="393">k6 load scripts</text>
           </svg>
         </div>
+        <svg class="tall" viewBox="0 0 260 572" role="img" aria-labelledby="flow-title-tall flow-desc-tall">
+          <title id="flow-title-tall">How arazzo-maestro works</title>
+          <desc id="flow-desc-tall">A workflow file and its OpenAPI contracts go into arazzo-maestro (AsyncAPI contracts are coming soon), which produces four outputs: lint findings with exit code 0 or 1, standalone HTML or Mermaid pages, Hurl end-to-end tests, and k6 load tests.</desc>
+          <!-- rails: inputs join a bus on the right, outputs leave a bus on the left -->
+          <path class="rail" d="M242 36 C 250 36, 252 40, 252 52"/>
+          <path class="rail" d="M242 100 C 250 100, 252 104, 252 116"/>
+          <path class="rail soon" d="M242 164 C 250 164, 252 168, 252 180"/>
+          <path class="rail" d="M252 52 L 252 232 C 252 254, 248 258, 234 258"/>
+          <path class="rail" d="M26 258 C 12 258, 6 262, 6 280 L 6 523 C 6 537, 8 537, 18 537"/>
+          <path class="rail" d="M6 337 C 6 351, 8 351, 18 351"/>
+          <path class="rail" d="M6 399 C 6 413, 8 413, 18 413"/>
+          <path class="rail" d="M6 461 C 6 475, 8 475, 18 475"/>
+          <!-- moving data -->
+          <path class="pulse" stroke="#eef1fb" d="M242 36 C 250 36, 252 40, 252 52 L 252 232 C 252 254, 248 258, 234 258"/>
+          <path class="pulse" stroke="#eef1fb" d="M242 100 C 250 100, 252 104, 252 116 L 252 232 C 252 254, 248 258, 234 258"/>
+          <path class="pulse" stroke="#2dd4bf" d="M26 258 C 12 258, 6 262, 6 280 L 6 337 C 6 351, 8 351, 18 351"/>
+          <path class="pulse" stroke="#a78bfa" d="M26 258 C 12 258, 6 262, 6 280 L 6 399 C 6 413, 8 413, 18 413"/>
+          <path class="pulse" stroke="#60a5fa" d="M26 258 C 12 258, 6 262, 6 280 L 6 461 C 6 475, 8 475, 18 475"/>
+          <path class="pulse" stroke="#fb923c" d="M26 258 C 12 258, 6 262, 6 280 L 6 523 C 6 537, 8 537, 18 537"/>
+          <!-- inputs -->
+          <rect class="node" x="10" y="10" width="232" height="52" rx="12"/>
+          <text class="t" x="22" y="32">workflow.arazzo.yaml</text><text class="s" x="22" y="52">steps, inputs, outputs</text>
+          <rect class="node" x="10" y="74" width="232" height="52" rx="12"/>
+          <text class="t" x="22" y="96">openapi.yaml</text><text class="s" x="22" y="116">local, or HTTPS opt-in</text>
+          <rect class="node soon" x="10" y="138" width="232" height="52" rx="12"/>
+          <text class="t" x="22" y="160">asyncapi.yaml</text><text class="s" x="22" y="180">events, coming soon</text>
+          <!-- core -->
+          <rect class="core" x="26" y="226" width="208" height="64" rx="16" stroke="#fde047"/>
+          <text class="t" x="130" y="252" text-anchor="middle">arazzo-maestro</text><text class="s" x="130" y="274" text-anchor="middle">one static binary</text>
+          <!-- outputs -->
+          <rect class="node" x="18" y="326" width="232" height="50" rx="12" stroke="#2dd4bf"/>
+          <text class="t" x="30" y="347" style="fill:#2dd4bf">lint</text><text class="s" x="30" y="366">findings, exit 0 or 1</text>
+          <rect class="node" x="18" y="388" width="232" height="50" rx="12" stroke="#a78bfa"/>
+          <text class="t" x="30" y="409" style="fill:#a78bfa">view</text><text class="s" x="30" y="428">.html or .mmd pages</text>
+          <rect class="node" x="18" y="450" width="232" height="50" rx="12" stroke="#60a5fa"/>
+          <text class="t" x="30" y="471" style="fill:#60a5fa">test e2e</text><text class="s" x="30" y="490">Hurl, run anywhere</text>
+          <rect class="node" x="18" y="512" width="232" height="50" rx="12" stroke="#fb923c"/>
+          <text class="t" x="30" y="533" style="fill:#fb923c">test perf</text><text class="s" x="30" y="552">k6 load scripts</text>
+        </svg>
         <figcaption>A workflow and its contracts in, four outputs out. No server, no runtime, no network unless you ask for it.</figcaption>
       </figure>
     </div>
@@ -466,7 +538,7 @@
             <div><h3>Tests drift</h3><p>The Postman collection and the load test were written by hand and stopped matching the workflow months ago.</p></div>
           </div>
           <div class="vs-panel vs-with">
-            <div><h3>CI fails first</h3><p><code>lint</code> resolves every <code>operationId</code> against the contract, reports each broken reference and exits 1.</p></div>
+            <div><h3>CI fails first</h3><p><code>lint</code> resolves every reference inside the file and every <code>operationId</code> against the contract, reports each broken one and exits 1.</p></div>
             <div><h3>One page per workflow</h3><p><code>view</code> writes a page anyone can open in a browser, inputs to outputs, every expression visible.</p></div>
             <div><h3>Tests from the source</h3><p><code>test</code> regenerates Hurl and k6 from the workflow itself, so they cannot drift.</p></div>
           </div>
@@ -477,19 +549,23 @@
     <section id="demo-lint" aria-labelledby="demo-lint-title">
       <div class="wrap">
         <p class="kicker" style="--c: var(--teal)">In action</p>
-        <h2 id="demo-lint-title">One typo. Caught before it ships.</h2>
-        <figure class="demo" aria-label="A lint session on shop.arazzo.yaml">
-          <div class="pane editor" role="img" aria-label="shop.arazzo.yaml, line 95: the pay step calls operationId processPaymnet, a misspelled name, corrected to processPayment.">
+        <h2 id="demo-lint-title">Three renames. Three stale references. One run.</h2>
+        <p class="intro">A step, an output and a retry target were renamed in <code>shop.arazzo.yaml</code>. The YAML is still valid and the OpenAPI contract has not changed, so a schema check sees nothing. <code>lint</code> follows every expression and names the three places that still use the old names.</p>
+        <figure class="demo" aria-label="A lint session on shop.arazzo.yaml after three renames">
+          <div class="pane editor" role="img" aria-label="shop.arazzo.yaml, the three lines that still use the old names. Line 66 references $steps.list-catalog, a step renamed catalog. Line 120 references $steps.pay.outputs.transactionId, an output renamed txId. Line 185 retries stepId pay-refused, a step renamed retry-payment. Each line is then corrected to the new name.">
             <p class="pane-tab">shop.arazzo.yaml</p>
-            <pre><span class="ln">93</span>      - stepId: pay
-<span class="ln">94</span>        description: Pay the order with a valid card
-<span class="ln">95</span>        operationId: <span class="typo"><span class="bad">processPaymnet</span><span class="good">processPayment</span></span>
-<span class="ln">96</span>        parameters:</pre>
+            <pre><span class="ln">66</span>            value: $steps.<span class="typo"><span class="bad">list-catalog</span><span class="good">catalog</span></span>.outputs.firstProductId
+<span class="ln">…</span>
+<span class="ln">120</span>      transactionId: $steps.pay.outputs.<span class="typo"><span class="bad">transactionId</span><span class="good">txId</span></span>
+<span class="ln">…</span>
+<span class="ln">185</span>            stepId: <span class="typo"><span class="bad">pay-refused</span><span class="good">retry-payment</span></span></pre>
           </div>
           <div class="pane console" role="group" aria-label="lint console, before and after the fix">
             <pre><span class="p">$</span> <span class="type t1">arazzo-maestro lint shop.arazzo.yaml</span>
-<span class="o1"><span class="err">[error]</span> workflows[happy-path-checkout].steps[pay].operationId: operation "processPaymnet" not found in source "shop-api"
-Error: 1 issue(s) found</span><span class="later">
+<span class="o1"><span class="err">[error]</span> workflows[happy-path-checkout].outputs.transactionId: reference $steps.pay.outputs.transactionId: step "pay" does not declare output "transactionId"
+<span class="err">[error]</span> workflows[happy-path-checkout].steps[get-product].parameters.productId: reference $steps.list-catalog.outputs.firstProductId: step "list-catalog" does not exist
+<span class="err">[error]</span> workflows[payment-refused-path].steps[retry-payment].onFailure[retry-on-transient-failure]: target step "pay-refused" does not exist in this workflow
+Error: 3 issue(s) found</span><span class="later">
 <span class="p">$</span> <span class="type t2">arazzo-maestro lint shop.arazzo.yaml</span>
 <span class="o2"><span class="ok">OK:</span> shop.arazzo.yaml, no issues found</span></span></pre>
             <p class="exit"><span class="x1" aria-hidden="true">exit 1</span><span class="x0">exit 0</span></p>
@@ -507,11 +583,18 @@ Error: 1 issue(s) found</span><span class="later">
         <div class="band c-lint">
           <div>
             <h3><code>lint</code> catches it before CI does</h3>
-            <p>Official JSON Schema, semantic rules, then every step checked against the OpenAPI contract it calls.</p>
+            <p>Official JSON Schema first, then every expression and action target inside the file, then every step checked against the OpenAPI contract it calls.</p>
           </div>
           <pre class="wrap-lines" tabindex="0" role="group" aria-label="lint session"><span class="p">$</span> arazzo-maestro lint checkout.arazzo.yaml
 <span class="err">[error]</span> workflows[checkout].steps[create-order].operationId: operation "createOrder" not found in source "shop-api"
 Error: 1 issue(s) found</pre>
+          <ul class="rules" aria-label="What lint checks">
+            <li><b>Schema</b>The official Arazzo JSON Schema, embedded in the binary: required fields, unknown fields, the version pattern.<code>workflows[0].stepz: not allowed</code></li>
+            <li><b>References</b>Every <code>$steps</code>, <code>$components</code> and <code>$sourceDescriptions</code> expression resolved: a step that does not exist or runs later, an output a step never declares, a missing component.<code>step "b" is not declared before this one</code></li>
+            <li><b>Flow</b><code>onSuccess</code>, <code>onFailure</code> and retry targets, <code>dependsOn</code>, duplicate <code>workflowId</code> and <code>stepId</code>, fields that have no effect for the action type.<code>target step "nowhere" does not exist in this workflow</code></li>
+            <li><b>Contract</b>Each <code>operationId</code> and <code>operationPath</code> resolved in the OpenAPI source it names, method and path included. An unqualified <code>operationId</code> is refused when several sources are declared.<code>no DELETE operation on path "/products" in source "shop-api"</code></li>
+          </ul>
+          <p class="policy">Every rule is always on. Errors exit 1, warnings do not, and there is no rule file to write or keep up to date.</p>
         </div>
 
         <div class="band c-view">
@@ -533,7 +616,7 @@ Error: 1 issue(s) found</pre>
             <h3><code>test run e2e</code> replays it for real</h3>
             <p>Each step becomes a <a href="https://hurl.dev">Hurl</a> request and outputs become captures that feed the next step. Point it at staging, a mock or production, with <code>hurl</code> on your PATH; workflow inputs come in as variables.</p>
             <pre class="mini" tabindex="0" role="group" aria-label="test run command"><span class="p">$</span> arazzo-maestro test run e2e shop.arazzo.yaml \
-    --base-url https://staging.example.com/api/v1 \
+    --base-url https://staging.example.com/<wbr>api/<wbr>v1 \
     --variable productId=p-001 --variable orderId=ord-1 \
     --variable acceptLanguage=en</pre>
           </div>
@@ -561,7 +644,7 @@ Failed files:      0 (0.0%)</pre>
     --vus 50 --duration 30s \
     --threshold 'http_req_duration=p(95)&lt;500'
 <span class="p">$</span> k6 run -e BASE_URL=<span class="hl">$STAGING</span> \
-    dist/perf/k6/shop/happy-path-checkout.k6.js</pre>
+    dist/<wbr>perf/<wbr>k6/<wbr>shop/<wbr>happy-path-checkout.k6.js</pre>
           </div>
           <figure class="board perf" aria-label="k6 run of happy-path-checkout.k6.js">
             <div role="img" aria-label="50 virtual users for 30 seconds against a local mock. Each virtual user loops through list-catalog, get-product, add-to-cart and pay, and all four checks pass at 100 percent.">
@@ -598,7 +681,7 @@ Failed files:      0 (0.0%)</pre>
           </fieldset>
           <div class="tab-panel in-go">
             <pre class="term" tabindex="0" role="group" aria-label="Install with Go"><span class="cmt"># Go 1.26 or newer</span>
-<span class="p">$</span> go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
+<span class="p">$</span> go install github.com/<wbr>emmanuelperu/<wbr>arazzo-maestro/<wbr>cmd/<wbr>arazzo-maestro@latest
 <span class="p">$</span> arazzo-maestro lint workflow.arazzo.yaml
 <span class="p">$</span> arazzo-maestro view workflow.arazzo.yaml -o dist --theme dark</pre>
             <div>
@@ -609,7 +692,7 @@ Failed files:      0 (0.0%)</pre>
           <div class="tab-panel in-docker">
             <pre class="term" tabindex="0" role="group" aria-label="Run with Docker"><span class="cmt"># multi-arch image, amd64 and arm64</span>
 <span class="p">$</span> docker run --rm -v "$PWD":/work -w /work \
-    ghcr.io/emmanuelperu/arazzo-maestro:latest \
+    ghcr.io/<wbr>emmanuelperu/<wbr>arazzo-maestro:latest \
     lint workflow.arazzo.yaml</pre>
             <div>
               <p>A <code>FROM scratch</code> image of about 20 MB: no shell, no libc, nothing but the binary.</p>
@@ -619,8 +702,8 @@ Failed files:      0 (0.0%)</pre>
           <div class="tab-panel in-bin">
             <pre class="term" tabindex="0" role="group" aria-label="Verify a release archive"><span class="cmt"># verify the archive before you run it</span>
 <span class="p">$</span> cosign verify-blob \
-    --certificate-identity-regexp 'https://github.com/emmanuelperu/arazzo-maestro/.github/workflows/release.yml@.*' \
-    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+    --certificate-identity-regexp 'https://github.com/<wbr>emmanuelperu/<wbr>arazzo-maestro/<wbr>.github/<wbr>workflows/<wbr>release.yml@.*' \
+    --certificate-oidc-issuer 'https://token.actions.<wbr>githubusercontent.com' \
     --bundle arazzo-maestro_0.6.0_linux_amd64.tar.gz.sig \
     arazzo-maestro_0.6.0_linux_amd64.tar.gz
 <span class="ok">Verified OK</span></pre>
@@ -637,7 +720,7 @@ Failed files:      0 (0.0%)</pre>
       <div class="wrap">
         <p class="kicker" style="--c: var(--teal)">CI</p>
         <h2 id="ci-title">Wire it in once. Forget about it.</h2>
-        <p class="intro">A broken <code>operationId</code> fails the pull request before anyone reviews it.</p>
+        <p class="intro">A broken reference fails the pull request before anyone reviews it.</p>
         <div class="recipes">
           <figure>
             <figcaption><code>.github/workflows/arazzo.yml</code></figcaption>
@@ -649,8 +732,8 @@ Failed files:      0 (0.0%)</pre>
       - uses: actions/setup-go@v7
         with: { go-version: '1.26' }
       - run: |
-          go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
-          arazzo-maestro lint workflows/checkout.arazzo.yaml</pre>
+          go install github.com/<wbr>emmanuelperu/<wbr>arazzo-maestro/<wbr>cmd/<wbr>arazzo-maestro@latest
+          arazzo-maestro lint workflows/*.arazzo.yaml</pre>
           </figure>
           <figure>
             <figcaption><code>.pre-commit-config.yaml</code></figcaption>
@@ -675,7 +758,7 @@ Failed files:      0 (0.0%)</pre>
         <dl class="sheet">
           <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 6h7M7.3 8.2l3.4 7.6M16.7 8.2l-3.4 7.6"/></svg>Arazzo</dt><dd>1.0, and 1.1 in part. Every rule is mapped in the <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/SPEC_COMPLIANCE.md">spec compliance matrix</a>.</dd></div>
           <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>Sources</dt><dd>Local OpenAPI files. HTTPS on <code>--allow-remote</code>: 2 MiB, 5 s, 2 redirects, plain HTTP always refused.</dd></div>
-          <div class="c-lint"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>lint</dt><dd>Official JSON Schema, semantic rules, then <code>operationId</code> resolution against the contract. Exit 0 or 1.</dd></div>
+          <div class="c-lint"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>lint</dt><dd>Official JSON Schema, reference and flow rules inside the file, then <code>operationId</code> resolution against the contract. Every rule always on: errors exit 1, warnings do not.</dd></div>
           <div class="c-view"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>view</dt><dd>HTML or Mermaid. Light, dark and pb33f themes, or your own <code>themes.yml</code>, contrast-audited at load. Portrait or landscape.</dd></div>
           <div class="c-e2e"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>test e2e</dt><dd><a href="https://hurl.dev">Hurl</a> files with captures chained step to step, run against any <code>--base-url</code>, with an optional HTML report.</dd></div>
           <div class="c-perf"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18a9 9 0 0 1 18 0"/><path d="M12 18l4.5-6M6 18h0M18 18h0"/><circle cx="12" cy="18" r="1.3"/></svg>test perf</dt><dd><a href="https://k6.io">k6</a> scripts with virtual users, duration and thresholds, <code>BASE_URL</code> read from the environment.</dd></div>
