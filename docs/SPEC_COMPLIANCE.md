@@ -26,7 +26,7 @@ These actively reject or corrupt spec-valid documents, ranked by impact:
 
 | Gap | Issue |
 |---|---|
-| Dotted names translate in k6 but are declined in Hurl: hurl reads `{{a.b}}` as member access, so a dotted name cannot become a Hurl variable (tool limitation, noted in the generated header) | [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
+| Dotted names translate in k6 but are declined in Hurl: hurl reads `{{a.b}}` as member access, so a dotted name cannot become a Hurl variable (tool limitation, noted in the generated header) | [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49), closed: Hurl limitation |
 
 Resolved non-compliances: 1.1 structural schema rejections (#47),
 `retryAfter` unit and `retryLimit` default (#41), cookie and
@@ -66,7 +66,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `operationId` (short + qualified) | ✅ | ✅ cross-file | ✅ | ✅ | ✅ | |
 | `operationPath` | ✅ | ✅ cross-file | ✅ decoded method+path | ✅ | ✅ | JSON pointer resolved against the named source, the target operation needs no operationId (#53) |
 | `workflowId` (nested workflow) | ✅ | ✅ ref checked | ✅ workflow tag + link | 🟡 explicit skip | 🟡 | Generators emit a named not-supported comment and no request; nested execution stays roadmap (#54) |
-| `channelPath` (1.1, AsyncAPI) | ❌ | 😶 accepted | ❌ placeholder | ❌ | 😶 | Accepted structurally since #47; resolution out of scope (AsyncAPI) |
+| `channelPath` (1.1, AsyncAPI) | ❌ | 😶 accepted | ❌ placeholder | ❌ | 😶 | Accepted structurally since #47; resolution planned ([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75)) |
 | `parameters` | ✅ | ✅ schema | ✅ | ✅ | 🟡 | All five `in` locations emitted (cookie as `[Cookies]`/`cookies:`, querystring appended to the URL); Reusable entries inlined at parse time (#52); `in` conditional rule unvalidated |
 | `requestBody.contentType` / `payload` | ✅ | ✅ | ✅ | ✅ | ✅ | Whole-string and embedded `{$expr}` substitution; an omitted `contentType` defers to the operation's declared type, and a real `Content-Type` header reaches the request (#66) |
 | `requestBody.replacements` | ✅ | 😶 schema-only | ✅ shown | ✅ applied | ✅ | JSON-pointer target applied to the payload before expression substitution; unresolved targets flagged (#55) |
@@ -96,13 +96,16 @@ flagged with a named comment instead of shipping verbatim (#56).
 | Embedded `{$expr}` in strings | n/a | ✅ | ✅ (declared `$inputs`/`$steps` only) | 🟡 |
 | `$response.header/...`, `$request.*` (captures) | n/a | ✅ | 🟡 explicit `unsupported` marker | 🟡 |
 | `$url`, `$method`, `$request.*`, `$message.*`, `$outputs.*`, `$workflows.*`, `$components.*`, `$self` (inline) | ❌ | 🟡 highlighted if `$`-prefixed | ✅ named `unsupported` comment by the request | ✅ #56 |
-| Names containing dots (legal per ABNF `identifier`) | ❌ | ✅ | 🟡 k6 translates, Hurl flags (no dotted var) | 🟡 [#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49) |
+| Names containing dots (legal per ABNF `identifier`) | ❌ | ✅ | 🟡 k6 translates, Hurl flags (no dotted var) | 🟡 Hurl limitation, noted in the generated header ([#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49), closed) |
 | Expression grammar validation | ❌ | n/a | n/a | ❌ no ABNF validation pass exists |
+
+AsyncAPI source resolution and message steps are planned
+([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75)); until
+then the linter accepts them structurally
+([#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47)).
 
 ## Out of scope by design
 
-- AsyncAPI source resolution and message steps (the linter should still
-  accept them structurally: [#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47))
 - Executing workflows (we generate tests; runners exist elsewhere)
 - Plain HTTP source URLs, and HTTPS ones unless `--allow-remote` is passed (offline-first eco-design rule; documented)
 

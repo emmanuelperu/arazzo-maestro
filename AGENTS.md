@@ -145,7 +145,7 @@ Dependency graph (no cycles): `model` → ∅, `expr` → ∅, `theme` → ∅,
 `renderer` → `model` + `oasresolver` + `theme`,
 `mermaidgen` → `model` + `oasresolver`, `cmd` → all.
 
-### State as of 2026-11-01
+### State as of 2026-11-04
 
 | Area | Status | Where |
 |---|---|---|
@@ -153,7 +153,7 @@ Dependency graph (no cycles): `model` → ∅, `expr` → ∅, `theme` → ∅,
 | Renderer (HTML output) | ✅ done | `internal/renderer/` |
 | Mermaid output (`view --format mermaid`) | ✅ done | `internal/mermaidgen/` |
 | CLI (`lint`, `view`, `test`) | ✅ done | `cmd/arazzo-maestro/` |
-| Theme system (light, dark, user `themes.yml`, WCAG audit) | ✅ done | `internal/theme/` |
+| Theme system (light, dark, pb33f, user `themes.yml`, WCAG audit) | ✅ done | `internal/theme/` |
 | Linter pass 1: JSON Schema | ✅ done | `internal/linter/schema.go` |
 | Linter pass 2: semantic rules | ✅ done | `internal/linter/linter.go` |
 | Linter pass 3: cross-file (operationId in OpenAPI) | ✅ done | `internal/linter/crossfile.go` |
@@ -162,11 +162,11 @@ Dependency graph (no cycles): `model` → ∅, `expr` → ∅, `theme` → ∅,
 | Test gen: e2e → Hurl (`test gen/run e2e`) | ✅ done (#21, merged) | `internal/hurlgen/` |
 | Test gen: perf → k6 (`test gen perf`) | ✅ done (#22, merged) | `internal/k6gen/` |
 | Test coverage | ✅ ≥80 % on every package except `model` (~61 %, plain data types) | `*_test.go` |
-| README | ✅ structurally done, ⏭️ visual hero pending | `README.md` |
+| README | ✅ done, with a visual preview section | `README.md` |
 | CI (GitHub Actions) | ✅ done | `.github/workflows/ci.yml` |
-| Releases (goreleaser, cosign-signed, SBOM) | ✅ shipped (latest v0.5.0) | `.github/workflows/release.yml` |
+| Releases (goreleaser, cosign-signed, SBOM) | ✅ shipped (latest v0.6.0) | `.github/workflows/release.yml` |
 | OpenSSF Best Practices badge | 🟡 Phases 1-3 done; `passing` badge still `in_progress` | `docs/ROADMAP.md` |
-| Logo / demo GIF / screenshots | ❌ pending | |
+| Banner / screenshots / landing page | ✅ `docs/banner-full.webp`, `docs/screenshots/`, landing page `docs/index.html` published by `pages.yml` | `docs/` |
 
 See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the full list of done and
 planned items.
@@ -183,7 +183,7 @@ make build                           # build bin/arazzo-maestro
 make test                            # go test ./...
 make vet                             # go vet ./...
 make lint                            # arazzo-maestro lint examples/*.arazzo.yaml
-make dist                            # render every example into dist/<workflow>/{light,dark}/
+make dist                            # render every example into dist/<example>/{light,dark,pb33f}/
 make hurl                            # generate Hurl e2e tests under examples/generated/e2e/hurl/
 make perf                            # generate k6 perf tests under examples/generated/perf/k6/
 make clean                           # rm -rf dist bin examples/generated
@@ -200,7 +200,7 @@ go mod tidy                                                 # keep go.mod clean
 - `make test vet` clean
 - `make lint` returns `OK` on every `examples/*.arazzo.yaml`
 - `make dist` regenerates every example without errors; spot-check at
-  least one `dist/<workflow>/light/index.html` opens in a browser
+  least one `dist/<example>/light/index.html` opens in a browser
 - If you touched a theme: `theme.Audit()` produces no warnings on
   built-ins (covered by `TestBuiltinThemesPassWCAG`)
 - If you touched the linter: all linter tests still pass

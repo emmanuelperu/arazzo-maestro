@@ -56,8 +56,8 @@
 ```text
 *.arazzo.yaml (Arazzo) ────┐                       ┌─►  lint   →  exit 0/1 + structured findings
                            ├──►  arazzo-maestro  ──┼─►  view   →  dist/*.html  (standalone)
-*-openapi.yaml / *-api.yaml ┤                       ├─►  test e2e  →  dist/e2e/hurl/*.hurl  (+ run / HTML report)
-themes.yml (opt.)        ──┘                       └─►  test perf →  dist/perf/k6/*.k6.js
+*-openapi.yaml / *-api.yaml ┤                       ├─►  test e2e  →  dist/e2e/hurl/<source>/*.hurl  (+ run / HTML report)
+themes.yml (opt.)        ──┘                       └─►  test perf →  dist/perf/k6/<source>/*.k6.js
 ```
 
 ## Why it exists
@@ -80,10 +80,10 @@ See ["What makes us different"](#what-makes-us-different) below for the longer t
 go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
 
 # Or build the Docker image locally (~20 MB FROM scratch)
-docker build --build-arg VERSION=0.4.0 -t arazzo-maestro:0.4.0 .
+docker build --build-arg VERSION=0.6.0 -t arazzo-maestro:0.6.0 .
 # Mount cwd into /work AND set it as workdir, so relative paths
 # (e.g. examples/shop.arazzo.yaml, dist/) resolve against your host cwd.
-docker run --rm -v "$PWD":/work -w /work arazzo-maestro:0.4.0 \
+docker run --rm -v "$PWD":/work -w /work arazzo-maestro:0.6.0 \
   view examples/shop.arazzo.yaml
 
 # Lint
@@ -149,9 +149,8 @@ $ arazzo-maestro lint examples/shop.arazzo.yaml
 OK: examples/shop.arazzo.yaml, no issues found
 
 $ arazzo-maestro lint broken.yaml
-[error] arazzo: value does not match expected pattern '^1\.[01]\.\d+(-.+)?$'
-[error] workflows[checkout].steps[create-order].operationId:
-        operation "createOrder" not found in source "shop-api"
+[error] arazzo: value does not match expected pattern '^1\\.[01]\\.\\d+(-.+)?$'
+[error] workflows[checkout].steps[create-order].operationId: operation "createOrder" not found in source "shop-api"
 Error: 2 issue(s) found
 ```
 
@@ -241,7 +240,7 @@ Parameters, outputs, success criteria and runtime expressions (including the emb
 
 These are **engineering constraints**, not afterthoughts. The rules are formalised in [`.agents/rules/`](./.agents/rules/) and enforced by reviews and tests:
 
-- **Eco-design**: 1 network request at page load (Tailwind CDN), ~29 kB HTML, ~4.5 kB gzipped, no JavaScript, no fonts loaded from third parties, single Go binary (~20 MB) packaged in a `FROM scratch` Docker image.
+- **Eco-design**: 1 network request at page load (the Tailwind CDN script, the only JavaScript on the page), ~29 kB HTML, ~4.5 kB gzipped, no fonts loaded from third parties, single Go binary (~20 MB) packaged in a `FROM scratch` Docker image.
 - **Accessibility**: WCAG 2.2 AA contrasts (4.5:1 on body text), semantic HTML (`<main>`, `<section>`, `<h1>`→`<h2>`→`<h3>`), `aria-hidden` on decorative icons, visible focus, `prefers-reduced-motion` honoured, no info conveyed by colour alone, fluid `rem` sizing.
 
 ### 🧰 Built-in CLI
@@ -283,6 +282,12 @@ test gen perf flags:
       --vus <n>               Concurrent virtual users (default: 1)
       --duration <d>          Test duration (e.g. 30s, 5m) (default: 30s)
       --threshold <m=expr>    k6 threshold as metric=expression (repeatable)
+
+remote source flags (lint and every test command):
+      --allow-remote          Fetch HTTPS sourceDescriptions URLs (plain HTTP is always refused)
+      --remote-max-size <n>   Maximum size of a fetched source, bytes or KiB/MiB suffix (default: 2MiB)
+      --remote-timeout <d>    Timeout for fetching one source (default: 5s)
+      --remote-max-redirects <n>  Redirects followed when fetching a source (default: 2)
 ```
 
 ## Architecture
