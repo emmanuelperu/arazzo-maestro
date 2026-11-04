@@ -63,10 +63,10 @@ perf: $(BIN) ## Generate k6 perf tests for every examples/*.arazzo.yaml under ex
 		$(BIN) test gen perf $$f -o examples/generated; \
 	done
 
-landing-sync: ## Rewrite the release-bound facts of the landing, README and recipes from the latest release and go.mod.
+landing-sync: ## Rewrite the release-bound facts of the landing, README, recipes and AGENTS.md from the latest release and go.mod.
 	scripts/landing-sync.sh
 
-landing-check: ## Fail when the landing, README or recipes lag behind the latest release or go.mod.
+landing-check: ## Fail when the landing, README, recipes or AGENTS.md lag behind the latest release or go.mod.
 	scripts/landing-sync.sh --check
 
 clean: ## Remove dist/, bin/, and examples/generated/.

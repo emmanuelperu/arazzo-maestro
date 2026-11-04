@@ -55,7 +55,7 @@ rewrite() {
 }
 
 status=0
-for f in docs/index.html README.md docs/RECIPES.md; do
+for f in docs/index.html README.md docs/RECIPES.md AGENTS.md; do
   if [ "$check" = 1 ]; then
     tmp=$(mktemp)
     cp "$f" "$tmp"
