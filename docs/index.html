@@ -314,13 +314,26 @@
       @keyframes bar5 { 0%, 71% { transform: scaleX(0); background: var(--yellow); } 80% { transform: scaleX(1); background: var(--yellow); } 81%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
       @keyframes code5 { 0%, 80% { opacity: 0; } 81%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
 
-      /* lint demo: 12 s story, three times. While it plays the editor shows one spelling at a time
-         (the other one collapsed to zero width); when it is over, the resting diff view takes over */
-      .typo { animation: a-typo 12s 3; }
-      .t1 { animation: a-t1 12s 3; } .o1 { animation: a-o1 12s 3; }
-      .typo .bad { animation: a-bad 12s 3; } .typo .good { animation: a-good 12s 3; }
-      .later { animation: a-later 12s 3; } .t2 { animation: a-t2 12s 3; } .o2 { animation: a-o2 12s 3; }
-      .x1 { animation: a-x1 12s 3; } .x0 { animation: a-x0 12s 3; }
+      /* lint demo: 12 s story, three times, started when the figure scrolls into view (same view
+         timeline and style query as the perf board). While it plays the editor shows one spelling at
+         a time (the other one collapsed to zero width); when it is over, the resting diff view takes over */
+      @supports not (animation-timeline: view()) {
+        .typo { animation: a-typo 12s 3; }
+        .t1 { animation: a-t1 12s 3; } .o1 { animation: a-o1 12s 3; }
+        .typo .bad { animation: a-bad 12s 3; } .typo .good { animation: a-good 12s 3; }
+        .later { animation: a-later 12s 3; } .t2 { animation: a-t2 12s 3; } .o2 { animation: a-o2 12s 3; }
+        .x1 { animation: a-x1 12s 3; } .x0 { animation: a-x0 12s 3; }
+      }
+      @supports (animation-timeline: view()) {
+        .demo { container-name: demo; animation: in-view 1s steps(1, end) both; animation-timeline: view(); animation-range: entry 0% entry 4%; }
+        @container demo style(--in: 1) {
+          .typo { animation: a-typo 12s 3; }
+          .t1 { animation: a-t1 12s 3; } .o1 { animation: a-o1 12s 3; }
+          .typo .bad { animation: a-bad 12s 3; } .typo .good { animation: a-good 12s 3; }
+          .later { animation: a-later 12s 3; } .t2 { animation: a-t2 12s 3; } .o2 { animation: a-o2 12s 3; }
+          .x1 { animation: a-x1 12s 3; } .x0 { animation: a-x0 12s 3; }
+        }
+      }
       @keyframes a-typo { 0%, 100% { column-gap: 0; } }
       @keyframes a-t1 { 0% { width: 0; animation-timing-function: steps(36, end); } 10%, 96% { width: 36ch; } 97%, 100% { width: 0; } }
       @keyframes a-o1 { 0%, 12% { opacity: 0; } 13%, 96% { opacity: 1; } 97%, 100% { opacity: 0; } }
