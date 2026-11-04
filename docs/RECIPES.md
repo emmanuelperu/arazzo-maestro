@@ -4,17 +4,27 @@ Ready-to-copy integrations for `arazzo-maestro`.
 
 ## CI workflow (GitHub Actions)
 
+The `lint` job is all you need to fail a pull request on a broken
+workflow. The `publish` and `deploy` jobs are optional: they render the
+workflow with `view` and put the result on GitHub Pages on every push to
+`main`. Each job runs on a fresh runner, which is why `publish` installs
+the binary again. One-time setup for the deploy: repository Settings,
+Pages, "Build and deployment", Source: "GitHub Actions".
+
 ```yaml
 # .github/workflows/arazzo.yml
 name: arazzo
 on: [pull_request, push]
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with: { go-version: '1.26' }
       - run: |
           go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
@@ -22,13 +32,34 @@ jobs:
 
   publish:
     needs: lint
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: arazzo-maestro view workflows/checkout.yaml -o public/
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.26' }
+      - run: |
+          go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
+          arazzo-maestro view workflows/checkout.yaml -o public/
+      - uses: actions/upload-pages-artifact@v5
         with: { path: public/ }
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5
 ```
+
+`view` writes one page per workflow plus an `index.html` listing them,
+so `public/` is a complete static site.
 
 ## Pre-commit hook
 
