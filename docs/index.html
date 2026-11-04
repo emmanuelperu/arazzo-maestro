@@ -1,7 +1,6 @@
 <!doctype html>
 <!--
-  arazzo-maestro, promotional landing page ("Flow"). The previous
-  "Blueprint" page is kept as index-v0.html.
+  arazzo-maestro, promotional landing page ("Flow").
   Dark dev-tool landing in the four yarn colours of the project banner
   (teal lint, violet view, blue e2e, orange perf). The motion explains
   the product: data flows from the workflow + contract, through the
@@ -56,11 +55,12 @@
     .bar nav .pill:hover { color: var(--bg); background: var(--text); }
 
     /* hero */
-    .hero { position: relative; padding: 4.5rem 0 1rem; text-align: center; }
-    .hero::before { content: ""; position: absolute; inset: -6rem 0 auto; height: 38rem; z-index: -1;
-      background: radial-gradient(40rem 18rem at 30% 40%, rgba(167, 139, 250, 0.28), transparent 70%),
-                  radial-gradient(36rem 16rem at 70% 30%, rgba(45, 212, 191, 0.22), transparent 70%),
-                  radial-gradient(30rem 14rem at 55% 75%, rgba(251, 146, 60, 0.18), transparent 70%); }
+    .hero { position: relative; padding: 4.5rem 0 1rem; text-align: center; content-visibility: auto; contain-intrinsic-size: auto 60rem; }
+    /* the glow fades out before the edges of its box: content-visibility clips paint to the hero */
+    .hero::before { content: ""; position: absolute; inset: 0 0 auto; height: 36rem; z-index: -1;
+      background: radial-gradient(30rem 16rem at 30% 50%, rgba(167, 139, 250, 0.28), transparent 70%),
+                  radial-gradient(30rem 14rem at 70% 42%, rgba(45, 212, 191, 0.22), transparent 70%),
+                  radial-gradient(26rem 11rem at 55% 76%, rgba(251, 146, 60, 0.18), transparent 70%); }
     .hero h1 { margin: 0 auto; font-size: clamp(2.8rem, 8.5vw, 6.25rem); line-height: 0.98; font-weight: 900; letter-spacing: -0.045em; }
     .rotor { display: block; height: 1.05em; overflow: hidden; }
     .rotor span { display: block; height: 1.05em; }
@@ -78,7 +78,7 @@
     /* the flow diagram: the loud element */
     .flow { margin: 3.5rem auto 0; max-width: 64rem; padding: 1.5rem; border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(180deg, var(--bg-2), var(--bg-term)); }
     .flow-scroll { overflow-x: auto; }
-    .flow svg { display: block; width: 100%; min-width: 640px; height: auto; font-family: var(--mono); }
+    .flow svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: var(--mono); }
     .flow .rail { fill: none; stroke: var(--line); stroke-width: 3; }
     .flow .rail.soon { stroke-dasharray: 6 8; }
     .flow .node.soon { stroke-dasharray: 6 6; fill: none; }
@@ -86,34 +86,37 @@
     .flow .node { fill: var(--bg-2); stroke: var(--line); stroke-width: 1.5; }
     .flow .core { fill: var(--bg); stroke-width: 2.5; }
     .flow .t { fill: var(--text); font-size: 17px; font-weight: 700; }
-    .flow .s { fill: var(--muted); font-size: 13px; }
+    .flow .s { fill: var(--muted); font-size: 14px; }
     .flow figcaption { margin-top: 1rem; color: var(--muted); font-size: 0.95rem; text-align: center; }
 
-    /* stats */
-    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 5rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-    .stats div { padding: 2rem 1.25rem; text-align: center; }
-    .stats div + div { border-left: 1px solid var(--line); }
-    .stats b { display: block; font-size: clamp(2.4rem, 6vw, 4rem); font-weight: 900; letter-spacing: -0.04em; line-height: 1; }
-    .stats span { display: block; margin-top: 0.5rem; color: var(--muted); }
-    .stats div:nth-child(1) b { color: var(--teal); } .stats div:nth-child(2) b { color: var(--violet); }
-    .stats div:nth-child(3) b { color: var(--blue); } .stats div:nth-child(4) b { color: var(--orange); }
+    /* pillars: what the tool is made of, no figures here (the real ones live in the spec sheet) */
+    .pillars { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 5rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .pillars div { padding: 2rem 1.25rem; text-align: center; }
+    .pillars div + div { border-left: 1px solid var(--line); }
+    .pillars b { display: block; font-size: clamp(1.5rem, 2.6vw, 2.1rem); font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; }
+    .pillars span { display: block; margin-top: 0.6rem; color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
+    .pillars div:nth-child(1) b { color: var(--teal); } .pillars div:nth-child(2) b { color: var(--violet); }
+    .pillars div:nth-child(3) b { color: var(--blue); } .pillars div:nth-child(4) b { color: var(--orange); }
 
-    /* sections */
-    section { padding: 7rem 0 0; }
+    /* sections: content-visibility skips layout and paint while a section is off screen (eco-design R5) */
+    section { padding: 7rem 0 0; content-visibility: auto; contain-intrinsic-size: auto 48rem; }
     .kicker { display: inline-block; margin: 0 0 1rem; padding: 0.2rem 0.6rem; border-radius: 6px; background: var(--c, var(--yellow)); color: var(--bg); font-weight: 800; font-size: 0.95rem; }
     h2 { margin: 0; max-width: 20ch; font-size: clamp(2.2rem, 5.5vw, 3.75rem); line-height: 1.02; font-weight: 900; letter-spacing: -0.035em; }
     .intro { max-width: 40rem; margin: 1.25rem 0 0; color: var(--muted); font-size: 1.2rem; }
 
-    /* before / after (CSS radio toggle) */
+    /* before / after (CSS radio toggle): the radios and their labels sit in one fieldset so
+       assistive tech gets the group, the panels are shown through :has() */
+    fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
     .versus { margin-top: 2.5rem; }
     .versus input { position: absolute; opacity: 0; pointer-events: none; }
     .switch { display: inline-flex; padding: 5px; border-radius: 999px; background: var(--bg-term); border: 1px solid var(--line); }
     .switch label { display: inline-flex; align-items: center; min-height: 46px; padding: 0 1.4rem; border-radius: 999px; font-weight: 800; color: var(--muted); cursor: pointer; }
     #vs-without:checked ~ .switch label[for="vs-without"] { background: var(--orange); color: var(--bg); }
     #vs-with:checked ~ .switch label[for="vs-with"] { background: var(--teal); color: var(--bg); }
-    .versus input:focus-visible ~ .switch { outline: 3px solid var(--yellow); outline-offset: 3px; }
+    #vs-without:focus-visible ~ .switch label[for="vs-without"],
+    #vs-with:focus-visible ~ .switch label[for="vs-with"] { outline: 3px solid var(--yellow); outline-offset: 3px; }
     .vs-panel { display: none; margin-top: 1.5rem; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
-    #vs-without:checked ~ .vs-without, #vs-with:checked ~ .vs-with { display: grid; }
+    .versus:has(#vs-without:checked) .vs-without, .versus:has(#vs-with:checked) .vs-with { display: grid; }
     .vs-panel div { padding: 1.5rem; border-radius: 16px; background: var(--bg-2); border: 1px solid var(--line); }
     .vs-without h3 { color: var(--orange); }
     .vs-with h3 { color: var(--teal); }
@@ -122,41 +125,228 @@
 
     /* command bands */
     .band { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 2rem 3.5rem; align-items: center; margin-top: 4rem; }
-    .band h3 { margin: 0; font: 900 clamp(1.8rem, 4vw, 2.6rem)/1.05 var(--sans); letter-spacing: -0.03em; }
-    .band h3 code { color: var(--c); font-size: 0.85em; }
+    .band h3 { margin: 0; font: 800 clamp(1.3rem, 2.6vw, 1.7rem)/1.15 var(--sans); letter-spacing: -0.02em; }
+    .band h3 code { display: block; margin-bottom: 0.3rem; color: var(--c); font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; line-height: 1; letter-spacing: -0.04em; }
     .band p { color: var(--muted); font-size: 1.1rem; }
     .band pre { margin: 0; padding: 1.25rem 1.4rem; border-radius: 16px; background: var(--bg-term); border: 1px solid var(--line); font-size: 0.9rem; line-height: 1.7; overflow-x: auto; }
+    .band pre.wrap-lines { white-space: pre-wrap; overflow-wrap: anywhere; }
     .c-lint { --c: var(--teal); } .c-view { --c: var(--violet); } .c-e2e { --c: var(--blue); } .c-perf { --c: var(--orange); }
-    .shot { margin: 0; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
-    .shot img { display: block; width: 100%; height: auto; }
-    .p { color: var(--teal); } .err { color: var(--orange); font-weight: 700; } .ok { color: var(--teal); font-weight: 700; } .hl { color: var(--yellow); } .bl { color: var(--blue); } .dim { color: var(--muted); }
+    .p { color: var(--teal); } .err { color: var(--orange); font-weight: 700; } .ok { color: var(--teal); font-weight: 700; } .hl { color: var(--yellow); }
+
+    /* e2e board: each step lights up as the Hurl run reaches it */
+    @property --req { syntax: "<integer>"; inherits: false; initial-value: 6; }
+    .band pre.mini { margin-top: 1.25rem; font-size: 0.875rem; }
+    .board { margin: 0; padding: 1.25rem 1.4rem; border-radius: 16px; background: var(--bg-term); border: 1px solid var(--line); font-family: var(--mono); }
+    .board-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; color: var(--muted); font-size: 0.9rem; }
+    .live { display: inline-block; width: 8px; height: 8px; margin-right: 0.55rem; border-radius: 50%; background: var(--teal); vertical-align: middle; }
+    .tally b { color: var(--text); counter-reset: req var(--req); }
+    .tally b::after { content: counter(req); }
+    .board .wf { margin: 1.1rem 0 0.5rem; color: var(--text); font-weight: 700; font-size: 0.9rem; }
+    .pods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+    .pods li { position: relative; display: flex; flex-direction: column; gap: 0.2rem; padding: 0.6rem 0.7rem 0.9rem; border-radius: 10px; border: 1.5px solid var(--teal); background: var(--bg-2); overflow: hidden; font-size: 0.875rem; }
+    .pods .sid { color: var(--blue); font-weight: 700; overflow-wrap: anywhere; }
+    .pods .call { color: var(--muted); }
+    .pods .code { margin-top: auto; padding-top: 0.2rem; color: var(--teal); font-weight: 800; }
+    .pods i { position: absolute; left: 0.7rem; right: 0.7rem; bottom: 0.4rem; height: 3px; border-radius: 2px; background: var(--teal); transform-origin: left; }
+    .board .legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 1rem 0 0; color: var(--muted); font-size: 0.875rem; }
+    .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 0.4rem; border-radius: 3px; vertical-align: -1px; }
+    .lg-wait::before { border: 1.5px dashed var(--muted); }
+    .lg-run::before { background: var(--yellow); }
+    .lg-ok::before { background: var(--teal); }
+    .board pre { margin: 1rem 0 0; padding-top: 0.9rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.875rem; line-height: 1.6; white-space: pre-wrap; }
+
+    /* perf board: 50 VU squares cycle through the four step colours */
+    @property --sec { syntax: "<integer>"; inherits: false; initial-value: 30; }
+    @property --in { syntax: "<integer>"; inherits: false; initial-value: 0; }
+    .clock b { color: var(--text); }
+    .sec { counter-reset: sec var(--sec); }
+    .sec::after { content: counter(sec); }
+    .vus { display: grid; grid-template-columns: repeat(25, minmax(0, 1fr)); gap: 5px; margin: 0; padding: 0; list-style: none; }
+    .vus li { aspect-ratio: 1; border-radius: 3px; background: var(--teal); }
+    .vus li:nth-child(4n+2) { background: var(--violet); } .vus li:nth-child(4n+3) { background: var(--blue); } .vus li:nth-child(4n) { background: var(--orange); }
+    .perf .pods { margin-top: 1rem; }
+    .perf .pods li { padding-bottom: 0.6rem; }
+    .perf .pods .s1 { border-color: var(--teal); } .perf .pods .s1 .sid { color: var(--teal); }
+    .perf .pods .s2 { border-color: var(--violet); } .perf .pods .s2 .sid { color: var(--violet); }
+    .perf .pods .s3 { border-color: var(--blue); } .perf .pods .s3 .sid { color: var(--blue); }
+    .perf .pods .s4 { border-color: var(--orange); } .perf .pods .s4 .sid { color: var(--orange); }
+
+    /* view: exploded isometric stack of real renders */
+    .iso { margin: 0; }
+    .iso-stage { position: relative; height: 430px; overflow: hidden; }
+    .plate { --w: min(300px, 58vw); position: absolute; left: 50%; top: 50%; width: var(--w); height: calc(var(--w) * 0.62); margin: calc(var(--w) * -0.31) 0 0 calc(var(--w) * -0.5); border-radius: 12px; border: 2px solid var(--c); background: var(--bg-2); overflow: hidden; transform: translateY(calc(var(--i) * 92px)) rotateX(56deg) rotateZ(-42deg); box-shadow: 0 28px 40px rgba(0, 0, 0, 0.55); }
+    .plate img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+    .plate b { position: absolute; left: 0.5rem; bottom: 0.5rem; padding: 0.15rem 0.5rem; border-radius: 6px; background: var(--c); color: var(--bg); font: 800 0.875rem var(--mono); }
+    .plate.p1 { --i: -1; --c: var(--teal); z-index: 3; }
+    .plate.p2 { --i: 0; --c: var(--violet); z-index: 2; }
+    .plate.p3 { --i: 1; --c: var(--orange); z-index: 1; }
 
     /* closing */
     .closing { margin-top: 8rem; padding: 4rem 1.5rem; border-radius: 28px; text-align: center; background: linear-gradient(120deg, #134e4a, #3b2a7a 45%, #1e3a6e 70%, #7c2d12); }
     .closing h2 { margin: 0 auto; max-width: 18ch; }
     .closing p { color: #e2e8f5; font-size: 1.15rem; }
 
-    footer { margin-top: 5rem; border-top: 1px solid var(--line); padding: 2rem 0 3rem; color: var(--muted); }
-    footer nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1.5rem; margin-bottom: 0.75rem; }
+    /* install tabs (CSS radio group, same pattern as the before / after switch) */
+    .tabs { margin-top: 2.5rem; }
+    .tabs input { position: absolute; opacity: 0; pointer-events: none; }
+    #in-go:focus-visible ~ .switch label[for="in-go"],
+    #in-docker:focus-visible ~ .switch label[for="in-docker"],
+    #in-bin:focus-visible ~ .switch label[for="in-bin"] { outline: 3px solid var(--yellow); outline-offset: 3px; }
+    #in-go:checked ~ .switch label[for="in-go"],
+    #in-docker:checked ~ .switch label[for="in-docker"],
+    #in-bin:checked ~ .switch label[for="in-bin"] { background: var(--yellow); color: var(--bg); }
+    .tab-panel { display: none; margin-top: 1.5rem; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 1.5rem 2.5rem; align-items: start; }
+    .tabs:has(#in-go:checked) .in-go, .tabs:has(#in-docker:checked) .in-docker, .tabs:has(#in-bin:checked) .in-bin { display: grid; }
+    .tab-panel p { margin: 0 0 0.75rem; color: var(--muted); font-size: 1.05rem; }
+    .term { margin: 0; padding: 1.25rem 1.4rem; border-radius: 16px; background: var(--bg-term); border: 1px solid var(--line); font-size: 0.9rem; line-height: 1.7; overflow-x: auto; }
+    .cmt { color: var(--muted); }
+
+    /* CI recipes */
+    .recipes { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 1.5rem; margin-top: 2.5rem; }
+    .recipes figure { display: flex; flex-direction: column; margin: 0; }
+    .recipes figcaption { margin-bottom: 0.6rem; font-weight: 800; }
+    .recipes figcaption code { color: var(--teal); }
+    .recipes .term { flex: 1; }
+
+    /* spec sheet */
+    .sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 3rem; margin: 2.5rem 0 0; }
+    .sheet div { display: grid; grid-template-columns: 10.5rem minmax(0, 1fr); gap: 1rem; padding: 1.1rem 0; border-top: 1px solid var(--line); }
+    .sheet dt { display: flex; align-items: flex-start; gap: 0.6rem; font-weight: 800; color: var(--c, var(--text)); }
+    .sheet dt svg { flex: none; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .sheet dd { margin: 0; color: var(--muted); }
+    .sheet dd code { color: var(--text); font-size: 0.92em; }
+
+    /* lint demo: typo caught then fixed. At rest (reduced motion, or once the loop is over) the
+       editor shows the typo struck through next to the fix, so the console errors still make sense */
+    .demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; margin: 2.5rem 0 0; align-items: start; }
+    .pane { margin: 0; padding: 1.25rem 1.4rem; border-radius: 16px; background: var(--bg-term); border: 1px solid var(--line); font: 0.875rem/1.7 var(--mono); }
+    .pane-tab { margin: -0.3rem 0 0.8rem; color: var(--muted); font: 700 0.875rem var(--mono); }
+    .pane pre { margin: 0; font: inherit; }
+    .editor pre { white-space: pre; overflow-x: auto; }
+    .console pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .ln { display: inline-block; width: 3ch; color: var(--muted); }
+    .typo { display: inline-flex; column-gap: 0.6ch; vertical-align: bottom; }
+    .typo > span { white-space: pre; }
+    .typo .bad { color: var(--orange); text-decoration: line-through; text-decoration-thickness: 2px; }
+    .typo .good { color: var(--teal); }
+    .type { display: inline-block; vertical-align: bottom; overflow: hidden; white-space: nowrap; }
+    .exit { display: inline-grid; margin: 1rem 0 0; font-weight: 800; }
+    .exit span { grid-area: 1 / 1; padding: 0.1rem 0.6rem; border-radius: 6px; color: var(--bg); }
+    .x1 { background: var(--orange); opacity: 0; } .x0 { background: var(--teal); }
+
+    footer { margin-top: 5rem; border-top: 1px solid var(--line); padding: 3rem 0 3rem; color: var(--muted); }
+    .foot { display: grid; grid-template-columns: minmax(0, 4fr) repeat(3, minmax(0, 2fr)); gap: 2rem; }
+    .foot .logo { margin-bottom: 0.75rem; }
+    .foot p { margin: 0 0 0.5rem; max-width: 26rem; }
+    .foot .foot-title { margin: 0 0 0.6rem; font-weight: 800; color: var(--text); }
+    .foot ul { margin: 0; padding: 0; list-style: none; }
     footer a { color: var(--text); display: inline-block; padding: 0.35rem 0; }
+    .legal { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); font-size: 0.95rem; }
 
     @media (prefers-reduced-motion: no-preference) {
+      /* the two loops that stay: the headline names the four outputs, the diagram shows data moving.
+         Every other animation plays a bounded number of times and rests on the finished state */
       .rotor span:first-child { animation: rotor 8s cubic-bezier(0.7, 0, 0.2, 1) infinite; }
       .flow .pulse { animation: flow 1.4s linear infinite; }
-      .flow .core { animation: glow 2.8s ease-in-out infinite; }
+      /* perf board: the clock runs 30 s in 10, once; each VU cycles through the steps until then,
+         and the summary only shows once the run is over */
+      @keyframes vu { 0% { background: var(--teal); } 25% { background: var(--violet); } 50% { background: var(--blue); } 75% { background: var(--orange); } }
+      @keyframes vu-off { 0% { box-shadow: none; } 100% { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line); } }
+      @keyframes sec { 0% { --sec: 0; } 100% { --sec: 30; } }
+      @keyframes perf-sum { 0% { opacity: 0; } 100% { opacity: 1; } }
+      /* The run starts when the board scrolls into view: a view timeline flips --in on the figure as
+         its top edge enters the viewport, and a style query on that value starts the time-based
+         animations. Browsers without scroll-driven animations play the run at page load instead */
+      @supports not (animation-timeline: view()) {
+        .vus li { animation: vu 1.6s steps(1, end) 7 var(--d), vu-off 10s steps(1, end) forwards; }
+        .sec { animation: sec 10s linear forwards; }
+        .perf pre { animation: perf-sum 10s steps(1, end) forwards; }
+      }
+      @supports (animation-timeline: view()) {
+        .perf { container-name: perf; animation: in-view 1s steps(1, end) both; animation-timeline: view(); animation-range: entry 0% entry 4%; }
+        @keyframes in-view { 0% { --in: 0; } 100% { --in: 1; } }
+        .perf .sec { --sec: 0; }
+        .perf pre { opacity: 0; }
+        @container perf style(--in: 1) {
+          .vus li { animation: vu 1.6s steps(1, end) 7 var(--d), vu-off 10s steps(1, end) forwards; }
+          .sec { animation: sec 10s linear forwards; }
+          .perf pre { animation: perf-sum 10s steps(1, end) forwards; }
+        }
+      }
+
+      /* e2e board: 10 s run, steps light up in order */
+      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1) { animation: pod0 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1) i { animation: bar0 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1) .code { animation: code0 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2) { animation: pod1 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2) i { animation: bar1 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2) .code { animation: code1 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3) { animation: pod2 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3) i { animation: bar2 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3) .code { animation: code2 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4) { animation: pod3 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4) i { animation: bar3 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4) .code { animation: code3 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1) { animation: pod4 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1) i { animation: bar4 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1) .code { animation: code4 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2) { animation: pod5 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2) i { animation: bar5 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2) .code { animation: code5 10s 3; }
+      .tally b { animation: req 10s 3; }
+      @keyframes req { 0%, 15% { --req: 0; } 16%, 28% { --req: 1; } 29%, 41% { --req: 2; } 42%, 54% { --req: 3; } 55%, 67% { --req: 4; } 68%, 80% { --req: 5; } 81%, 95% { --req: 6; } 97%, 100% { --req: 0; } }
+      @keyframes pod0 { 0%, 6% { border-color: var(--line); border-style: dashed; } 7%, 15% { border-color: var(--yellow); border-style: solid; } 16%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
+      @keyframes bar0 { 0%, 6% { transform: scaleX(0); background: var(--yellow); } 15% { transform: scaleX(1); background: var(--yellow); } 16%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes code0 { 0%, 15% { opacity: 0; } 16%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes pod1 { 0%, 19% { border-color: var(--line); border-style: dashed; } 20%, 28% { border-color: var(--yellow); border-style: solid; } 29%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
+      @keyframes bar1 { 0%, 19% { transform: scaleX(0); background: var(--yellow); } 28% { transform: scaleX(1); background: var(--yellow); } 29%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes code1 { 0%, 28% { opacity: 0; } 29%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes pod2 { 0%, 32% { border-color: var(--line); border-style: dashed; } 33%, 41% { border-color: var(--yellow); border-style: solid; } 42%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
+      @keyframes bar2 { 0%, 32% { transform: scaleX(0); background: var(--yellow); } 41% { transform: scaleX(1); background: var(--yellow); } 42%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes code2 { 0%, 41% { opacity: 0; } 42%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes pod3 { 0%, 45% { border-color: var(--line); border-style: dashed; } 46%, 54% { border-color: var(--yellow); border-style: solid; } 55%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
+      @keyframes bar3 { 0%, 45% { transform: scaleX(0); background: var(--yellow); } 54% { transform: scaleX(1); background: var(--yellow); } 55%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes code3 { 0%, 54% { opacity: 0; } 55%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes pod4 { 0%, 58% { border-color: var(--line); border-style: dashed; } 59%, 67% { border-color: var(--yellow); border-style: solid; } 68%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
+      @keyframes bar4 { 0%, 58% { transform: scaleX(0); background: var(--yellow); } 67% { transform: scaleX(1); background: var(--yellow); } 68%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes code4 { 0%, 67% { opacity: 0; } 68%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes pod5 { 0%, 71% { border-color: var(--line); border-style: dashed; } 72%, 80% { border-color: var(--yellow); border-style: solid; } 81%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
+      @keyframes bar5 { 0%, 71% { transform: scaleX(0); background: var(--yellow); } 80% { transform: scaleX(1); background: var(--yellow); } 81%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes code5 { 0%, 80% { opacity: 0; } 81%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
+
+      /* lint demo: 12 s story, three times. While it plays the editor shows one spelling at a time
+         (the other one collapsed to zero width); when it is over, the resting diff view takes over */
+      .typo { animation: a-typo 12s 3; }
+      .t1 { animation: a-t1 12s 3; } .o1 { animation: a-o1 12s 3; }
+      .typo .bad { animation: a-bad 12s 3; } .typo .good { animation: a-good 12s 3; }
+      .later { animation: a-later 12s 3; } .t2 { animation: a-t2 12s 3; } .o2 { animation: a-o2 12s 3; }
+      .x1 { animation: a-x1 12s 3; } .x0 { animation: a-x0 12s 3; }
+      @keyframes a-typo { 0%, 100% { column-gap: 0; } }
+      @keyframes a-t1 { 0% { width: 0; animation-timing-function: steps(36, end); } 10%, 96% { width: 36ch; } 97%, 100% { width: 0; } }
+      @keyframes a-o1 { 0%, 12% { opacity: 0; } 13%, 96% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes a-bad {
+        0%, 13% { max-width: none; overflow: visible; text-decoration: none; }
+        15%, 40% { max-width: none; overflow: visible; text-decoration: underline wavy var(--orange); text-underline-offset: 4px; }
+        42%, 96% { max-width: 0; overflow: hidden; text-decoration: none; }
+        97%, 100% { max-width: none; overflow: visible; text-decoration: none; }
+      }
+      @keyframes a-good { 0%, 40% { max-width: 0; overflow: hidden; } 42%, 96% { max-width: none; overflow: visible; } 97%, 100% { max-width: 0; overflow: hidden; } }
+      @keyframes a-later { 0%, 47% { opacity: 0; } 48%, 96% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes a-t2 { 0%, 48% { width: 0; animation-timing-function: steps(36, end); } 58%, 96% { width: 36ch; } 97%, 100% { width: 0; } }
+      @keyframes a-o2 { 0%, 61% { opacity: 0; } 62%, 96% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes a-x1 { 0%, 12% { opacity: 0; } 13%, 61% { opacity: 1; } 62%, 100% { opacity: 0; } }
+      @keyframes a-x0 { 0%, 61% { opacity: 0; } 62%, 96% { opacity: 1; } 97%, 100% { opacity: 0; } }
+
       @keyframes rotor {
         0%, 20% { margin-top: 0; } 25%, 45% { margin-top: -1.05em; }
         50%, 70% { margin-top: -2.1em; } 75%, 95% { margin-top: -3.15em; } 100% { margin-top: 0; }
       }
       @keyframes flow { to { stroke-dashoffset: -24; } }
-      @keyframes glow { 50% { stroke-opacity: 0.45; } }
     }
     @media (max-width: 760px) {
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .stats div:nth-child(3) { border-left: 0; }
-      .stats div:nth-child(n+3) { border-top: 1px solid var(--line); }
+      .pillars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pillars div:nth-child(3) { border-left: 0; }
+      .pillars div:nth-child(n+3) { border-top: 1px solid var(--line); }
       .vs-panel { grid-template-columns: minmax(0, 1fr); }
-      .band { grid-template-columns: minmax(0, 1fr); }
+      .band, .tab-panel, .recipes, .sheet, .demo { grid-template-columns: minmax(0, 1fr); }
+      .pane { padding: 1rem; }
+      .editor pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .pods { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .vus { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+      .iso-stage { height: 320px; }
+      .plate.p1 { --i: -0.75; } .plate.p3 { --i: 0.75; }
+      .sheet div { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
+      .switch { flex-wrap: wrap; border-radius: 26px; }
+      .foot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .foot > div:first-child { grid-column: 1 / -1; }
       .hero { padding-top: 2.5rem; }
       section { padding-top: 5rem; }
       .flow { padding: 0.75rem; }
@@ -168,7 +358,7 @@
   <div class="strip">v0.6.0 is out: HTTPS OpenAPI sources behind <code>--allow-remote</code>. <a href="https://github.com/emmanuelperu/arazzo-maestro/releases/tag/v0.6.0">Read the release notes</a></div>
   <div class="wrap">
     <header class="bar">
-      <a class="logo" href="#main">
+      <a class="logo" href="./">
         <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
           <path d="M15 9.5V12.5M15 17.5C15 19.5 8.5 19 8.5 21.5M15 17.5C15 19.5 21.5 19 21.5 21.5" fill="none" stroke="#eef1fb" stroke-width="1.6" stroke-linecap="round"/>
           <rect x="7" y="3" width="16" height="6.5" rx="3.25" fill="#2dd4bf"/>
@@ -181,8 +371,9 @@
       <nav aria-label="Primary">
         <a href="#how">How it works</a>
         <a href="#commands">Commands</a>
+        <a href="#specs">Specs</a>
         <a href="https://github.com/emmanuelperu/arazzo-maestro">GitHub</a>
-        <a class="pill" href="#get">Get started</a>
+        <a class="pill" href="#install">Get started</a>
       </nav>
     </header>
   </div>
@@ -190,16 +381,16 @@
   <main id="main">
     <div class="wrap hero">
       <h1>
-        <span class="grad">Arazzo workflows,</span>
+        <span>Arazzo workflows,</span>
         <span class="sr-only">linted, rendered, tested and load-tested.</span>
         <span class="rotor" aria-hidden="true"><span class="r1">linted.</span><span class="r2">rendered.</span><span class="r3">tested.</span><span class="r4">load-tested.</span></span>
       </h1>
       <p class="lede">One Go binary reads your <a href="https://spec.openapis.org/arazzo/latest.html">Arazzo</a> files and your OpenAPI contracts, then fails your CI, draws the workflow for your team, and runs it against any environment.</p>
       <div class="cta">
-        <a class="btn btn-main" href="#get">Get started</a>
+        <a class="btn btn-main" href="#install">Get started</a>
         <a class="btn btn-alt" href="https://github.com/emmanuelperu/arazzo-maestro">Star on GitHub</a>
       </div>
-      <div class="install" aria-label="Install command"><b>$</b>go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest</div>
+      <div class="install" role="group" aria-label="Install command"><b>$</b>go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest</div>
 
       <figure class="flow" id="how">
         <div class="flow-scroll" tabindex="0" role="region" aria-label="How arazzo-maestro works, scrollable diagram">
@@ -247,25 +438,28 @@
     </div>
 
     <div class="wrap">
-      <div class="stats">
-        <div><b>4.5 kB</b><span>per rendered page, gzipped</span></div>
-        <div><b>0</b><span>bytes of JavaScript</span></div>
-        <div><b>3</b><span>lint passes, schema to contract</span></div>
-        <div><b>1</b><span>static binary, no cgo</span></div>
+      <div class="pillars">
+        <div><b>One binary</b><span>Static Go, nothing to install first, where most API tooling starts with a Node or Python runtime.</span></div>
+        <div><b>Plain HTML out</b><span>One file per workflow, opened from disk or hosted anywhere static.</span></div>
+        <div><b>Scratch image</b><span>The Docker image is the binary alone, with no OS layer underneath it.</span></div>
+        <div><b>Files you keep</b><span>Hurl and k6 tests as plain text, versioned and edited like the rest of the repo.</span></div>
       </div>
     </div>
 
-    <section aria-labelledby="why-title">
+    <section id="why" aria-labelledby="why-title">
       <div class="wrap">
         <p class="kicker">Why</p>
         <h2 id="why-title">Your workflow file should not be a dead document.</h2>
         <div class="versus">
-          <input type="radio" name="vs" id="vs-without" checked>
-          <input type="radio" name="vs" id="vs-with">
-          <div class="switch" role="group" aria-label="Compare">
-            <label for="vs-without">Without arazzo-maestro</label>
-            <label for="vs-with">With arazzo-maestro</label>
-          </div>
+          <fieldset>
+            <legend class="sr-only">Compare</legend>
+            <input type="radio" name="vs" id="vs-without" checked>
+            <input type="radio" name="vs" id="vs-with">
+            <div class="switch">
+              <label for="vs-without">Without arazzo-maestro</label>
+              <label for="vs-with">With arazzo-maestro</label>
+            </div>
+          </fieldset>
           <div class="vs-panel vs-without">
             <div><h3>Typos ship</h3><p>A step calls an <code>operationId</code> the contract renamed last sprint. Nobody notices until the integration breaks.</p></div>
             <div><h3>Nobody reads YAML</h3><p>Product, QA and support never open the file, so the workflow lives in one person's head.</p></div>
@@ -280,19 +474,44 @@
       </div>
     </section>
 
+    <section id="demo-lint" aria-labelledby="demo-lint-title">
+      <div class="wrap">
+        <p class="kicker" style="--c: var(--teal)">In action</p>
+        <h2 id="demo-lint-title">One typo. Caught before it ships.</h2>
+        <figure class="demo" aria-label="A lint session on shop.arazzo.yaml">
+          <div class="pane editor" role="img" aria-label="shop.arazzo.yaml, line 95: the pay step calls operationId processPaymnet, a misspelled name, corrected to processPayment.">
+            <p class="pane-tab">shop.arazzo.yaml</p>
+            <pre><span class="ln">93</span>      - stepId: pay
+<span class="ln">94</span>        description: Pay the order with a valid card
+<span class="ln">95</span>        operationId: <span class="typo"><span class="bad">processPaymnet</span><span class="good">processPayment</span></span>
+<span class="ln">96</span>        parameters:</pre>
+          </div>
+          <div class="pane console" role="group" aria-label="lint console, before and after the fix">
+            <pre><span class="p">$</span> <span class="type t1">arazzo-maestro lint shop.arazzo.yaml</span>
+<span class="o1"><span class="err">[error]</span> workflows[happy-path-checkout].steps[pay].operationId: operation "processPaymnet" not found in source "shop-api"
+<span class="err">[error]</span> workflows[payment-refused-path].steps[pay-refused].operationId: operation "processPaymnet" not found in source "shop-api"
+Error: 2 issue(s) found</span><span class="later">
+<span class="p">$</span> <span class="type t2">arazzo-maestro lint shop.arazzo.yaml</span>
+<span class="o2"><span class="ok">OK:</span> shop.arazzo.yaml, no issues found</span></span></pre>
+            <p class="exit"><span class="x1" aria-hidden="true">exit 1</span><span class="x0">exit 0</span></p>
+          </div>
+        </figure>
+      </div>
+    </section>
+
     <section id="commands" aria-labelledby="commands-title">
       <div class="wrap">
         <p class="kicker">Commands</p>
-        <h2 id="commands-title">Four commands. Nothing else to install.</h2>
+        <h2 id="commands-title">Four commands. One binary.</h2>
+        <p class="intro">Linting, rendering and generating tests need nothing but the binary. Running the tests is left to <a href="https://hurl.dev">Hurl</a> and <a href="https://k6.io">k6</a>, two proven open source runners, rather than a home-made one.</p>
 
         <div class="band c-lint">
           <div>
             <h3><code>lint</code> catches it before CI does</h3>
             <p>Official JSON Schema, semantic rules, then every step checked against the OpenAPI contract it calls.</p>
           </div>
-          <pre tabindex="0" aria-label="lint session"><span class="p">$</span> arazzo-maestro lint checkout.arazzo.yaml
-<span class="err">[error]</span> steps[create-order].operationId:
-        operation "createOrder" not found in source "shop-api"
+          <pre class="wrap-lines" tabindex="0" role="group" aria-label="lint session"><span class="p">$</span> arazzo-maestro lint checkout.arazzo.yaml
+<span class="err">[error]</span> workflows[checkout].steps[create-order].operationId: operation "createOrder" not found in source "shop-api"
 Error: 1 issue(s) found</pre>
         </div>
 
@@ -301,56 +520,228 @@ Error: 1 issue(s) found</pre>
             <h3><code>view</code> draws it for everyone</h3>
             <p>Standalone HTML in light, dark or pb33f themes, portrait or landscape. Or Mermaid, rendered inline by GitHub.</p>
           </div>
-          <figure class="shot">
-            <img src="screenshots/happy-landscape.webp" width="1280" height="720" loading="lazy" alt="The happy-path-checkout workflow rendered by arazzo-maestro in landscape: a START card with inputs, then the steps list-catalog, get-product and add-to-cart side by side with parameters, success criteria and outputs.">
+          <figure class="iso" aria-label="The same workflow rendered three ways: light theme, dark theme and landscape layout">
+            <div class="iso-stage">
+              <div class="plate p1"><img src="screenshots/stack-light.webp" width="600" height="372" loading="lazy" alt="The happy-path-checkout workflow rendered with the light theme."><b>--theme light</b></div>
+              <div class="plate p2"><img src="screenshots/stack-dark.webp" width="600" height="372" loading="lazy" alt="The same workflow rendered with the dark theme."><b>--theme dark</b></div>
+              <div class="plate p3"><img src="screenshots/stack-landscape.webp" width="600" height="372" loading="lazy" alt="The same workflow rendered in landscape layout, steps side by side."><b>--layout landscape</b></div>
+            </div>
           </figure>
         </div>
 
         <div class="band c-e2e">
           <div>
             <h3><code>test run e2e</code> replays it for real</h3>
-            <p>Each step becomes a <a href="https://hurl.dev">Hurl</a> request, outputs become captures, criteria become asserts. Point it at staging, a mock or production.</p>
+            <p>Each step becomes a <a href="https://hurl.dev">Hurl</a> request, outputs become captures, criteria become asserts. Point it at staging, a mock or production, with <code>hurl</code> on your PATH.</p>
+            <pre class="mini" tabindex="0" role="group" aria-label="test run command"><span class="p">$</span> arazzo-maestro test run e2e shop.arazzo.yaml \
+    --base-url https://staging.example.com/api/v1</pre>
           </div>
-          <pre tabindex="0" aria-label="test run session"><span class="p">$</span> arazzo-maestro test run e2e shop.arazzo.yaml \
-    --base-url https://staging.example.com/api/v1
-<span class="ok">Success</span> happy-path-checkout.hurl <span class="dim">(4 requests)</span>
-<span class="ok">Success</span> payment-refused-path.hurl <span class="dim">(2 requests)</span></pre>
+          <figure class="board" aria-label="Hurl run of shop.arazzo.yaml">
+            <div role="img" aria-label="The steps of happy-path-checkout (list-catalog, get-product, add-to-cart, pay) then payment-refused-path (add-to-cart, pay-refused) run one after another and each turns green with its expected status code.">
+            <div class="board-top"><span><span class="live"></span>shop.arazzo.yaml</span><span class="tally">requests <b></b>/6</span></div>
+            <p class="wf">happy-path-checkout.hurl</p>
+            <ol class="pods"><li><span class="sid">list-catalog</span><span class="call">GET /<wbr>products</span><span class="code">200</span><i></i></li><li><span class="sid">get-product</span><span class="call">GET /<wbr>products/<wbr>{productId}</span><span class="code">200</span><i></i></li><li><span class="sid">add-to-cart</span><span class="call">POST /<wbr>cart/<wbr>items</span><span class="code">201</span><i></i></li><li><span class="sid">pay</span><span class="call">POST /<wbr>orders/<wbr>{orderId}/<wbr>payment</span><span class="code">200</span><i></i></li></ol>
+            <p class="wf">payment-refused-path.hurl</p>
+            <ol class="pods"><li><span class="sid">add-to-cart</span><span class="call">POST /<wbr>cart/<wbr>items</span><span class="code">201</span><i></i></li><li><span class="sid">pay-refused</span><span class="call">POST /<wbr>orders/<wbr>{orderId}/<wbr>payment</span><span class="code">200</span><i></i></li></ol>
+            <p class="legend"><span class="lg-wait">waiting</span><span class="lg-run">running</span><span class="lg-ok">passed</span></p>
+            </div>
+            <pre>Executed files:    2
+Executed requests: 6
+Succeeded files:   2 (100.0%)
+Failed files:      0 (0.0%)</pre>
+          </figure>
         </div>
 
         <div class="band c-perf">
           <div>
             <h3><code>test gen perf</code> puts it under load</h3>
-            <p>The same chain of calls as a <a href="https://k6.io">k6</a> script, with your virtual users, duration and thresholds.</p>
+            <p>The same chain of calls as a <a href="https://k6.io">k6</a> script, with your virtual users, duration and thresholds. k6 runs it, from your laptop or your CI.</p>
+            <pre class="mini" tabindex="0" role="group" aria-label="perf commands"><span class="p">$</span> arazzo-maestro test gen perf shop.arazzo.yaml \
+    --vus 50 --duration 30s \
+    --threshold 'http_req_duration=p(95)&lt;500'
+<span class="p">$</span> k6 run -e BASE_URL=<span class="hl">$STAGING</span> \
+    dist/perf/k6/shop/happy-path-checkout.k6.js</pre>
           </div>
-          <pre tabindex="0" aria-label="perf session"><span class="p">$</span> arazzo-maestro test gen perf shop.arazzo.yaml \
-    --vus 50 --duration 5m --threshold 'http_req_duration=p(95)&lt;500'
-<span class="p">$</span> k6 run -e BASE_URL=<span class="hl">$STAGING</span> dist/perf/k6/shop/happy-path-checkout.k6.js</pre>
+          <figure class="board perf" aria-label="k6 run of happy-path-checkout.k6.js">
+            <div role="img" aria-label="50 virtual users for 30 seconds against a local mock. Each virtual user loops through list-catalog, get-product, add-to-cart and pay, and all four checks pass at 100 percent.">
+            <div class="board-top"><span>happy-path-checkout.k6.js</span><span class="clock">elapsed <b class="sec"></b>/30 s</span></div>
+            <p class="wf">50 virtual users, colour = the step each one is on</p>
+            <ol class="vus"><li style="--d:-0.82s"></li><li style="--d:-0.38s"></li><li style="--d:-1.01s"></li><li style="--d:-0.12s"></li><li style="--d:-0.18s"></li><li style="--d:-1.37s"></li><li style="--d:-0.24s"></li><li style="--d:-0.93s"></li><li style="--d:-1.49s"></li><li style="--d:-0.14s"></li><li style="--d:-1.29s"></li><li style="--d:-0.54s"></li><li style="--d:-0.09s"></li><li style="--d:-0.22s"></li><li style="--d:-1.11s"></li><li style="--d:-1.07s"></li><li style="--d:-0.17s"></li><li style="--d:-0.61s"></li><li style="--d:-0.23s"></li><li style="--d:-1.41s"></li><li style="--d:-1.08s"></li><li style="--d:-0.15s"></li><li style="--d:-1.44s"></li><li style="--d:-0.31s"></li><li style="--d:-0.57s"></li><li style="--d:-1.49s"></li><li style="--d:-0.15s"></li><li style="--d:-1.47s"></li><li style="--d:-1.49s"></li><li style="--d:-1.01s"></li><li style="--d:-0.12s"></li><li style="--d:-0.56s"></li><li style="--d:-0.11s"></li><li style="--d:-1.42s"></li><li style="--d:-0.34s"></li><li style="--d:-0.74s"></li><li style="--d:-1.07s"></li><li style="--d:-0.36s"></li><li style="--d:-1.38s"></li><li style="--d:-0.30s"></li><li style="--d:-1.46s"></li><li style="--d:-0.78s"></li><li style="--d:-1.43s"></li><li style="--d:-0.46s"></li><li style="--d:-0.26s"></li><li style="--d:-1.48s"></li><li style="--d:-1.46s"></li><li style="--d:-0.48s"></li><li style="--d:-0.95s"></li><li style="--d:-0.24s"></li></ol>
+            <ol class="pods"><li class="s1"><span class="sid">list-catalog</span><span class="call">GET /<wbr>products</span><span class="code">&#10003; 200, 100%</span></li><li class="s2"><span class="sid">get-product</span><span class="call">GET /<wbr>products/<wbr>{productId}</span><span class="code">&#10003; 200, 100%</span></li><li class="s3"><span class="sid">add-to-cart</span><span class="call">POST /<wbr>cart/<wbr>items</span><span class="code">&#10003; 201, 100%</span></li><li class="s4"><span class="sid">pay</span><span class="call">POST /<wbr>orders/<wbr>{orderId}/<wbr>payment</span><span class="code">&#10003; 200, 100%</span></li></ol>
+            </div>
+            <pre><span class="ok">&#10003;</span> checks.........: 100.00%
+  http_req_failed: 0.00%
+<span class="ok">&#10003;</span> http_req_duration: p(95)=1.39ms, threshold p(95)&lt;500</pre>
+            <p class="legend">Excerpt of the k6 v0.57 summary, 50 VUs for 30 s against a local mock. Your API sets the real numbers.</p>
+          </figure>
+        </div>
+
+      </div>
+    </section>
+
+    <section id="install" aria-labelledby="install-title">
+      <div class="wrap">
+        <p class="kicker">Install</p>
+        <h2 id="install-title">Three ways in. Same binary.</h2>
+        <div class="tabs">
+          <fieldset>
+            <legend class="sr-only">Install method</legend>
+            <input type="radio" name="install" id="in-go" checked>
+            <input type="radio" name="install" id="in-docker">
+            <input type="radio" name="install" id="in-bin">
+            <div class="switch">
+              <label for="in-go">Go</label>
+              <label for="in-docker">Docker</label>
+              <label for="in-bin">Signed binary</label>
+            </div>
+          </fieldset>
+          <div class="tab-panel in-go">
+            <pre class="term" tabindex="0" role="group" aria-label="Install with Go"><span class="cmt"># Go 1.26 or newer</span>
+<span class="p">$</span> go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
+<span class="p">$</span> arazzo-maestro lint workflow.arazzo.yaml
+<span class="p">$</span> arazzo-maestro view workflow.arazzo.yaml -o dist --theme dark</pre>
+            <div>
+              <p>Pure Go, no cgo: it builds anywhere Go does and starts instantly.</p>
+              <p>Four direct dependencies, all listed in <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/go.mod"><code>go.mod</code></a>.</p>
+            </div>
+          </div>
+          <div class="tab-panel in-docker">
+            <pre class="term" tabindex="0" role="group" aria-label="Run with Docker"><span class="cmt"># multi-arch image, amd64 and arm64</span>
+<span class="p">$</span> docker run --rm -v "$PWD":/work -w /work \
+    ghcr.io/emmanuelperu/arazzo-maestro:latest \
+    lint workflow.arazzo.yaml</pre>
+            <div>
+              <p>A <code>FROM scratch</code> image of about 20 MB: no shell, no libc, nothing but the binary.</p>
+              <p>Every image is signed with cosign. More in the <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/RECIPES.md#docker">Docker recipe</a>.</p>
+            </div>
+          </div>
+          <div class="tab-panel in-bin">
+            <pre class="term" tabindex="0" role="group" aria-label="Verify a release archive"><span class="cmt"># verify the archive before you run it</span>
+<span class="p">$</span> cosign verify-blob \
+    --certificate-identity-regexp 'https://github.com/emmanuelperu/arazzo-maestro/.github/workflows/release.yml@.*' \
+    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+    --bundle arazzo-maestro_0.6.0_linux_amd64.tar.gz.sig \
+    arazzo-maestro_0.6.0_linux_amd64.tar.gz
+<span class="ok">Verified OK</span></pre>
+            <div>
+              <p>Linux and macOS on amd64 and arm64, Windows on amd64.</p>
+              <p>Each archive ships with a keyless cosign signature, an SBOM and a SHA-256 checksum. <a href="https://github.com/emmanuelperu/arazzo-maestro/releases/tag/v0.6.0">Get v0.6.0</a>.</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
+    <section id="ci" aria-labelledby="ci-title">
+      <div class="wrap">
+        <p class="kicker" style="--c: var(--teal)">CI</p>
+        <h2 id="ci-title">Wire it in once. Forget about it.</h2>
+        <p class="intro">A broken <code>operationId</code> fails the pull request before anyone reviews it.</p>
+        <div class="recipes">
+          <figure>
+            <figcaption><code>.github/workflows/arazzo.yml</code></figcaption>
+            <pre class="term" tabindex="0" role="group" aria-label="GitHub Actions workflow">jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.26' }
+      - run: |
+          go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
+          arazzo-maestro lint workflows/checkout.yaml</pre>
+          </figure>
+          <figure>
+            <figcaption><code>.pre-commit-config.yaml</code></figcaption>
+            <pre class="term" tabindex="0" role="group" aria-label="pre-commit hook">- repo: local
+  hooks:
+    - id: arazzo-lint
+      name: arazzo-maestro lint
+      entry: arazzo-maestro lint
+      language: system
+      files: '\.arazzo\.ya?ml$'</pre>
+          </figure>
+        </div>
+        <p class="intro">Copy-paste versions in the <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/RECIPES.md">recipes</a>, including the two extra jobs that publish the rendered pages to GitHub Pages.</p>
+      </div>
+    </section>
+
+    <section id="specs" aria-labelledby="specs-title">
+      <div class="wrap">
+        <p class="kicker" style="--c: var(--violet)">Specs</p>
+        <h2 id="specs-title">Under the hood.</h2>
+        <dl class="sheet">
+          <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 6h7M7.3 8.2l3.4 7.6M16.7 8.2l-3.4 7.6"/></svg>Arazzo</dt><dd>1.0, and 1.1 in part. Every rule is mapped in the <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/SPEC_COMPLIANCE.md">spec compliance matrix</a>.</dd></div>
+          <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>Sources</dt><dd>Local OpenAPI files. HTTPS on <code>--allow-remote</code>: 2 MiB, 5 s, 2 redirects, plain HTTP always refused.</dd></div>
+          <div class="c-lint"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>lint</dt><dd>Official JSON Schema, semantic rules, then <code>operationId</code> resolution against the contract. Exit 0 or 1.</dd></div>
+          <div class="c-view"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>view</dt><dd>HTML or Mermaid. Light, dark and pb33f themes, or your own <code>themes.yml</code>, contrast-audited at load. Portrait or landscape.</dd></div>
+          <div class="c-e2e"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>test e2e</dt><dd><a href="https://hurl.dev">Hurl</a> files with captures and asserts, run against any <code>--base-url</code>, with an optional HTML report.</dd></div>
+          <div class="c-perf"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18a9 9 0 0 1 18 0"/><path d="M12 18l4.5-6M6 18h0M18 18h0"/><circle cx="12" cy="18" r="1.3"/></svg>test perf</dt><dd><a href="https://k6.io">k6</a> scripts with virtual users, duration and thresholds, <code>BASE_URL</code> read from the environment.</dd></div>
+          <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>Runtime</dt><dd>Go, no cgo, four direct dependencies. One static binary of about 20 MB.</dd></div>
+          <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Supply chain</dt><dd>cosign keyless signatures, SBOM, SHA-256 checksums, <a href="https://scorecard.dev/viewer/?uri=github.com/emmanuelperu/arazzo-maestro">OpenSSF Scorecard</a>.</dd></div>
+        </dl>
+      </div>
+    </section>
+
     <div class="wrap" id="get">
-      <div class="closing">
-        <h2>Ship workflows you can prove.</h2>
+      <section class="closing" aria-labelledby="closing-title">
+        <h2 id="closing-title">Ship workflows you can prove.</h2>
         <p>Open source, Apache 2.0, signed releases with an SBOM.</p>
         <div class="cta">
           <a class="btn btn-main" href="https://github.com/emmanuelperu/arazzo-maestro/releases">Download v0.6.0</a>
-          <a class="btn btn-alt" href="https://github.com/emmanuelperu/arazzo-maestro#quick-start" style="border-color:#e2e8f5">Read the quick start</a>
+          <a class="btn btn-alt" href="#install" style="border-color:#e2e8f5">Install it</a>
         </div>
-      </div>
+      </section>
     </div>
   </main>
 
   <footer>
     <div class="wrap">
-      <nav aria-label="Project">
-        <a href="https://github.com/emmanuelperu/arazzo-maestro">GitHub</a>
-        <a href="https://github.com/emmanuelperu/arazzo-maestro/issues">Issues</a>
-        <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/CONTRIBUTING.md">Contributing</a>
-        <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/ROADMAP.md">Roadmap</a>
-        <a href="https://spec.openapis.org/arazzo/latest.html">Arazzo specification</a>
-      </nav>
-      <p>No JavaScript, system fonts, WCAG 2.2 AA. Animations stop when your system asks for reduced motion.</p>
+      <div class="foot">
+        <div>
+          <a class="logo" href="./">
+            <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+              <path d="M15 9.5V12.5M15 17.5C15 19.5 8.5 19 8.5 21.5M15 17.5C15 19.5 21.5 19 21.5 21.5" fill="none" stroke="#eef1fb" stroke-width="1.6" stroke-linecap="round"/>
+              <rect x="7" y="3" width="16" height="6.5" rx="3.25" fill="#2dd4bf"/>
+              <rect x="7" y="12" width="16" height="6.5" rx="3.25" fill="#a78bfa"/>
+              <rect x="2" y="21" width="12" height="6.5" rx="3.25" fill="#60a5fa"/>
+              <rect x="16" y="21" width="12" height="6.5" rx="3.25" fill="#fb923c"/>
+            </svg>
+            arazzo-maestro
+          </a>
+          <p>Lint, render and test Arazzo workflows from one Go binary.</p>
+        </div>
+        <nav aria-labelledby="foot-docs">
+          <p class="foot-title" id="foot-docs">Docs</p>
+          <ul>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro#readme">README</a></li>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/TEST_GENERATION.md">Test generation</a></li>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/RECIPES.md">Recipes</a></li>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/SPEC_COMPLIANCE.md">Spec compliance</a></li>
+          </ul>
+        </nav>
+        <nav aria-labelledby="foot-project">
+          <p class="foot-title" id="foot-project">Project</p>
+          <ul>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro">GitHub</a></li>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro/releases">Releases</a></li>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/ROADMAP.md">Roadmap</a></li>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro/issues">Issues</a></li>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/CONTRIBUTING.md">Contributing</a></li>
+            <li><a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/SECURITY.md">Security</a></li>
+          </ul>
+        </nav>
+        <nav aria-labelledby="foot-std">
+          <p class="foot-title" id="foot-std">Standards</p>
+          <ul>
+            <li><a href="https://spec.openapis.org/arazzo/latest.html">Arazzo</a></li>
+            <li><a href="https://spec.openapis.org/oas/latest.html">OpenAPI</a></li>
+            <li><a href="https://hurl.dev">Hurl</a></li>
+            <li><a href="https://k6.io">k6</a></li>
+          </ul>
+        </nav>
+      </div>
+      <p class="legal">Apache 2.0. No JavaScript, system fonts, WCAG 2.2 AA. Animations stop when your system asks for reduced motion.</p>
     </div>
   </footer>
 </body>

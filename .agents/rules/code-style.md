@@ -50,6 +50,16 @@
   compared byte-for-byte
 - End-to-end CLI tests live in `cmd/.../*_test.go`
 
+## CSS and HTML in `docs/`
+
+- The landing pages are hand-written CSS with no build step, so nothing
+  prunes a selector for us. Every change to a page ends with a cleanup
+  pass: a selector with no matching element, a class with no rule, a
+  property declared twice, a keyframe nothing runs. Delete them, do not
+  keep them "in case" (git has them)
+- Quick check: for every class named in `<style>`, grep the markup for
+  it, and for every `class="..."` in the markup, grep the stylesheet
+
 ## Git
 
 - No automatic `Co-Authored-By` (see global instructions)
