@@ -96,17 +96,17 @@ Pull the published image `ghcr.io/emmanuelperu/arazzo-maestro:latest`
 
 ```bash
 # Build locally
-docker build --build-arg VERSION=0.6.0 \
-  -t ghcr.io/emmanuelperu/arazzo-maestro:0.6.0 .
+docker build --build-arg VERSION=0.7.0 \
+  -t ghcr.io/emmanuelperu/arazzo-maestro:0.7.0 .
 
 # Lint a file from the current directory
 docker run --rm -v "$PWD":/work -w /work \
-  ghcr.io/emmanuelperu/arazzo-maestro:0.6.0 \
+  ghcr.io/emmanuelperu/arazzo-maestro:0.7.0 \
   lint workflows/checkout.arazzo.yaml
 
 # Render to ./dist/ on the host, owned by you rather than root
 docker run --rm -v "$PWD":/work -w /work --user "$(id -u):$(id -g)" \
-  ghcr.io/emmanuelperu/arazzo-maestro:0.6.0 \
+  ghcr.io/emmanuelperu/arazzo-maestro:0.7.0 \
   view workflows/checkout.arazzo.yaml
 ```
 

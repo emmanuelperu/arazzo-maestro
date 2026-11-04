@@ -164,7 +164,7 @@ Dependency graph (no cycles): `model` → ∅, `expr` → ∅, `theme` → ∅,
 | Test coverage | ✅ ≥80 % on every package except `model` (~61 %, plain data types) | `*_test.go` |
 | README | ✅ done, with a visual preview section | `README.md` |
 | CI (GitHub Actions) | ✅ done | `.github/workflows/ci.yml` |
-| Releases (goreleaser, cosign-signed, SBOM) | ✅ shipped (latest v0.6.0) | `.github/workflows/release.yml` |
+| Releases (goreleaser, cosign-signed, SBOM) | ✅ shipped (latest v0.7.0) | `.github/workflows/release.yml` |
 | OpenSSF Best Practices badge | 🟡 Phases 1-3 done; `passing` badge still `in_progress` | `docs/ROADMAP.md` |
 | Banner / screenshots / landing page | ✅ `docs/banner-full.webp`, `docs/screenshots/`, landing page `docs/index.html` published by `pages.yml` | `docs/` |
 
