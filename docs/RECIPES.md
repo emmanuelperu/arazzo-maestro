@@ -35,7 +35,7 @@ jobs:
         with: { go-version: '1.26' }
       - run: |
           go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
-          arazzo-maestro lint workflows/checkout.yaml
+          arazzo-maestro lint workflows/*.arazzo.yaml
 
   publish:
     needs: lint
@@ -47,7 +47,7 @@ jobs:
         with: { go-version: '1.26' }
       - run: |
           go install github.com/emmanuelperu/arazzo-maestro/cmd/arazzo-maestro@latest
-          arazzo-maestro view workflows/checkout.yaml -o public/
+          arazzo-maestro view workflows/checkout.arazzo.yaml -o public/
       - uses: actions/upload-pages-artifact@v5
         with: { path: public/ }
 
@@ -70,9 +70,11 @@ so `public/` is a complete static site.
 
 ## Pre-commit hook
 
-`lint` takes exactly one file, while pre-commit passes every staged file
-in a single call, so the hook names the workflow itself and only uses
-`files` to decide when to run.
+pre-commit passes every staged file matching `files` in a single call;
+`lint` accepts several files and prefixes each finding with its file.
+Keep the pattern on `.arazzo.yaml` names: an OpenAPI contract stored
+next to the workflows would otherwise be linted as an Arazzo file and
+fail the hook.
 
 ```yaml
 # .pre-commit-config.yaml
@@ -81,10 +83,9 @@ repos:
     hooks:
       - id: arazzo-lint
         name: arazzo-maestro lint
-        entry: arazzo-maestro lint workflows/checkout.yaml
+        entry: arazzo-maestro lint
         language: system
-        files: '^workflows/.*\.ya?ml$'
-        pass_filenames: false
+        files: '\.arazzo\.ya?ml$'
 ```
 
 ## Docker
@@ -101,12 +102,12 @@ docker build --build-arg VERSION=0.6.0 \
 # Lint a file from the current directory
 docker run --rm -v "$PWD":/work -w /work \
   ghcr.io/emmanuelperu/arazzo-maestro:0.6.0 \
-  lint workflows/checkout.yaml
+  lint workflows/checkout.arazzo.yaml
 
 # Render to ./dist/ on the host, owned by you rather than root
 docker run --rm -v "$PWD":/work -w /work --user "$(id -u):$(id -g)" \
   ghcr.io/emmanuelperu/arazzo-maestro:0.6.0 \
-  view workflows/checkout.yaml
+  view workflows/checkout.arazzo.yaml
 ```
 
 `-v "$PWD":/work` exposes your current directory inside the container,

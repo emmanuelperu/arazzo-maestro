@@ -1,5 +1,7 @@
-# Deploy the promotional landing page (docs/index.html, static, no build
-# step) and its screenshots to GitHub Pages.
+# Deploy the promotional landing page (docs/index.html, static) and its
+# screenshots to GitHub Pages. The only build step stamps the release-bound
+# facts (version, banner, Go minor, dependency count) from the latest
+# release and go.mod, so a new release refreshes the page without a commit.
 #
 # One-time setup: repo Settings → Pages → "Build and deployment" →
 # Source: "GitHub Actions".
@@ -18,6 +20,9 @@ on:
       - "docs/index.html"
       - "docs/screenshots/**"
       - ".github/workflows/pages.yml"
+      - "scripts/landing-sync.sh"
+  release:
+    types: [published]
   workflow_dispatch:
 
 # Least privilege by default; the deploy job widens what it needs.
@@ -35,6 +40,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Stamp the latest release into the page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/landing-sync.sh
+          git --no-pager diff --stat -- docs/index.html
 
       - name: Guard, eco-design invariants must hold
         run: |
