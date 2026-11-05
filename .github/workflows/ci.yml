@@ -26,33 +26,77 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Tells whether a pull request touches anything besides docs/ and
+  # Markdown. Pushes to main always count as code changes, and so does
+  # any failure to list the files.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - name: List changed files
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename'); then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if printf '%s\n' "$files" | grep -qvE '^docs/|\.md$'; then code=true; else code=false; fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   test:
     name: test (${{ matrix.os }})
+    needs: changes
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    # Branch protection requires "test (macos-latest)", so a docs-only pull
+    # request still reports that check, from an Ubuntu runner that skips
+    # every step: a skipped matrix job would never report its expanded name.
+    runs-on: ${{ (matrix.os == 'macos-latest' && needs.changes.outputs.code != 'true') && 'ubuntu-latest' || matrix.os }}
+    env:
+      RUN: ${{ matrix.os != 'macos-latest' || needs.changes.outputs.code == 'true' }}
     steps:
+      - name: Skip the macOS build for a docs-only change
+        if: env.RUN != 'true'
+        run: echo "::notice::Only docs/ or Markdown changed, macOS build skipped"
+
       - name: Checkout
+        if: env.RUN == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
+        if: env.RUN == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
 
       - name: go vet
+        if: env.RUN == 'true'
         run: go vet ./...
 
       - name: go test
+        if: env.RUN == 'true'
         run: go test -race -cover ./...
 
       - name: go build
+        if: env.RUN == 'true'
         run: go build -o /tmp/arazzo-maestro ./cmd/arazzo-maestro
 
       - name: Lint the demo Arazzo files
+        if: env.RUN == 'true'
         run: |
           for f in examples/*.arazzo.yaml; do
             echo "→ lint $f"
@@ -60,6 +104,7 @@ jobs:
           done
 
       - name: Render the demo files (eco-design guard)
+        if: env.RUN == 'true'
         run: |
           /tmp/arazzo-maestro view examples/shop.arazzo.yaml -o /tmp/dist/shop --theme light
           for f in /tmp/dist/shop/*.html; do
