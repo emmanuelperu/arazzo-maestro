@@ -6,8 +6,8 @@
   tapestries hang in it, like the banner: the "How it works" diagram and
   the closing banner, each on a wooden rod with yarn loops and a fringe.
   Arazzo is Italian for tapestry: steps are the threads. CSS only, no
-  JavaScript, system fonts, local assets only; every animation stops
-  under prefers-reduced-motion.
+  JavaScript, system fonts, local assets only; every animation can be
+  paused (WCAG 2.2.2) and stops under prefers-reduced-motion.
 -->
 <html lang="en">
 <head>
@@ -81,7 +81,7 @@
     .install b { color: var(--teal); }
 
     /* the flow diagram: the loud element */
-    .flow { margin: 3.5rem auto 0; max-width: 64rem; padding: 1.5rem; border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(180deg, var(--bg-2), var(--bg-term)); }
+    .flow { padding: 1.5rem; }
     .flow-scroll { overflow-x: auto; }
     .flow svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: var(--mono); }
     .flow .rail { fill: none; stroke: var(--line); stroke-width: 3; }
@@ -155,6 +155,11 @@
     .board { margin: 0; padding: 1.25rem 1.4rem; border-radius: 16px; background: var(--bg-term); border: 1px solid var(--line); font-family: var(--mono); }
     .board-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; color: var(--muted); font-size: 0.9rem; }
     .live { display: inline-block; width: 8px; height: 8px; margin-right: 0.55rem; border-radius: 50%; background: var(--teal); vertical-align: middle; }
+    /* "running" while a demo plays, "done" once it rests on its final frame (the rest state) */
+    .state { display: inline-grid; margin-left: 0.75rem; font-weight: 700; }
+    .state > span { grid-area: 1 / 1; }
+    .state .run { color: var(--yellow); opacity: 0; }
+    .state .done { color: var(--teal); }
     .tally b { color: var(--text); counter-reset: req var(--req); }
     .tally b::after { content: counter(req); }
     .board .wf { margin: 1.1rem 0 0.5rem; color: var(--text); font-weight: 700; font-size: 0.9rem; }
@@ -163,12 +168,20 @@
     .pods .sid { color: var(--blue); font-weight: 700; overflow-wrap: anywhere; }
     .pods .call { color: var(--muted); }
     .pods .code { margin-top: auto; padding-top: 0.2rem; color: var(--teal); font-weight: 800; }
+    /* e2e: a step is satin-stitched round once it passes, like the diagram's nodes, and its
+       progress bar is sewn as a running stitch */
+    .board:not(.perf) .pods li::before { content: ""; position: absolute; inset: 0; padding: 3px; border-radius: inherit; pointer-events: none;
+      background: repeating-linear-gradient(-55deg, #14b8a6 0 3px, #0f766e 3px 4.3px, #5eead4 4.3px 5px);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+    .board:not(.perf) .pods i { background: repeating-linear-gradient(115deg, var(--teal) 0 2px, transparent 2px 4px); }
     .pods i { position: absolute; left: 0.7rem; right: 0.7rem; bottom: 0.4rem; height: 3px; border-radius: 2px; background: var(--teal); transform-origin: left; }
     .board .legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 1rem 0 0; color: var(--muted); font-size: 0.875rem; }
     .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 0.4rem; border-radius: 3px; vertical-align: -1px; }
     .lg-wait::before { border: 1.5px dashed var(--muted); }
     .lg-run::before { background: var(--yellow); }
     .lg-ok::before { background: var(--teal); }
+    .board:not(.perf) .lg-ok::before { background: repeating-linear-gradient(-55deg, #14b8a6 0 2px, #0f766e 2px 3px, #5eead4 3px 4px); }
     .board pre { margin: 1rem 0 0; padding-top: 0.9rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.875rem; line-height: 1.6; white-space: pre-wrap; }
 
     /* perf board: 50 VU squares cycle through the four step colours */
@@ -177,9 +190,14 @@
     .clock b { color: var(--text); }
     .sec { counter-reset: sec var(--sec); }
     .sec::after { content: counter(sec); }
-    .vus { display: grid; grid-template-columns: repeat(25, minmax(0, 1fr)); gap: 5px; margin: 0; padding: 0; list-style: none; }
-    .vus li { aspect-ratio: 1; border-radius: 3px; background: var(--teal); }
-    .vus li:nth-child(4n+2) { background: var(--violet); } .vus li:nth-child(4n+3) { background: var(--blue); } .vus li:nth-child(4n) { background: var(--orange); }
+    /* a loom: one warp thread per virtual user, time runs down, and each pick takes the colour of
+       the step that user is on (7 loops of the four steps). --o shifts each user's phase. The
+       ::before cover hides the rows not woven yet, bare warp only; at rest the band is complete */
+    .vus { position: relative; display: grid; grid-template-columns: repeat(50, minmax(0, 1fr)); gap: 0 2px; height: 168px; margin: 0; padding: 0; list-style: none; }
+    .vus li { border-radius: 1px; background: repeating-linear-gradient(180deg, var(--teal) 0 6px, var(--violet) 6px 12px, var(--blue) 12px 18px, var(--orange) 18px 24px) 0 var(--o) / 100% 24px; }
+    .vus::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(180deg, rgba(8, 12, 27, 0.4) 0 1px, transparent 1px 3px); }
+    .vus::before { content: ""; position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; height: 0;
+      background: linear-gradient(90deg, transparent calc(50% - 1px), var(--line) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)) 0 0 / calc((100% + 2px) / 50) 100% repeat-x, var(--bg-term); }
     .perf .pods { margin-top: 1rem; }
     .perf .pods li { padding-bottom: 0.6rem; }
     .perf .pods .s1 { border-color: var(--teal); } .perf .pods .s1 .sid { color: var(--teal); }
@@ -198,7 +216,7 @@
     .plate.p3 { --i: 1; --c: var(--orange); z-index: 1; }
 
     /* closing */
-    .closing { margin-top: 8rem; padding: 4rem 1.5rem; border-radius: 28px; text-align: center; background: linear-gradient(120deg, #134e4a, #3b2a7a 45%, #1e3a6e 70%, #7c2d12); }
+    .closing { padding: 4rem 1.5rem 3rem; text-align: center; }
     .closing h2 { margin: 0 auto; max-width: 18ch; }
     .closing p { color: #e2e8f5; font-size: 1.15rem; }
 
@@ -245,7 +263,9 @@
     .typo { display: inline-flex; column-gap: 0.6ch; vertical-align: bottom; }
     .typo > span { white-space: pre; }
     .typo .bad { color: var(--orange); text-decoration: line-through; text-decoration-thickness: 2px; }
-    .typo .good { color: var(--teal); }
+    /* lint as darning: a stale reference is a snag (wavy orange underline while lint reports it),
+       the new name is stitched back in with a teal satin stitch */
+    .typo .good { color: var(--teal); padding-bottom: 2px; background: repeating-linear-gradient(115deg, var(--teal) 0 2px, transparent 2px 4px) 0 100% / 100% 3px no-repeat; }
     .type { display: inline-block; vertical-align: bottom; overflow: hidden; white-space: nowrap; }
     .exit { display: inline-grid; margin: 1rem 0 0; font-weight: 800; }
     .exit span { grid-area: 1 / 1; padding: 0.1rem 0.6rem; border-radius: 6px; color: var(--bg); }
@@ -257,7 +277,7 @@
     .foot p { margin: 0 0 0.5rem; max-width: 26rem; }
     .foot .foot-title { margin: 0 0 0.6rem; font-weight: 800; color: var(--text); }
     .foot ul { margin: 0; padding: 0; list-style: none; }
-    footer a { color: var(--text); display: inline-block; padding: 0.35rem 0; }
+    footer a { color: var(--text); display: inline-block; min-width: 24px; padding: 0.35rem 0; }
     .legal { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); font-size: 0.95rem; }
 
     @media (prefers-reduced-motion: no-preference) {
@@ -265,19 +285,23 @@
          Every other animation plays a bounded number of times and rests on the finished state */
       .rotor span:first-child { animation: rotor 8s cubic-bezier(0.7, 0, 0.2, 1) infinite; }
       .flow .pulse { animation: flow 1.4s linear infinite; }
-      /* perf board: the clock runs 30 s in 10, once; each VU cycles through the steps until then,
+      /* perf board: the clock runs 30 s in 10, once; the loom weaves one row per pick meanwhile,
          and the summary only shows once the run is over */
-      @keyframes vu { 0% { background: var(--teal); } 25% { background: var(--violet); } 50% { background: var(--blue); } 75% { background: var(--orange); } }
-      @keyframes vu-off { 0% { box-shadow: none; } 100% { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line); } }
+      @keyframes weave { 0% { height: 100%; } 100% { height: 0; } }
       @keyframes sec { 0% { --sec: 0; } 100% { --sec: 30; } }
       @keyframes perf-sum { 0% { opacity: 0; } 100% { opacity: 1; } }
+      /* run state of each demo: "running" while it plays, "done" when it rests on its final frame */
+      @keyframes st-on { 0%, 100% { opacity: 1; } }
+      @keyframes st-off { 0%, 100% { opacity: 0; } }
+      @keyframes st-live { 0%, 100% { background: var(--yellow); } }
       /* The run starts when the board scrolls into view: a view timeline flips --in on the figure as
          its top edge enters the viewport, and a style query on that value starts the time-based
          animations. Browsers without scroll-driven animations play the run at page load instead */
       @supports not (animation-timeline: view()) {
-        .vus li { animation: vu 1.6s steps(1, end) 7 var(--d), vu-off 10s steps(1, end) forwards; }
+        .vus::before { animation: weave 10s steps(28, end); }
         .sec { animation: sec 10s linear forwards; }
         .perf pre { animation: perf-sum 10s steps(1, end) forwards; }
+        .perf .state .run { animation: st-on 10s; } .perf .state .done { animation: st-off 10s; } .perf .live { animation: st-live 10s; }
       }
       @supports (animation-timeline: view()) {
         .perf { container-name: perf; animation: in-view 1s steps(1, end) both; animation-timeline: view(); animation-range: entry 0% entry 4%; }
@@ -285,38 +309,48 @@
         .perf .sec { --sec: 0; }
         .perf pre { opacity: 0; }
         @container perf style(--in: 1) {
-          .vus li { animation: vu 1.6s steps(1, end) 7 var(--d), vu-off 10s steps(1, end) forwards; }
+          .vus::before { animation: weave 10s steps(28, end); }
           .sec { animation: sec 10s linear forwards; }
           .perf pre { animation: perf-sum 10s steps(1, end) forwards; }
+          .perf .state .run { animation: st-on 10s; } .perf .state .done { animation: st-off 10s; } .perf .live { animation: st-live 10s; }
         }
       }
 
       /* e2e board: 10 s run, steps light up in order */
-      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1) { animation: pod0 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1) i { animation: bar0 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1) .code { animation: code0 10s 3; }
-      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2) { animation: pod1 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2) i { animation: bar1 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2) .code { animation: code1 10s 3; }
-      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3) { animation: pod2 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3) i { animation: bar2 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3) .code { animation: code2 10s 3; }
-      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4) { animation: pod3 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4) i { animation: bar3 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4) .code { animation: code3 10s 3; }
-      .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1) { animation: pod4 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1) i { animation: bar4 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1) .code { animation: code4 10s 3; }
-      .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2) { animation: pod5 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2) i { animation: bar5 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2) .code { animation: code5 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1) { animation: pod0 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1) i { animation: bar0 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1) .code { animation: code0 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(1)::before { animation: code0 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2) { animation: pod1 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2) i { animation: bar1 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2) .code { animation: code1 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(2)::before { animation: code1 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3) { animation: pod2 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3) i { animation: bar2 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3) .code { animation: code2 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(3)::before { animation: code2 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4) { animation: pod3 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4) i { animation: bar3 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4) .code { animation: code3 10s 3; } .board:not(.perf) .pods:nth-of-type(1) li:nth-child(4)::before { animation: code3 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1) { animation: pod4 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1) i { animation: bar4 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1) .code { animation: code4 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(1)::before { animation: code4 10s 3; }
+      .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2) { animation: pod5 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2) i { animation: bar5 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2) .code { animation: code5 10s 3; } .board:not(.perf) .pods:nth-of-type(2) li:nth-child(2)::before { animation: code5 10s 3; }
       .tally b { animation: req 10s 3; }
+      .board:not(.perf) .state .run { animation: st-on 30s; } .board:not(.perf) .state .done { animation: st-off 30s; } .board:not(.perf) .live { animation: st-live 30s; }
+      /* the e2e board starts on scroll too, through the play state: until the board is in view its
+         animations hold their first frame, every step waiting */
+      @supports (animation-timeline: view()) {
+        .board:not(.perf) { container-name: e2e; animation: in-view 1s steps(1, end) both; animation-timeline: view(); animation-range: entry 0% entry 4%; }
+        /* !important beats the animation shorthands above, which reset the play state */
+        .board:not(.perf) * { animation-play-state: paused !important; }
+        @container e2e style(--in: 1) { .board:not(.perf) * { animation-play-state: running !important; } }
+      }
       @keyframes req { 0%, 15% { --req: 0; } 16%, 28% { --req: 1; } 29%, 41% { --req: 2; } 42%, 54% { --req: 3; } 55%, 67% { --req: 4; } 68%, 80% { --req: 5; } 81%, 95% { --req: 6; } 97%, 100% { --req: 0; } }
       @keyframes pod0 { 0%, 6% { border-color: var(--line); border-style: dashed; } 7%, 15% { border-color: var(--yellow); border-style: solid; } 16%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
-      @keyframes bar0 { 0%, 6% { transform: scaleX(0); background: var(--yellow); } 15% { transform: scaleX(1); background: var(--yellow); } 16%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes bar0 { 0%, 6% { transform: scaleX(0); background: var(--yellow); } 15% { transform: scaleX(1); background: var(--yellow); } 16%, 95% { transform: scaleX(1); background: repeating-linear-gradient(115deg, var(--teal) 0 2px, transparent 2px 4px); } 97%, 100% { transform: scaleX(0); } }
       @keyframes code0 { 0%, 15% { opacity: 0; } 16%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
       @keyframes pod1 { 0%, 19% { border-color: var(--line); border-style: dashed; } 20%, 28% { border-color: var(--yellow); border-style: solid; } 29%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
-      @keyframes bar1 { 0%, 19% { transform: scaleX(0); background: var(--yellow); } 28% { transform: scaleX(1); background: var(--yellow); } 29%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes bar1 { 0%, 19% { transform: scaleX(0); background: var(--yellow); } 28% { transform: scaleX(1); background: var(--yellow); } 29%, 95% { transform: scaleX(1); background: repeating-linear-gradient(115deg, var(--teal) 0 2px, transparent 2px 4px); } 97%, 100% { transform: scaleX(0); } }
       @keyframes code1 { 0%, 28% { opacity: 0; } 29%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
       @keyframes pod2 { 0%, 32% { border-color: var(--line); border-style: dashed; } 33%, 41% { border-color: var(--yellow); border-style: solid; } 42%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
-      @keyframes bar2 { 0%, 32% { transform: scaleX(0); background: var(--yellow); } 41% { transform: scaleX(1); background: var(--yellow); } 42%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes bar2 { 0%, 32% { transform: scaleX(0); background: var(--yellow); } 41% { transform: scaleX(1); background: var(--yellow); } 42%, 95% { transform: scaleX(1); background: repeating-linear-gradient(115deg, var(--teal) 0 2px, transparent 2px 4px); } 97%, 100% { transform: scaleX(0); } }
       @keyframes code2 { 0%, 41% { opacity: 0; } 42%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
       @keyframes pod3 { 0%, 45% { border-color: var(--line); border-style: dashed; } 46%, 54% { border-color: var(--yellow); border-style: solid; } 55%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
-      @keyframes bar3 { 0%, 45% { transform: scaleX(0); background: var(--yellow); } 54% { transform: scaleX(1); background: var(--yellow); } 55%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes bar3 { 0%, 45% { transform: scaleX(0); background: var(--yellow); } 54% { transform: scaleX(1); background: var(--yellow); } 55%, 95% { transform: scaleX(1); background: repeating-linear-gradient(115deg, var(--teal) 0 2px, transparent 2px 4px); } 97%, 100% { transform: scaleX(0); } }
       @keyframes code3 { 0%, 54% { opacity: 0; } 55%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
       @keyframes pod4 { 0%, 58% { border-color: var(--line); border-style: dashed; } 59%, 67% { border-color: var(--yellow); border-style: solid; } 68%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
-      @keyframes bar4 { 0%, 58% { transform: scaleX(0); background: var(--yellow); } 67% { transform: scaleX(1); background: var(--yellow); } 68%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes bar4 { 0%, 58% { transform: scaleX(0); background: var(--yellow); } 67% { transform: scaleX(1); background: var(--yellow); } 68%, 95% { transform: scaleX(1); background: repeating-linear-gradient(115deg, var(--teal) 0 2px, transparent 2px 4px); } 97%, 100% { transform: scaleX(0); } }
       @keyframes code4 { 0%, 67% { opacity: 0; } 68%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
       @keyframes pod5 { 0%, 71% { border-color: var(--line); border-style: dashed; } 72%, 80% { border-color: var(--yellow); border-style: solid; } 81%, 95% { border-color: var(--teal); border-style: solid; } 97%, 100% { border-color: var(--line); border-style: dashed; } }
-      @keyframes bar5 { 0%, 71% { transform: scaleX(0); background: var(--yellow); } 80% { transform: scaleX(1); background: var(--yellow); } 81%, 95% { transform: scaleX(1); background: var(--teal); } 97%, 100% { transform: scaleX(0); } }
+      @keyframes bar5 { 0%, 71% { transform: scaleX(0); background: var(--yellow); } 80% { transform: scaleX(1); background: var(--yellow); } 81%, 95% { transform: scaleX(1); background: repeating-linear-gradient(115deg, var(--teal) 0 2px, transparent 2px 4px); } 97%, 100% { transform: scaleX(0); } }
       @keyframes code5 { 0%, 80% { opacity: 0; } 81%, 95% { opacity: 1; } 97%, 100% { opacity: 0; } }
 
       /* lint demo: 12 s story, three times, started when the figure scrolls into view (same view
@@ -328,6 +362,7 @@
         .typo .bad { animation: a-bad 12s 3; } .typo .good { animation: a-good 12s 3; }
         .later { animation: a-later 12s 3; } .t2 { animation: a-t2 12s 3; } .o2 { animation: a-o2 12s 3; }
         .x1 { animation: a-x1 12s 3; } .x0 { animation: a-x0 12s 3; }
+        .console .state .run { animation: st-on 36s; } .console .state .done { animation: st-off 36s; }
       }
       @supports (animation-timeline: view()) {
         .demo { container-name: demo; animation: in-view 1s steps(1, end) both; animation-timeline: view(); animation-range: entry 0% entry 4%; }
@@ -337,6 +372,7 @@
           .typo .bad { animation: a-bad 12s 3; } .typo .good { animation: a-good 12s 3; }
           .later { animation: a-later 12s 3; } .t2 { animation: a-t2 12s 3; } .o2 { animation: a-o2 12s 3; }
           .x1 { animation: a-x1 12s 3; } .x0 { animation: a-x0 12s 3; }
+          .console .state .run { animation: st-on 36s; } .console .state .done { animation: st-off 36s; }
         }
       }
       @keyframes a-typo { 0%, 100% { column-gap: 0; } }
@@ -348,7 +384,13 @@
         42%, 96% { max-width: 0; overflow: hidden; text-decoration: none; }
         97%, 100% { max-width: none; overflow: visible; text-decoration: none; }
       }
-      @keyframes a-good { 0%, 40% { max-width: 0; overflow: hidden; } 42%, 96% { max-width: none; overflow: visible; } 97%, 100% { max-width: 0; overflow: hidden; } }
+      /* the new name appears, then its stitch runs under it from left to right */
+      @keyframes a-good {
+        0%, 40% { max-width: 0; overflow: hidden; background-size: 0 3px; }
+        42% { max-width: none; overflow: visible; background-size: 0 3px; }
+        47%, 96% { max-width: none; overflow: visible; background-size: 100% 3px; }
+        97%, 100% { max-width: 0; overflow: hidden; background-size: 0 3px; }
+      }
       @keyframes a-later { 0%, 47% { opacity: 0; } 48%, 96% { opacity: 1; } 97%, 100% { opacity: 0; } }
       @keyframes a-t2 { 0%, 48% { width: 0; animation-timing-function: steps(36, end); } 58%, 96% { width: 36ch; } 97%, 100% { width: 0; } }
       @keyframes a-o2 { 0%, 61% { opacity: 0; } 62%, 96% { opacity: 1; } 97%, 100% { opacity: 0; } }
@@ -391,7 +433,6 @@
       .pane { padding: 1rem; }
       .editor pre { white-space: pre-wrap; overflow-wrap: anywhere; }
       .pods { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .vus { grid-template-columns: repeat(10, minmax(0, 1fr)); }
       .iso-stage { height: 320px; }
       .plate.p1 { --i: -0.75; } .plate.p3 { --i: 0.75; }
       .sheet div { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
@@ -461,6 +502,113 @@
     .logo rect:nth-of-type(1) { fill: url(#sat-teal); } .logo rect:nth-of-type(2) { fill: url(#sat-violet); }
     .logo rect:nth-of-type(3) { fill: url(#sat-blue); } .logo rect:nth-of-type(4) { fill: url(#sat-orange); }
     .logo svg { filter: drop-shadow(0 1px 1px rgba(20, 10, 0, 0.35)); }
+    /* the weaver's mark: old tapestries carry the workshop's mark woven into the selvedge */
+    .closing .mark { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; margin: 3rem 0 0; padding: 0.4rem 1rem;
+      background: #e2d2ae repeating-linear-gradient(0deg, rgba(90, 62, 20, 0.12) 0 1px, transparent 1px 3px);
+      border-block: 3px solid; border-image: repeating-linear-gradient(90deg, var(--t-teal) 0 4px, var(--t-violet) 4px 8px, var(--t-blue) 8px 12px, var(--t-orange) 12px 16px) 3;
+      color: var(--ink); font: 700 0.875rem/1.5 var(--mono); }
+    .closing .mark span + span::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 0.7rem; background: currentColor; transform: rotate(45deg); vertical-align: middle; }
+
+    /* the back of the tapestry: a checkbox turns the diagram over to the YAML it is woven from.
+       The whole hanging turns, the back face is mirrored back so it reads, and the faces swap at
+       the halfway point. Without motion the faces simply swap */
+    .faces { display: grid; }
+    .face { grid-area: 1 / 1; min-width: 0; }
+    .face.back { text-align: left; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 1.5rem 2.5rem; align-items: center; visibility: hidden; }
+    .flow:has(#flip:checked) .front { visibility: hidden; }
+    .flow:has(#flip:checked) .back { visibility: visible; }
+    .flip-input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+    .flip { display: flex; width: fit-content; align-items: center; gap: 0.55rem; min-height: 48px; margin: 1.1rem auto 0; padding: 0 1.4rem 0 1.15rem; border: 2px solid var(--ink); border-radius: 999px;
+      background: var(--ink); color: var(--linen); font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 6px 14px -8px rgba(27, 35, 64, 0.8); }
+    .flip:hover { border-color: #a07400; box-shadow: 0 0 0 3px #a07400, 0 6px 14px -8px rgba(27, 35, 64, 0.8); }
+    .flip .turn { flex: none; width: 18px; min-width: 0; height: 18px; }
+    /* a dog-eared corner: the cloth lifts at the bottom right and shows its back, gold thread and all */
+    .fold { position: absolute; z-index: 4; right: 0; bottom: 0; width: 3rem; height: 3rem; cursor: pointer;
+      background: linear-gradient(315deg, var(--bg) 0 50%, transparent 50%),
+        linear-gradient(135deg, transparent 0 calc(50% + 1.1rem), #a07400 calc(50% + 1.1rem) calc(50% + 1.1rem + 3px), transparent 0),
+        linear-gradient(315deg, transparent 50%, #d6c398 50%, #c6b088);
+      filter: drop-shadow(-3px -3px 3px rgba(60, 40, 10, 0.35)); }
+    .flow:has(#flip:checked) .fold { visibility: hidden; }
+    .flow:has(#flip:focus-visible) .flip { outline: 3px solid var(--ink); outline-offset: 3px; }
+    .back-note p { margin: 0 0 0.9rem; color: var(--ink-2); }
+    .back-note .back-title { color: var(--ink); font: 800 1.35rem/1.2 var(--sans); letter-spacing: -0.02em; }
+    .back-note code { color: var(--ink); }
+    .back-note .flip { margin: 1.4rem 0 0; }
+    .yaml { --lh: 1.4rem; position: relative; margin: 0; white-space: pre; overflow-wrap: normal; padding: 0.5rem 0 0.5rem 2.4rem; overflow-x: auto; color: var(--ink); font-size: 0.875rem; line-height: var(--lh); }
+    .yaml b { color: #6e4b00; }
+    /* a float: the thread leaves the output line, runs behind the cloth and comes out on the line
+       that uses it, knotted at both ends */
+    .float { position: absolute; left: calc(0.45rem + var(--g) * 0.6rem); top: calc(0.5rem + (var(--a) + 0.5) * var(--lh) - 1.5px); width: calc(1.6rem - var(--g) * 0.6rem);
+      height: calc((var(--b) - var(--a)) * var(--lh) + 3px); border: 3px solid #a07400; border-right: 0; border-radius: 8px 0 0 8px; }
+    .float::before, .float::after { content: ""; position: absolute; right: -4px; width: 8px; height: 8px; border-radius: 50%; background: #6e4b00; }
+    .float::before { top: -5.5px; } .float::after { bottom: -5.5px; }
+    @media (prefers-reduced-motion: no-preference) {
+      .flow { transform: perspective(2400px) rotateY(0deg); transition: transform 0.9s cubic-bezier(0.65, 0, 0.35, 1); }
+      .face { transition: visibility 0s 0.45s, transform 0s 0.45s; }
+      .flow:has(#flip:checked) { transform: perspective(2400px) rotateY(180deg); }
+      .flow:has(#flip:checked) .back { transform: scaleX(-1); }
+      .fold { transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1), height 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+      .flow:has(.flip:hover, .fold:hover, #flip:focus-visible) .fold { width: 4.5rem; height: 4.5rem; }
+    }
+    @media (max-width: 900px) {
+      .face.back { grid-template-columns: minmax(0, 1fr); align-content: start; }
+    }
+
+    /* Jacquard cards: each command's name punched in 7-bit ASCII (one column per letter, most
+       significant bit on top), laced at both ends in the command's yarn */
+    .jq { display: block; height: 4.5rem; width: auto; margin: 0 0 1rem; color: var(--c); filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45)); }
+    .jq-card { fill: #e6d6b0; }
+    .jq-holes { stroke: var(--bg); stroke-width: 5; stroke-linecap: round; }
+    .jq-eye { fill: var(--bg); stroke: currentColor; stroke-width: 2; }
+    .jq-lace { stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
+    .jq-note { margin: 0.75rem 0 0; color: var(--muted); font-size: 0.95rem; }
+    /* output threads: the diagram's four yarns run down the margin of the Commands section and are
+       laced into their command's card. The section's content-visibility clips them to its box, so they
+       enter from its top edge. Drawn only where the page has a margin wide enough for them */
+    @media (min-width: 1340px) {
+      #commands .band > div:first-child { position: relative; }
+      #commands .band > div:first-child::before { content: ""; position: absolute; left: calc(-1 * var(--x) - 2px); bottom: calc(100% - 2.25rem); width: 4px; height: 400rem;
+        background: repeating-linear-gradient(115deg, var(--c) 0 3px, color-mix(in srgb, var(--c), #000 45%) 3px 4px); }
+      /* the thread is laced through the card's left eye */
+      #commands .band > div:first-child::after { content: ""; position: absolute; left: calc(-1 * var(--x) - 5px); top: calc(2.25rem - 5px); width: calc(var(--x) + 5px); height: 10px;
+        background: radial-gradient(circle at 5px 50%, var(--c) 4.5px, transparent 5px), linear-gradient(var(--c), var(--c)) 0 50% / 100% 3px no-repeat; }
+      #commands .c-lint { --x: 1.5rem; } #commands .c-view { --x: 2.25rem; } #commands .c-e2e { --x: 3rem; } #commands .c-perf { --x: 3.75rem; }
+    }
+
+    /* WCAG 2.2.2: a fixed control pauses every animation; it only shows where something moves */
+    .motion { display: none; }
+    @media (prefers-reduced-motion: no-preference) {
+      html { scroll-padding-bottom: 5rem; }
+      .motion { position: fixed; z-index: 20; right: 1rem; bottom: 1rem; display: block; }
+      .motion label { display: inline-flex; align-items: center; gap: 0.6rem; min-height: 44px; padding: 0 1rem 0 0.8rem;
+        border-radius: 999px; border: 2px solid var(--line); background: var(--bg-2); color: var(--text); font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+      .motion label:hover { border-color: var(--text); }
+      .motion input { width: 18px; height: 18px; margin: 0; }
+      .motion label:has(input:checked) { border-color: var(--yellow); }
+      .motion label:has(input:focus-visible) { outline: 3px solid var(--yellow); outline-offset: 3px; }
+      html:has(#motion-pause:checked) *, html:has(#motion-pause:checked) *::before, html:has(#motion-pause:checked) *::after { animation-play-state: paused !important; }
+    }
+
+    /* Windows high contrast (forced colours): the satin patterns and the linen drop out, so the
+       diagram is redrawn in system colours, and the data that is colour (the loom) keeps its own */
+    @media (forced-colors: active) {
+      /* !important: the tapestry rules above are more specific (attribute and class selectors) */
+      .flow .node, .flow .core { fill: Canvas !important; stroke: CanvasText !important; filter: none !important; }
+      .flow .node.soon, .flow .rail.soon { stroke: GrayText !important; }
+      .flow .rail { stroke: CanvasText; }
+      .flow .pulse { stroke: Highlight !important; }
+      .flow text { fill: CanvasText !important; }
+      .logo rect { fill: CanvasText; } .logo path { stroke: CanvasText; } .logo svg { filter: none; }
+      .btn, .bar nav .pill, .kicker, .exit span { border: 2px solid; }
+      #vs-without:checked ~ .switch label[for="vs-without"], #vs-with:checked ~ .switch label[for="vs-with"],
+      #in-go:checked ~ .switch label[for="in-go"], #in-docker:checked ~ .switch label[for="in-docker"],
+      #in-bin:checked ~ .switch label[for="in-bin"] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+      .vus, .live, .legend span::before { forced-color-adjust: none; }
+      .closing .mark { border-image: none; }
+      .fold { display: none; }
+      .board:not(.perf) .pods li::before { display: none; }
+    }
+
     @media (max-width: 960px) {
       .flow { margin-left: auto; margin-right: auto; width: calc(100% - 2.5rem); }
       .rod { left: -0.6rem; right: -0.6rem; }
@@ -468,11 +616,14 @@
     }
     @media (max-width: 760px) {
       .closing .rod { left: -0.25rem; right: -0.25rem; }
+      .closing .mark { flex-direction: column; }
+      .closing .mark span + span::before { display: none; }
     }
   </style>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
+  <aside class="motion" aria-label="Animations"><label><input type="checkbox" id="motion-pause">Pause animations</label></aside>
   <svg class="defs" width="0" height="0" aria-hidden="true" focusable="false"><defs><pattern id="sat-teal" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#14b8a6"/><rect width="1.3" height="5" fill="#0f766e"/><rect x="2.6" width="0.9" height="5" fill="#5eead4" opacity="0.75"/></pattern><pattern id="sat-violet" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#8b5cf6"/><rect width="1.3" height="5" fill="#5b21b6"/><rect x="2.6" width="0.9" height="5" fill="#c4b5fd" opacity="0.75"/></pattern><pattern id="sat-blue" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#3b82f6"/><rect width="1.3" height="5" fill="#1e40af"/><rect x="2.6" width="0.9" height="5" fill="#93c5fd" opacity="0.75"/></pattern><pattern id="sat-orange" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#f97316"/><rect width="1.3" height="5" fill="#c2410c"/><rect x="2.6" width="0.9" height="5" fill="#fdba74" opacity="0.75"/></pattern><pattern id="sat-yellow" width="3.5" height="3.5" patternUnits="userSpaceOnUse" patternTransform="rotate(-20)"><rect width="3.5" height="3.5" fill="#facc15"/><rect width="1" height="3.5" fill="#ca8a04" opacity="0.35"/><rect x="1.9" width="0.7" height="3.5" fill="#fef08a" opacity="0.6"/></pattern><pattern id="sat-ink" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#2a3352"/><rect width="1.3" height="5" fill="#141a30"/><rect x="2.6" width="0.9" height="5" fill="#5b6690" opacity="0.75"/></pattern><filter id="raise" x="-10%" y="-20%" width="120%" height="150%"><feDropShadow dx="0" dy="1.6" stdDeviation="1.3" flood-color="#2a1a05" flood-opacity="0.35"/></filter></defs></svg>
   <aside class="strip" aria-label="Latest release"><span class="rel">v0.7.0 is out: Build the Dockerfile with the go.mod Go version and let lint take several files.</span> <a href="https://github.com/emmanuelperu/arazzo-maestro/releases/tag/v0.7.0">Read the release notes</a></aside>
   <div class="wrap">
@@ -513,6 +664,8 @@
 
       <figure class="flow" id="how">
         <div class="rod" aria-hidden="true"></div>
+        <div class="faces">
+        <div class="face front">
         <div class="flow-scroll" tabindex="0" role="region" aria-label="How arazzo-maestro works, scrollable diagram">
           <svg class="wide" viewBox="0 0 1000 430" role="img" aria-labelledby="flow-title flow-desc">
             <title id="flow-title">How arazzo-maestro works</title>
@@ -593,6 +746,41 @@
           <text class="t k-perf" x="30" y="533">test gen perf</text><text class="s" x="30" y="552">k6 load scripts</text>
         </svg>
         <figcaption><b>Arazzo is Italian for tapestry:</b> a workflow weaves API calls together, each step's outputs carried into the next. A workflow and its contracts in, four outputs out; the CLI makes no network call unless you ask for it.</figcaption>
+        <label class="flip" for="flip"><svg class="turn" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 9a6 6 0 0 1 11-3.3M16 11a6 6 0 0 1-11 3.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15.5 2v4h-4M4.5 18v-4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn it over: the YAML behind it</label>
+        <label class="fold" for="flip" aria-hidden="true"></label>
+        </div>
+        <div class="face back">
+          <div class="back-note">
+            <p class="back-title">The back of the tapestry</p>
+            <p><code>examples/shop.arazzo.yaml</code>, the four steps of <code>happy-path-checkout</code>, abridged to their operations and the outputs they pass on.</p>
+            <p>Each gold float is an output picked up further down: the threads the front hides, and the references <code>lint</code> checks one by one.</p>
+            <label class="flip" for="flip"><svg class="turn" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 9a6 6 0 0 1 11-3.3M16 11a6 6 0 0 1-11 3.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15.5 2v4h-4M4.5 18v-4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn it back: the diagram</label>
+          </div>
+          <pre class="yaml" tabindex="0" role="group" aria-label="Abridged YAML of happy-path-checkout"><i class="float" style="--a:4;--b:10;--g:0"></i><i class="float" style="--a:14;--b:20;--g:0"></i><i class="float" style="--a:18;--b:21;--g:1"></i>steps:
+  - stepId: list-catalog
+    operationId: listProducts
+    outputs:
+      <b>firstProductId</b>: $response.body#/items/0/id
+  - stepId: get-product
+    operationId: getProduct
+    parameters:
+      - name: productId
+        in: path
+        value: <b>$steps.list-catalog.outputs.firstProductId</b>
+  - stepId: add-to-cart
+    operationId: addToCart
+    outputs:
+      <b>cartTotal</b>: $response.body#/totalPrice
+  - stepId: pay
+    operationId: processPayment
+    outputs:
+      <b>transactionId</b>: $response.body#/transactionId
+outputs:
+  totalSpent: <b>$steps.add-to-cart.outputs.cartTotal</b>
+  transactionId: <b>$steps.pay.outputs.transactionId</b></pre>
+        </div>
+        </div>
+        <input class="flip-input" type="checkbox" id="flip">
       </figure>
     </div>
 
@@ -648,6 +836,7 @@
 <span class="ln">185</span>            stepId: <span class="typo"><span class="bad">pay-refused</span><span class="good">retry-payment</span></span></pre>
           </div>
           <div class="pane console" role="group" aria-label="lint console, before and after the fix">
+            <p class="pane-tab" aria-hidden="true">terminal<span class="state"><span class="run">running</span><span class="done">done</span></span></p>
             <pre><span class="p">$</span> <span class="type t1">arazzo-maestro lint shop.arazzo.yaml</span>
 <span class="o1"><span class="err">[error]</span> workflows[happy-path-checkout].outputs.transactionId: reference $steps.pay.outputs.transactionId: step "pay" does not declare output "transactionId"
 <span class="err">[error]</span> workflows[happy-path-checkout].steps[get-product].parameters.productId: reference $steps.list-catalog.outputs.firstProductId: step "list-catalog" does not exist
@@ -666,9 +855,11 @@ Error: 3 issue(s) found</span><span class="later">
         <p class="kicker">Commands</p>
         <h2 id="commands-title">Lint, view, test. One binary.</h2>
         <p class="intro">Linting, rendering and generating tests need nothing but the binary. Running the tests is left to <a href="https://hurl.dev">Hurl</a> and <a href="https://k6.io">k6</a>, two proven open source runners, rather than a home-made one.</p>
+        <p class="jq-note">Each command comes on its own punched card, its name in 7-bit ASCII, one column per letter: the way a Jacquard loom reads its pattern.</p>
 
         <div class="band c-lint">
           <div>
+            <svg class="jq" viewBox="0 0 68 74" width="68" height="74" aria-hidden="true" focusable="false"><path class="jq-card" d="M8 0H64a4 4 0 0 1 4 4V70a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V8z"/><path class="jq-holes" d="M22 13h0M22 21h0M22 37h0M22 45h0M30 13h0M30 21h0M30 37h0M30 61h0M38 13h0M38 21h0M38 37h0M38 45h0M38 53h0M46 13h0M46 21h0M46 29h0M46 45h0"/><path class="jq-lace" d="M0 37h8M68 37h-8"/><circle class="jq-eye" cx="8" cy="37" r="3.5"/><circle class="jq-eye" cx="60" cy="37" r="3.5"/></svg>
             <h3><code>lint</code> catches it before review does</h3>
             <p>Official JSON Schema first, then every expression and action target inside the file, then every step checked against the OpenAPI contract it calls.</p>
           </div>
@@ -686,6 +877,7 @@ Error: 1 issue(s) found</pre>
 
         <div class="band c-view">
           <div>
+            <svg class="jq" viewBox="0 0 68 74" width="68" height="74" aria-hidden="true" focusable="false"><path class="jq-card" d="M8 0H64a4 4 0 0 1 4 4V70a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V8z"/><path class="jq-holes" d="M22 13h0M22 21h0M22 29h0M22 45h0M22 53h0M30 13h0M30 21h0M30 37h0M30 61h0M38 13h0M38 21h0M38 45h0M38 61h0M46 13h0M46 21h0M46 29h0M46 45h0M46 53h0M46 61h0"/><path class="jq-lace" d="M0 37h8M68 37h-8"/><circle class="jq-eye" cx="8" cy="37" r="3.5"/><circle class="jq-eye" cx="60" cy="37" r="3.5"/></svg>
             <h3><code>view</code> draws it for everyone</h3>
             <p>Standalone HTML in light, dark or pb33f themes, portrait or landscape. Or Mermaid, rendered inline by GitHub.</p>
           </div>
@@ -700,6 +892,7 @@ Error: 1 issue(s) found</pre>
 
         <div class="band c-e2e">
           <div>
+            <svg class="jq" viewBox="0 0 132 74" width="132" height="74" aria-hidden="true" focusable="false"><path class="jq-card" d="M8 0H128a4 4 0 0 1 4 4V70a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V8z"/><path class="jq-holes" d="M22 13h0M22 21h0M22 29h0M22 45h0M30 13h0M30 21h0M30 45h0M30 61h0M38 13h0M38 21h0M38 29h0M38 53h0M38 61h0M46 13h0M46 21h0M46 29h0M46 45h0M54 21h0M62 13h0M62 21h0M62 29h0M62 53h0M70 13h0M70 21h0M70 29h0M70 45h0M70 61h0M78 13h0M78 21h0M78 37h0M78 45h0M78 53h0M86 21h0M94 13h0M94 21h0M94 45h0M94 61h0M102 21h0M102 29h0M102 53h0M110 13h0M110 21h0M110 45h0M110 61h0"/><path class="jq-lace" d="M0 37h8M132 37h-8"/><circle class="jq-eye" cx="8" cy="37" r="3.5"/><circle class="jq-eye" cx="124" cy="37" r="3.5"/></svg>
             <h3><code>test run e2e</code> replays it for real</h3>
             <p>Each step becomes a <a href="https://hurl.dev">Hurl</a> request and outputs become captures that feed the next step. <code>test gen e2e</code> writes the files to commit; <code>test run e2e</code> generates and runs them in one go against staging or a mock, with <code>hurl</code> on your PATH. Workflow inputs come in as variables.</p>
             <pre class="mini wrap-lines" tabindex="0" role="group" aria-label="e2e commands"><span class="p">$</span> arazzo-maestro test gen e2e shop.arazzo.yaml
@@ -711,7 +904,7 @@ Error: 1 issue(s) found</pre>
           </div>
           <figure class="board" aria-label="Hurl run of shop.arazzo.yaml">
             <div role="img" aria-label="The steps of happy-path-checkout (list-catalog, get-product, add-to-cart, pay) then payment-refused-path (add-to-cart, pay-refused) run one after another and each turns green with the status code it returned.">
-            <div class="board-top"><span><span class="live"></span>shop.arazzo.yaml</span><span class="tally">requests <b></b>/6</span></div>
+            <div class="board-top"><span><span class="live"></span>shop.arazzo.yaml<span class="state"><span class="run">running</span><span class="done">done</span></span></span><span class="tally">requests <b></b>/6</span></div>
             <p class="wf">happy-path-checkout.hurl</p>
             <ol class="pods"><li><span class="sid">list-catalog</span><span class="call">GET /<wbr>products</span><span class="code">200</span><i></i></li><li><span class="sid">get-product</span><span class="call">GET /<wbr>products/<wbr>{productId}</span><span class="code">200</span><i></i></li><li><span class="sid">add-to-cart</span><span class="call">POST /<wbr>cart/<wbr>items</span><span class="code">201</span><i></i></li><li><span class="sid">pay</span><span class="call">POST /<wbr>orders/<wbr>{orderId}/<wbr>payment</span><span class="code">200</span><i></i></li></ol>
             <p class="wf">payment-refused-path.hurl</p>
@@ -727,6 +920,7 @@ Failed files:      0 (0.0%)</pre>
 
         <div class="band c-perf">
           <div>
+            <svg class="jq" viewBox="0 0 140 74" width="140" height="74" aria-hidden="true" focusable="false"><path class="jq-card" d="M8 0H136a4 4 0 0 1 4 4V70a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V8z"/><path class="jq-holes" d="M22 13h0M22 21h0M22 29h0M22 45h0M30 13h0M30 21h0M30 45h0M30 61h0M38 13h0M38 21h0M38 29h0M38 53h0M38 61h0M46 13h0M46 21h0M46 29h0M46 45h0M54 21h0M62 13h0M62 21h0M62 45h0M62 53h0M62 61h0M70 13h0M70 21h0M70 45h0M70 61h0M78 13h0M78 21h0M78 37h0M78 45h0M78 53h0M86 21h0M94 13h0M94 21h0M94 29h0M102 13h0M102 21h0M102 45h0M102 61h0M110 13h0M110 21h0M110 29h0M110 53h0M118 13h0M118 21h0M118 45h0M118 53h0"/><path class="jq-lace" d="M0 37h8M140 37h-8"/><circle class="jq-eye" cx="8" cy="37" r="3.5"/><circle class="jq-eye" cx="132" cy="37" r="3.5"/></svg>
             <h3><code>test gen perf</code> puts it under load</h3>
             <p>The same chain of calls as a <a href="https://k6.io">k6</a> script, with your virtual users, duration and thresholds. k6 runs it, from your laptop or your CI.</p>
             <pre class="mini" tabindex="0" role="group" aria-label="perf commands"><span class="p">$</span> arazzo-maestro test gen perf shop.arazzo.yaml \
@@ -736,10 +930,10 @@ Failed files:      0 (0.0%)</pre>
     dist/<wbr>perf/<wbr>k6/<wbr>shop/<wbr>happy-path-checkout.k6.js</pre>
           </div>
           <figure class="board perf" aria-label="k6 run of happy-path-checkout.k6.js">
-            <div role="img" aria-label="50 virtual users for 30 seconds against a local mock. Each virtual user loops through list-catalog, get-product, add-to-cart and pay, and all four checks pass at 100 percent.">
-            <div class="board-top"><span>happy-path-checkout.k6.js</span><span class="clock">elapsed <b class="sec"></b>/30 s</span></div>
-            <p class="wf">50 virtual users, color = the step each one is on</p>
-            <ol class="vus"><li style="--d:-0.82s"></li><li style="--d:-0.38s"></li><li style="--d:-1.01s"></li><li style="--d:-0.12s"></li><li style="--d:-0.18s"></li><li style="--d:-1.37s"></li><li style="--d:-0.24s"></li><li style="--d:-0.93s"></li><li style="--d:-1.49s"></li><li style="--d:-0.14s"></li><li style="--d:-1.29s"></li><li style="--d:-0.54s"></li><li style="--d:-0.09s"></li><li style="--d:-0.22s"></li><li style="--d:-1.11s"></li><li style="--d:-1.07s"></li><li style="--d:-0.17s"></li><li style="--d:-0.61s"></li><li style="--d:-0.23s"></li><li style="--d:-1.41s"></li><li style="--d:-1.08s"></li><li style="--d:-0.15s"></li><li style="--d:-1.44s"></li><li style="--d:-0.31s"></li><li style="--d:-0.57s"></li><li style="--d:-1.49s"></li><li style="--d:-0.15s"></li><li style="--d:-1.47s"></li><li style="--d:-1.49s"></li><li style="--d:-1.01s"></li><li style="--d:-0.12s"></li><li style="--d:-0.56s"></li><li style="--d:-0.11s"></li><li style="--d:-1.42s"></li><li style="--d:-0.34s"></li><li style="--d:-0.74s"></li><li style="--d:-1.07s"></li><li style="--d:-0.36s"></li><li style="--d:-1.38s"></li><li style="--d:-0.30s"></li><li style="--d:-1.46s"></li><li style="--d:-0.78s"></li><li style="--d:-1.43s"></li><li style="--d:-0.46s"></li><li style="--d:-0.26s"></li><li style="--d:-1.48s"></li><li style="--d:-1.46s"></li><li style="--d:-0.48s"></li><li style="--d:-0.95s"></li><li style="--d:-0.24s"></li></ol>
+            <div role="img" aria-label="50 virtual users for 30 seconds against a local mock, drawn as a woven band: one thread per virtual user, time running down, each row colored by the step that user is on. Each virtual user loops through list-catalog, get-product, add-to-cart and pay, and all four checks pass at 100 percent.">
+            <div class="board-top"><span><span class="live"></span>happy-path-checkout.k6.js<span class="state"><span class="run">running</span><span class="done">done</span></span></span><span class="clock">elapsed <b class="sec"></b>/30 s</span></div>
+            <p class="wf">50 virtual users, one thread each, woven as time runs down; color = the step it is on</p>
+            <ol class="vus"><li style="--o:12px"></li><li style="--o:6px"></li><li style="--o:15px"></li><li style="--o:2px"></li><li style="--o:3px"></li><li style="--o:21px"></li><li style="--o:4px"></li><li style="--o:14px"></li><li style="--o:22px"></li><li style="--o:2px"></li><li style="--o:19px"></li><li style="--o:8px"></li><li style="--o:1px"></li><li style="--o:3px"></li><li style="--o:17px"></li><li style="--o:16px"></li><li style="--o:3px"></li><li style="--o:9px"></li><li style="--o:3px"></li><li style="--o:21px"></li><li style="--o:16px"></li><li style="--o:2px"></li><li style="--o:22px"></li><li style="--o:5px"></li><li style="--o:9px"></li><li style="--o:22px"></li><li style="--o:2px"></li><li style="--o:22px"></li><li style="--o:22px"></li><li style="--o:15px"></li><li style="--o:2px"></li><li style="--o:8px"></li><li style="--o:2px"></li><li style="--o:21px"></li><li style="--o:5px"></li><li style="--o:11px"></li><li style="--o:16px"></li><li style="--o:5px"></li><li style="--o:21px"></li><li style="--o:4px"></li><li style="--o:22px"></li><li style="--o:12px"></li><li style="--o:21px"></li><li style="--o:7px"></li><li style="--o:4px"></li><li style="--o:22px"></li><li style="--o:22px"></li><li style="--o:7px"></li><li style="--o:14px"></li><li style="--o:4px"></li></ol>
             <ol class="pods"><li class="s1"><span class="sid">list-catalog</span><span class="call">GET /<wbr>products</span><span class="code">&#10003; 200, 100%</span></li><li class="s2"><span class="sid">get-product</span><span class="call">GET /<wbr>products/<wbr>{productId}</span><span class="code">&#10003; 200, 100%</span></li><li class="s3"><span class="sid">add-to-cart</span><span class="call">POST /<wbr>cart/<wbr>items</span><span class="code">&#10003; 201, 100%</span></li><li class="s4"><span class="sid">pay</span><span class="call">POST /<wbr>orders/<wbr>{orderId}/<wbr>payment</span><span class="code">&#10003; 200, 100%</span></li></ol>
             </div>
             <pre><span class="ok">&#10003;</span> checks.........: 100.00%
@@ -861,11 +1055,11 @@ Failed files:      0 (0.0%)</pre>
       <section class="closing" aria-labelledby="closing-title">
         <div class="rod" aria-hidden="true"></div>
         <h2 id="closing-title">Ship workflows you can prove.</h2>
-        <p>Open source, Apache 2.0, signed releases with an SBOM.</p>
         <div class="cta">
           <a class="btn btn-main" href="https://github.com/emmanuelperu/arazzo-maestro/releases">Download v0.7.0</a>
           <a class="btn btn-alt" href="#install">Install it</a>
         </div>
+        <p class="mark"><span>arazzo-maestro v0.7.0</span><span>Apache 2.0</span><span>signed with cosign, SBOM included</span></p>
       </section>
     </div>
   </main>
@@ -916,7 +1110,7 @@ Failed files:      0 (0.0%)</pre>
           </ul>
         </nav>
       </div>
-      <p class="legal">Apache 2.0. No JavaScript, system fonts, WCAG 2.2 AA. Animations stop when your system asks for reduced motion.</p>
+      <p class="legal">Apache 2.0. No JavaScript, system fonts, WCAG 2.2 AA. Animations can be paused, and stop when your system asks for reduced motion.</p>
     </div>
   </footer>
 </body>
