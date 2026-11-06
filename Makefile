@@ -15,11 +15,16 @@ LDFLAGS  := -s -w -X main.version=$(VERSION)
 # referenced via //go:embed must trigger a rebuild, otherwise `make
 # dist` would silently render with a stale binary.
 GO_SOURCES   := $(shell find cmd internal -name '*.go')
-EMBED_ASSETS := $(shell find cmd internal -name '*.html' -o -name '*.yml' -o -name '*.json')
+EMBED_ASSETS := $(shell find cmd internal -name '*.html' -o -name '*.yml' -o -name '*.json' -o -name '*.css')
+
+# Tailwind v3 standalone CLI (github.com/tailwindlabs/tailwindcss releases,
+# v3.4.17), needed only by `make css`: the generated CSS is committed and
+# embedded, so building and testing never need it.
+TAILWIND ?= tailwindcss
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build test vet lint dist hurl perf clean landing-sync landing-check
+.PHONY: help build test vet lint dist hurl perf css clean landing-sync landing-check
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -62,6 +67,9 @@ perf: $(BIN) ## Generate k6 perf tests for every examples/*.arazzo.yaml under ex
 		echo "→ $$f"; \
 		$(BIN) test gen perf $$f -o examples/generated; \
 	done
+
+css: ## Regenerate the embedded Tailwind CSS from the classes the renderer templates use.
+	$(TAILWIND) --content 'internal/renderer/templates/*.html,internal/renderer/renderer.go' --minify -o internal/renderer/templates/tailwind.css
 
 landing-sync: ## Rewrite the release-bound facts of the landing, README, recipes and AGENTS.md from the latest release and go.mod.
 	scripts/landing-sync.sh

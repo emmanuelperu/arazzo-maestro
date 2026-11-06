@@ -22,6 +22,7 @@
 - [x] Mermaid export (`view --format mermaid`): one `.mmd` flowchart per workflow
 - [x] Spec-compliance wave (PRs #78 to #90): shared runtime-expression parser (`internal/expr`), requestBody `contentType` + `replacements` (`internal/payload`), `operationPath` resolution, honest degradation of `workflowId` steps, `components` reusable objects inlined at parse time, workflow-level `parameters`/`successActions`/`failureActions` defaults, `workflow.dependsOn` (parse + lint + render), criterion `context`/`type` badges, JSON-pointer sub-access on `$inputs`/`$steps` references
 - [x] HTTPS `sourceDescriptions` behind the opt-in `--allow-remote` (bounded size, timeout and redirects; plain HTTP always refused) ([#106](https://github.com/emmanuelperu/arazzo-maestro/issues/106))
+- [x] Tailwind CSS internalised: the classes the templates use are extracted at build time (`make css`) and embedded, so a rendered page makes no network request
 
 ## Planned
 
@@ -30,7 +31,6 @@
 - [ ] Nested workflow execution (`step.workflowId` rendering + honest test-gen degradation shipped; expanding/inlining the invoked workflow is not)
 - [ ] Parallel-branch rendering for `workflow.dependsOn` (the field is parsed, linted and displayed; the diagram does not lay branches out in parallel)
 - [ ] SVG / PNG export (pure-Go layout pass, no headless browser) ([#26](https://github.com/emmanuelperu/arazzo-maestro/issues/26))
-- [ ] Internalise Tailwind CSS (zero network requests at page load)
 - [ ] Deterministic caching of HTTPS sources (fetching itself shipped behind `--allow-remote`)
 - [ ] Watch mode (`--watch`) using `fsnotify`
 - [ ] Test generation: wire authentication from OpenAPI `securitySchemes` ([#45](https://github.com/emmanuelperu/arazzo-maestro/issues/45))
