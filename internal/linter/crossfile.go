@@ -13,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
+	"os"
 	"strings"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/model"
@@ -46,6 +48,7 @@ func lintCrossFile(doc *model.ArazzoDocument, basePath string, remote oasresolve
 		for _, step := range wf.Steps {
 			issues = append(issues, checkStepOperation(step, &wf, index, implicitSource, multipleSources, sourceTypes)...)
 			issues = append(issues, checkStepOperationPath(step, &wf, index, sourceTypes)...)
+			issues = append(issues, checkStepChannelPath(step, &wf, sourceTypes)...)
 		}
 	}
 	return issues
@@ -76,7 +79,35 @@ func buildOperationIndex(doc *model.ArazzoDocument, basePath string, remote oasr
 		}
 		index[r.Name] = r.Source
 	}
+	issues = append(issues, checkAsyncAPIFiles(doc.SourceDescriptions, basePath)...)
 	return index, issues
+}
+
+// checkAsyncAPIFiles reports local asyncapi sources whose file is
+// missing. Their content is not parsed, and remote ones are not fetched.
+func checkAsyncAPIFiles(descs []model.SourceDescription, basePath string) []Issue {
+	var issues []Issue
+	for _, src := range descs {
+		if src.Type != "asyncapi" {
+			continue
+		}
+		if u, err := url.Parse(src.URL); err == nil && (strings.EqualFold(u.Scheme, "http") || strings.EqualFold(u.Scheme, "https")) {
+			continue
+		}
+		r := oasresolver.SourceResult{Name: src.Name, URL: src.URL}
+		r.Path, r.Err = oasresolver.ResolveURL(src.URL, basePath)
+		if r.Err == nil {
+			_, r.Err = os.Stat(r.Path)
+		}
+		if r.Err != nil {
+			issues = append(issues, Issue{
+				Severity: SeverityError,
+				Path:     "sourceDescriptions[" + src.Name + "]",
+				Message:  sourceErrMessage(r),
+			})
+		}
+	}
+	return issues
 }
 
 func sourceErrMessage(r oasresolver.SourceResult) string {
@@ -87,6 +118,63 @@ func sourceErrMessage(r oasresolver.SourceResult) string {
 		return fmt.Sprintf("cannot load %s: %s", r.Path, r.Err)
 	}
 	return r.Err.Error()
+}
+
+// asyncNotResolved is the warning for an operation reference into an
+// asyncapi source: the reference is accepted, but nothing checks that
+// the AsyncAPI document defines it.
+func asyncNotResolved(path, target, sourceName string) Issue {
+	return Issue{
+		Severity: SeverityWarning,
+		Path:     path,
+		Message:  fmt.Sprintf("%q not checked: lint does not resolve AsyncAPI documents (source %q)", target, sourceName),
+	}
+}
+
+// checkStepChannelPath validates a step's `channelPath`: the canonical
+// '{$sourceDescriptions.<name>.url}#/channels/<channel>' form, naming
+// a declared asyncapi source. The channel itself is not resolved.
+func checkStepChannelPath(step model.Step, wf *model.Workflow, sourceTypes map[string]string) []Issue {
+	if step.ChannelPath == "" {
+		return nil
+	}
+	path := fmt.Sprintf("workflows[%s].steps[%s].channelPath", wf.WorkflowID, step.StepID)
+	sourceName, channel, ok := oasresolver.ChannelPathTarget(step.ChannelPath)
+	if !ok {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message: fmt.Sprintf(
+				"malformed channelPath %q\n\thint: expected {$sourceDescriptions.<name>.url}#/channels/<channel>",
+				step.ChannelPath,
+			),
+		}}
+	}
+	typ, declared := sourceTypes[sourceName]
+	if !declared {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("channelPath references source description %q which does not exist", sourceName),
+		}}
+	}
+	if typ != "asyncapi" {
+		return []Issue{{
+			Severity: SeverityError,
+			Path:     path,
+			Message:  fmt.Sprintf("channelPath references source %q of type %q; channels live in an asyncapi source", sourceName, typeOrDefault(typ)),
+		}}
+	}
+	return []Issue{asyncNotResolved(path, "channel "+channel, sourceName)}
+}
+
+// typeOrDefault returns a source description type, an omitted one
+// reading as openapi like everywhere else in the linter.
+func typeOrDefault(typ string) string {
+	if typ == "" {
+		return "openapi"
+	}
+	return typ
 }
 
 // checkStepOperation validates a single step's `operationId` against
@@ -126,6 +214,9 @@ func checkStepOperation(step model.Step, wf *model.Workflow, index operationInde
 		}}
 	}
 	if typ, isOther := nonOpenAPISource(sourceTypes, sourceName); isOther {
+		if typ == "asyncapi" {
+			return []Issue{asyncNotResolved(path, opID, sourceName)}
+		}
 		return []Issue{{
 			Severity: SeverityError,
 			Path:     path,
@@ -178,6 +269,9 @@ func checkStepOperationPath(step model.Step, wf *model.Workflow, index operation
 		}}
 	}
 	if typ, isOther := nonOpenAPISource(sourceTypes, sourceName); isOther {
+		if typ == "asyncapi" {
+			return []Issue{asyncNotResolved(path, pointer, sourceName)}
+		}
 		return []Issue{{
 			Severity: SeverityError,
 			Path:     path,

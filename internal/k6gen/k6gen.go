@@ -199,7 +199,7 @@ func writeInputs(b *strings.Builder, inputs []model.InputProperty, ids *identTab
 // post-replacement values the steps serialise.
 func subAccessedInputs(wf model.Workflow, ids *identTable) bool {
 	for _, step := range wf.Steps {
-		if step.WorkflowID != "" {
+		if step.WorkflowID != "" || step.IsAsync() {
 			continue
 		}
 		step.Parameters = model.ResolvedParameters(step.Parameters)
@@ -272,6 +272,13 @@ func writeStep(b *strings.Builder, s model.Step, sources map[string]*oasresolver
 		if len(model.OwnParameters(s.Parameters)) > 0 {
 			b.WriteString("  // warning: parameters are not forwarded to the invoked workflow\n")
 		}
+		if len(s.Outputs) > 0 {
+			fmt.Fprintf(b, "  // warning: outputs %s are not captured; later references to them stay unresolved\n", model.OutputNames(s.Outputs))
+		}
+		return
+	}
+	if s.IsAsync() {
+		fmt.Fprintf(b, "  // not supported: %s; no message sent or received, no request generated\n", s.AsyncKind())
 		if len(s.Outputs) > 0 {
 			fmt.Fprintf(b, "  // warning: outputs %s are not captured; later references to them stay unresolved\n", model.OutputNames(s.Outputs))
 		}

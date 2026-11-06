@@ -101,6 +101,7 @@ The repo ships with three demo Arazzo files in [`examples/`](./examples):
 - [`shop.arazzo.yaml`](./examples/shop.arazzo.yaml), happy-path checkout + a retry-on-failure path (showcases `onFailure: retry`). References [`shop-openapi.yaml`](./examples/shop-openapi.yaml) (scored 100/100 by [Vacuum](https://quobix.com/vacuum/)).
 - [`checkout-branching.arazzo.yaml`](./examples/checkout-branching.arazzo.yaml), single payment step that branches via `onSuccess: goto` / `onFailure: goto` to a confirm or cancel step. References [`checkout-branching-api.yaml`](./examples/checkout-branching-api.yaml).
 - [`auth.arazzo.yaml`](./examples/auth.arazzo.yaml), authenticated scenario showing where test data comes from: credentials as run-time inputs, token captured from the login step, order id self-provisioned from the listing. References [`auth-api.yaml`](./examples/auth-api.yaml) (scored 100/100 by Vacuum).
+- [`order-events.arazzo.yaml`](./examples/order-events.arazzo.yaml), event-driven checkout mixing HTTP calls with AsyncAPI `send` / `receive` steps tied by a correlation id. References [`order-events-api.yaml`](./examples/order-events-api.yaml) (100/100 by Vacuum) and [`order-events-asyncapi.yaml`](./examples/order-events-asyncapi.yaml); the generated tests skip the message steps.
 
 The `happy-path-checkout` workflow rendered by `view`, in the `light` and `dark` themes (click to enlarge):
 
@@ -214,10 +215,11 @@ The short version:
   (derived captures in Hurl, value navigation in k6), and `$inputs`
   sub-access is translated in k6. The embedded schema is the official
   **1.0**
-  one with the 1.1 structural additions (`$self`, `channelPath`,
-  `in: querystring`, AsyncAPI sources, expression versions) grafted on
-  at load time, so 1.1 documents lint; their semantics are not
-  implemented yet.
+  one with the 1.1 structural additions (`$self`, the AsyncAPI step
+  fields, `in: querystring`, AsyncAPI sources, expression versions)
+  grafted on at load time, so 1.1 documents lint. AsyncAPI steps are
+  linted and rendered, but the AsyncAPI document is not resolved and no
+  message is generated.
 
 ### 🧪 Test generation
 

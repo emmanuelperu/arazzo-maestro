@@ -41,7 +41,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `arazzo` version 1.0.x / 1.1.x | ✅ | ✅ | n/a | n/a | ✅ | Version pattern patched at schema load |
 | `$self` (1.1) | ❌ | 😶 accepted | ❌ | ❌ | 😶 | Accepted structurally since #47; no base-URI / identity-based reference resolution |
 | `info` | ✅ | ✅ | 🟡 | n/a | 🟡 | `description` and `version` parsed but never rendered |
-| `sourceDescriptions` | ✅ | ✅ | ❌ | 🟡 | 🟡 | Never rendered; `type: arazzo` and `type: asyncapi` sources accepted but never resolved; HTTPS URLs fetched only with the opt-in `--allow-remote` ([#106](https://github.com/emmanuelperu/arazzo-maestro/issues/106)), plain HTTP always rejected |
+| `sourceDescriptions` | ✅ | ✅ | ❌ | 🟡 | 🟡 | Never rendered; `type: arazzo` sources accepted but never resolved; `type: asyncapi` sources have their local file checked, their content is not parsed; HTTPS URLs fetched only with the opt-in `--allow-remote` ([#106](https://github.com/emmanuelperu/arazzo-maestro/issues/106)), plain HTTP always rejected |
 | `components` + Reusable Objects | ✅ | ✅ refs checked | ✅ inlined | ✅ inlined | 🟡 | `parameters`/`successActions`/`failureActions` parsed, `$components.*` references inlined at parse time (`value` override honoured), dangling/malformed/kind-mismatched refs linted, unresolved entries surfaced instead of blank (#52); reusable `inputs` schemas still schema-only (tied to [#57](https://github.com/emmanuelperu/arazzo-maestro/issues/57)) |
 | `x-` extensions | 😶 | ✅ | ❌ | ❌ | 🟡 | Accepted, never surfaced |
 
@@ -66,7 +66,12 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `operationId` (short + qualified) | ✅ | ✅ cross-file | ✅ | ✅ | ✅ | |
 | `operationPath` | ✅ | ✅ cross-file | ✅ decoded method+path | ✅ | ✅ | JSON pointer resolved against the named source, the target operation needs no operationId (#53) |
 | `workflowId` (nested workflow) | ✅ | ✅ ref checked | ✅ workflow tag + link | 🟡 explicit skip | 🟡 | Generators emit a named not-supported comment and no request; nested execution stays roadmap (#54) |
-| `channelPath` (1.1, AsyncAPI) | ❌ | 😶 accepted | ❌ placeholder | ❌ | 😶 | Accepted structurally since #47; resolution planned ([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75)) |
+| `channelPath` (1.1, AsyncAPI) | ✅ | 🟡 form + source type | ✅ channel name | 🟡 explicit skip | 🟡 | `{$sourceDescriptions.<name>.url}#/channels/<channel>` on a declared `asyncapi` source; the channel itself is not resolved and lint says so in a warning ([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75)) |
+| Operations on an `asyncapi` source (`operationId` / `operationPath`) | ✅ | 🟡 warning | ✅ | 🟡 explicit skip | 🟡 | Accepted with a "not checked" warning: AsyncAPI documents are not parsed ([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75)) |
+| `action` (1.1, `send` / `receive`) | ✅ | ✅ enum + applicability | ✅ step tag | 🟡 explicit skip | 🟡 | Warned when the step does not target an `asyncapi` source; generators emit a named not-supported comment and no request (Hurl and k6 scripts speak HTTP only) |
+| `correlationId` (1.1) | ✅ | ✅ | ✅ | ❌ | 🟡 | Warned unless `action: receive`, per the spec; `$steps` references checked |
+| `timeout` (1.1) | ✅ | ✅ schema | ✅ `N ms` | ❌ | 🟡 | Not translated to a Hurl or k6 timeout |
+| Step `dependsOn` (1.1) | ✅ | ✅ refs checked | ✅ | n/a | ✅ | Current-workflow `stepId`, `$workflows.<id>.steps.<id>` and `$sourceDescriptions.<name>.<id>.steps.<id>` forms; generated scripts run steps in document order |
 | `parameters` | ✅ | ✅ schema | ✅ | ✅ | 🟡 | All five `in` locations emitted (cookie as `[Cookies]`/`cookies:`, querystring appended to the URL); Reusable entries inlined at parse time (#52); `in` conditional rule unvalidated |
 | `requestBody.contentType` / `payload` | ✅ | ✅ | ✅ | ✅ | ✅ | Whole-string and embedded `{$expr}` substitution; an omitted `contentType` defers to the operation's declared type, and a real `Content-Type` header reaches the request (#66) |
 | `requestBody.replacements` | ✅ | 😶 schema-only | ✅ shown | ✅ applied | ✅ | JSON-pointer target applied to the payload before expression substitution; unresolved targets flagged (#55) |
@@ -99,10 +104,10 @@ flagged with a named comment instead of shipping verbatim (#56).
 | Names containing dots (legal per ABNF `identifier`) | ❌ | ✅ | 🟡 k6 translates, Hurl flags (no dotted var) | 🟡 Hurl limitation, noted in the generated header ([#49](https://github.com/emmanuelperu/arazzo-maestro/issues/49), closed) |
 | Expression grammar validation | ❌ | n/a | n/a | ❌ no ABNF validation pass exists |
 
-AsyncAPI source resolution and message steps are planned
-([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75)); until
-then the linter accepts them structurally
-([#47](https://github.com/emmanuelperu/arazzo-maestro/issues/47)).
+AsyncAPI steps are parsed, linted for form and rendered (see
+[`order-events.arazzo.yaml`](../examples/order-events.arazzo.yaml)); the
+AsyncAPI document itself is not resolved and no message is generated
+([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75)).
 
 ## Out of scope by design
 

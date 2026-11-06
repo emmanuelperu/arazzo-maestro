@@ -1,0 +1,122 @@
+openapi: "3.1.0"
+info:
+  title: Order Events HTTP API
+  version: "1.0.0"
+  description: HTTP side of an event-driven checkout. Orders are created and read over HTTP; payment travels as messages described in order-events-asyncapi.yaml.
+servers:
+  - url: https://orders.example.com/api/v1
+tags:
+  - name: orders
+    description: Creating and reading orders.
+paths:
+  /orders:
+    post:
+      operationId: placeOrder
+      summary: Place an order, payment follows asynchronously
+      tags: [orders]
+      parameters:
+        - name: X-Correlation-Id
+          in: header
+          required: true
+          description: Identifier shared by this request and every message of the same checkout.
+          schema:
+            type: string
+            example: chk-7f3a
+          examples:
+            success:
+              value: chk-7f3a
+      requestBody:
+        description: Product and quantity to order.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewOrder"
+            # Named examples drive mock servers (Microcks): a request example
+            # and the response example with the SAME name form one mockable
+            # exchange.
+            examples:
+              success:
+                value:
+                  productId: 42
+                  quantity: 1
+      responses:
+        "202":
+          description: Order accepted, awaiting payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+              examples:
+                success:
+                  value:
+                    id: ord-1001
+                    status: awaiting-payment
+                    total: 49.99
+        "400":
+          description: Unknown product or invalid quantity
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Read an order
+      tags: [orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: Identifier returned when the order was placed.
+          schema:
+            type: string
+            example: ord-1001
+          examples:
+            success:
+              value: ord-1001
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+              examples:
+                success:
+                  value:
+                    id: ord-1001
+                    status: paid
+                    total: 49.99
+        "404":
+          description: No order with this identifier
+components:
+  schemas:
+    NewOrder:
+      type: object
+      description: An order request.
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: integer
+          description: Catalogue identifier of the product.
+          example: 42
+        quantity:
+          type: integer
+          minimum: 1
+          description: Number of items.
+          example: 1
+    Order:
+      type: object
+      description: An order and where it stands.
+      required: [id, status, total]
+      properties:
+        id:
+          type: string
+          description: Order identifier.
+          example: ord-1001
+        status:
+          type: string
+          enum: [awaiting-payment, paid, cancelled]
+          description: Payment state of the order.
+          example: paid
+        total:
+          type: number
+          description: Amount to pay, in euros.
+          example: 49.99

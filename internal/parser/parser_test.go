@@ -757,3 +757,32 @@ workflows:
 		t.Errorf("Condition[1] = %q", crits[1].Condition)
 	}
 }
+
+func TestParseAsyncStepFields(t *testing.T) {
+	src := `
+arazzo: "1.1.0"
+info: { title: t, version: "1.0.0" }
+workflows:
+  - workflowId: wf
+    steps:
+      - stepId: confirm
+        channelPath: '{$sourceDescriptions.events.url}#/channels/orderConfirmed'
+        action: receive
+        correlationId: $inputs.correlationId
+        timeout: 6000
+        dependsOn: [place, $workflows.other.steps.x]
+`
+	doc, err := ParseBytes([]byte(src))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	s := doc.Workflows[0].Steps[0]
+	if s.ChannelPath != "{$sourceDescriptions.events.url}#/channels/orderConfirmed" || s.Action != "receive" ||
+		s.CorrelationID != "$inputs.correlationId" || s.Timeout != 6000 ||
+		len(s.DependsOn) != 2 || s.DependsOn[1] != "$workflows.other.steps.x" {
+		t.Errorf("async fields not parsed: %+v", s)
+	}
+	if !s.IsAsync() {
+		t.Error("a channelPath step should be async")
+	}
+}

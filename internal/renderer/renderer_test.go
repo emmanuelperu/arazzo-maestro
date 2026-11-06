@@ -478,6 +478,36 @@ func TestRenderWorkflowTagsWorkflowSteps(t *testing.T) {
 	}
 }
 
+func TestRenderWorkflowShowsAsyncSteps(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "place", OperationID: "$sourceDescriptions.events.placeOrder", Action: "send"},
+			{StepID: "confirm", ChannelPath: "{$sourceDescriptions.events.url}#/channels/order~1confirmed",
+				Action: "receive", CorrelationID: "$inputs.correlationId", Timeout: 6000,
+				DependsOn: []string{"place", "$workflows.other.steps.x"}},
+			{StepID: "opaque", ChannelPath: "not-the-spec-form"},
+		},
+	}
+	html, err := RenderWorkflow(wf, nil, LayoutPortrait)
+	if err != nil {
+		t.Fatalf("RenderWorkflow: %v", err)
+	}
+	for _, want := range []string{
+		">send</span>", ">receive</span>",
+		// The channel name is decoded from its JSON pointer; anything else is shown raw.
+		`<span class="api-link">order/confirmed</span>`,
+		`<span class="api-link">not-the-spec-form</span>`,
+		"Coordination",
+		`<code class="api-link">place</code>, <code class="api-link">$workflows.other.steps.x</code>`,
+		"correlationId", "6000 ms",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("expected %q in the rendered page", want)
+		}
+	}
+}
+
 func TestRenderWorkflowShowsComponentParameters(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",

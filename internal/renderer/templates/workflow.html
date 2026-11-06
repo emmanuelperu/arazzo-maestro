@@ -681,7 +681,7 @@
           <header class="step-marker">
             <span class="step-number" aria-hidden="true">{{ printf "%02d" (add1 $i) }}</span>
             <h3 class="step-id">{{ $step.StepID }}</h3>
-            <span class="step-tag">{{ if $step.WorkflowID }}workflow{{ else }}API{{ end }}</span>
+            <span class="step-tag">{{ if $step.WorkflowID }}workflow{{ else if $step.Action }}{{ $step.Action }}{{ else }}API{{ end }}</span>
           </header>
 
           <div class="step-body">
@@ -709,10 +709,47 @@
                   <span class="api-link">{{ $step.WorkflowID }}</span>
                 {{ end }}
               </p>
+            {{ else if $step.ChannelPath }}
+              <p class="op">
+                <span class="op-arrow" aria-hidden="true">→</span>
+                <span class="kv-in">channel</span>
+                {{ with channelTarget $step.ChannelPath }}
+                  <span class="api-link">{{ . }}</span>
+                {{ else }}
+                  <span class="api-link">{{ $step.ChannelPath }}</span>
+                {{ end }}
+              </p>
             {{ end }}
 
             {{ if $step.Description }}
               <p class="step-description">{{ trim $step.Description }}</p>
+            {{ end }}
+
+            {{ if or $step.DependsOn $step.CorrelationID $step.Timeout }}
+              <p class="block-label">Coordination</p>
+              <ul class="kv">
+                {{ with $step.DependsOn }}
+                  <li>
+                    <code class="kv-key">dependsOn</code>
+                    <span class="kv-sep" aria-hidden="true">=</span>
+                    {{ range $j, $dep := . }}{{ if $j }}, {{ end }}<code class="api-link">{{ $dep }}</code>{{ end }}
+                  </li>
+                {{ end }}
+                {{ with $step.CorrelationID }}
+                  <li>
+                    <code class="kv-key">correlationId</code>
+                    <span class="kv-sep" aria-hidden="true">=</span>
+                    {{ renderValue . }}
+                  </li>
+                {{ end }}
+                {{ with $step.Timeout }}
+                  <li>
+                    <code class="kv-key">timeout</code>
+                    <span class="kv-sep" aria-hidden="true">=</span>
+                    {{ . }} ms
+                  </li>
+                {{ end }}
+              </ul>
             {{ end }}
 
             {{ if $step.Parameters }}
