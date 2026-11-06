@@ -116,12 +116,12 @@ func newTranslator(wf model.Workflow, sources map[string]*oasresolver.Source) *t
 		derivedByStep: make(map[string][]derivedCapture),
 	}
 
-	// Outputs per step, excluding workflow-invoking steps: those emit no
-	// request, so their outputs are never captured and references to
+	// Outputs per step, excluding workflow-invoking and AsyncAPI steps:
+	// those emit no request, so their outputs are never captured and references to
 	// them must stay visibly untranslated.
 	taken := make(map[string]bool)
 	for _, step := range wf.Steps {
-		if step.WorkflowID != "" {
+		if step.WorkflowID != "" || step.IsAsync() {
 			continue
 		}
 		outs := make(map[string]string, len(step.Outputs))
@@ -133,7 +133,7 @@ func newTranslator(wf model.Workflow, sources map[string]*oasresolver.Source) *t
 	}
 
 	for _, step := range wf.Steps {
-		if step.WorkflowID != "" {
+		if step.WorkflowID != "" || step.IsAsync() {
 			continue
 		}
 		// Match what writeStep serialises: unresolved reusable parameters
@@ -262,6 +262,13 @@ func (tr *translator) writeStep(b *strings.Builder, s model.Step) {
 		if len(model.OwnParameters(s.Parameters)) > 0 {
 			b.WriteString("# warning: parameters are not forwarded to the invoked workflow\n")
 		}
+		if len(s.Outputs) > 0 {
+			fmt.Fprintf(b, "# warning: outputs %s are not captured; later references to them stay unresolved\n", model.OutputNames(s.Outputs))
+		}
+		return
+	}
+	if s.IsAsync() {
+		fmt.Fprintf(b, "# not supported: %s; no message sent or received, no request generated\n", s.AsyncKind())
 		if len(s.Outputs) > 0 {
 			fmt.Fprintf(b, "# warning: outputs %s are not captured; later references to them stay unresolved\n", model.OutputNames(s.Outputs))
 		}

@@ -1006,6 +1006,23 @@ func TestGenerateWorkflowStepEmitsNoRequest(t *testing.T) {
 	assertContains(t, out, "http.request('GET', `${BASE_URL}/products`")
 }
 
+func TestGenerateAsyncStepEmitsNoRequest(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "confirm", ChannelPath: "{$sourceDescriptions.events.url}#/channels/orderConfirmed",
+				Action: "receive", Outputs: []model.OutputEntry{{Name: "orderId", Expression: "$message.payload#/orderId"}}},
+			{StepID: "list", OperationID: "listProducts"},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "// not supported: AsyncAPI receive step; no message sent or received, no request generated")
+	assertContains(t, out, "// warning: outputs orderId are not captured")
+	assertNotContains(t, out, "__unresolved__")
+	assertNotContains(t, out, "const confirm_orderId")
+	assertContains(t, out, "http.request('GET', `${BASE_URL}/products`")
+}
+
 func TestGenerateComponentParameters(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",

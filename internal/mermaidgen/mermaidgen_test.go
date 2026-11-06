@@ -141,6 +141,8 @@ func TestGenerateLabelsOperationPathAndWorkflowSteps(t *testing.T) {
 			{StepID: "by-path", OperationPath: "{$sourceDescriptions.shop.url}#/paths/~1pet~1findByStatus/get"},
 			{StepID: "by-workflow", WorkflowID: "checkout"},
 			{StepID: "opaque", OperationPath: "not-the-spec-form"},
+			{StepID: "place", OperationID: "$sourceDescriptions.events.placeOrder", Action: "send"},
+			{StepID: "confirm", ChannelPath: "{$sourceDescriptions.events.url}#/channels/order~1confirmed", Action: "receive"},
 		},
 	}
 	out := Generate(wf)
@@ -149,6 +151,8 @@ func TestGenerateLabelsOperationPathAndWorkflowSteps(t *testing.T) {
 		`s1["02 by-workflow<br/>workflow: checkout"]`,
 		// An undecodable operationPath is shown raw, like the HTML renderer.
 		`s2["03 opaque<br/>not-the-spec-form"]`,
+		`s3["04 place<br/>send $sourceDescriptions.events.placeOrder"]`,
+		`s4["05 confirm<br/>receive channel: order/confirmed"]`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\n---\n%s", want, out)

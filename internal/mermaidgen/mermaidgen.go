@@ -75,19 +75,32 @@ func (f *flowchart) declareNodes(steps []model.Step) {
 	f.line("  " + startNode + "([Start])")
 	for i, step := range steps {
 		label := fmt.Sprintf("%02d %s", i+1, step.StepID)
+		var target string
 		switch {
 		case step.OperationID != "":
-			label += "<br/>" + step.OperationID
+			target = step.OperationID
 		case step.OperationPath != "":
 			if method, path, ok := oasresolver.OperationPathTarget(step.OperationPath); ok {
-				label += "<br/>" + method + " " + path
+				target = method + " " + path
 			} else {
 				// Undecodable reference: show it raw, like the HTML renderer,
 				// rather than hiding that the step targets an operation.
-				label += "<br/>" + step.OperationPath
+				target = step.OperationPath
 			}
 		case step.WorkflowID != "":
-			label += "<br/>workflow: " + step.WorkflowID
+			target = "workflow: " + step.WorkflowID
+		case step.ChannelPath != "":
+			if _, channel, ok := oasresolver.ChannelPathTarget(step.ChannelPath); ok {
+				target = "channel: " + channel
+			} else {
+				target = step.ChannelPath
+			}
+		}
+		if step.Action != "" {
+			target = strings.TrimSpace(step.Action + " " + target)
+		}
+		if target != "" {
+			label += "<br/>" + target
 		}
 		f.line(fmt.Sprintf("  s%d[%q]", i, escape(label)))
 	}
