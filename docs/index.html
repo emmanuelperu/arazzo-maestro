@@ -1,12 +1,13 @@
 <!doctype html>
 <!--
-  arazzo-maestro, promotional landing page ("Flow, stitched").
+  arazzo-maestro, promotional landing page ("Tapestry").
   Dark dev-tool landing in the four yarn colours of the project banner
-  (teal lint, violet view, blue e2e, orange perf), with textile accents
-  taken from the banner: a faint weave on the ground, the diagram hung as a
-  tapestry from a wooden rod, nodes satin-stitched in the four yarns,
-  running-stitch borders and cross-stitch rules. CSS only, system fonts,
-  local assets only; motion stops under prefers-reduced-motion.
+  (teal lint, violet view, blue e2e, orange perf). Two cream linen
+  tapestries hang in it, like the banner: the "How it works" diagram and
+  the closing banner, each on a wooden rod with yarn loops and a fringe.
+  Arazzo is Italian for tapestry: steps are the threads. CSS only, no
+  JavaScript, system fonts, local assets only; every animation stops
+  under prefers-reduced-motion.
 -->
 <html lang="en">
 <head>
@@ -403,101 +404,76 @@
     }
   </style>
   <style>
-    /* ---- textile layer ---- */
+    /* ---- tapestry ----
+       Two cream linen tapestries hang in the dark page, as on the project banner: the diagram and
+       the closing banner. Dashed lines keep one meaning, not shipped yet (the AsyncAPI input). */
+    :root { --linen: #efe5cf; --ink: #1b2340; --ink-2: #4a4234;
+      --t-teal: #0b6b62; --t-violet: #5b21b6; --t-blue: #1d4ed8; --t-orange: #a3360a; }
     .defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+    html { scrollbar-color: var(--line) var(--bg); accent-color: var(--teal); }
+    ::selection { background: var(--yellow); color: #10162b; }
     .hero, .closing { content-visibility: visible; }
-    /* the diagram hangs from a rod like a tapestry, fringe below */
-    .flow { position: relative; width: min(64rem, 100% - 3rem); margin: 4.75rem auto 4rem; border: 0; border-radius: 6px; }
+    /* .hero sits on the .wrap element and its padding shorthand dropped the side gutters */
+    .hero.wrap { padding-left: 1rem; padding-right: 1rem; }
+    .pillars b { text-wrap: balance; }
+    .flow, .closing { position: relative; border: 0; border-radius: 4px; color: var(--ink);
+      background-color: var(--linen);
+      background-image: radial-gradient(circle at 2.5px 2.5px, rgba(90, 62, 20, 0.16) 0.9px, transparent 1.5px),
+        repeating-linear-gradient(0deg, rgba(122, 92, 40, 0.09) 0 1px, transparent 1px 5px),
+        repeating-linear-gradient(90deg, rgba(122, 92, 40, 0.09) 0 1px, transparent 1px 5px);
+      background-size: 5px 5px, auto, auto;
+      box-shadow: 0 40px 60px -30px #000, inset 0 -6px 12px -8px rgba(90, 62, 20, 0.35); }
+    .flow { width: min(64rem, 100% - 3rem); margin: 4.75rem auto 4.25rem; }
+    .closing { margin-top: 9rem; margin-bottom: 3rem; }
+    .flow :focus-visible, .closing :focus-visible, .flow-scroll:focus-visible { outline-color: var(--ink); }
+    /* wooden rod, yarn loops wrapped round it, fringe below */
     .rod { position: absolute; z-index: 2; left: -1.25rem; right: -1.25rem; top: -1.7rem; height: 1.05rem; border-radius: 999px;
       background: linear-gradient(180deg, #c98a52 0%, #9a5a2b 45%, #5c3216 100%); box-shadow: 0 5px 8px -2px rgba(40, 20, 5, 0.45); }
     .rod::before, .rod::after { content: ""; position: absolute; top: -0.42rem; width: 1.9rem; height: 1.9rem; border-radius: 50%;
       background: radial-gradient(circle at 35% 30%, #dba06a, #8a4f24 55%, #4a2810 100%); box-shadow: 0 4px 6px -2px rgba(40, 20, 5, 0.5); }
     .rod::before { left: -0.95rem; } .rod::after { right: -0.95rem; }
-    /* yarn loops wrapped round the rod */
-    .flow::before { content: ""; position: absolute; z-index: 3; left: 1.25rem; right: 1.25rem; top: -2rem; height: 2.5rem; pointer-events: none;
-      background: repeating-linear-gradient(90deg, transparent 0 5px, var(--loop-a) 5px 7px, var(--loop-b) 7px 11px, var(--loop-a) 11px 13px, transparent 13px 18px);
-      border-radius: 0 0 3px 3px; height: 1.75rem; }
+    .flow::before, .closing::before { content: ""; position: absolute; z-index: 3; left: 1.25rem; right: 1.25rem; top: -2rem; height: 2rem; pointer-events: none;
+      background: repeating-linear-gradient(90deg, transparent 0 5px, #b39a68 5px 7px, #ecdcb8 7px 11px, #b39a68 11px 13px, transparent 13px 18px); }
     .flow::after, .closing::after { content: ""; position: absolute; left: 0.9rem; right: 0.9rem; top: 100%; height: 2.4rem; pointer-events: none;
-      background: repeating-linear-gradient(90deg, var(--fringe-a) 0 3px, var(--fringe-b) 3px 4px, transparent 4px 8px);
+      background: repeating-linear-gradient(90deg, #e3d2ab 0 3px, #b9a275 3px 4px, transparent 4px 8px);
       -webkit-mask: linear-gradient(180deg, #000 55%, transparent); mask: linear-gradient(180deg, #000 55%, transparent); }
-    .flow .node { filter: url(#raise); }
-    .flow .rail { stroke-width: 5; stroke-linecap: round; }
-    .flow .core { fill: url(#sat-yellow); stroke: #8a6100; stroke-width: 1.5; filter: url(#raise); }
-    .flow text[text-anchor="middle"] { fill: #10162b; }
-    .flow .core + text + text { fill: #10162b; }
+    /* the diagram: satin-stitched nodes, couched navy cord for the rails */
+    .flow .node { fill: #fbf5e8; stroke: url(#sat-ink); stroke-width: 6; filter: url(#raise); }
     .flow rect[stroke="#2dd4bf"] { stroke: url(#sat-teal); }
     .flow rect[stroke="#a78bfa"] { stroke: url(#sat-violet); }
     .flow rect[stroke="#60a5fa"] { stroke: url(#sat-blue); }
     .flow rect[stroke="#fb923c"] { stroke: url(#sat-orange); }
-    .flow .node { stroke-width: 6; }
-    .flow .node.soon { stroke-width: 2.5; stroke-dasharray: 5 6; filter: none; }
-    .flow .k-lint { fill: var(--teal); } .flow .k-view { fill: var(--violet); } .flow .k-e2e { fill: var(--blue); } .flow .k-perf { fill: var(--orange); }
-    .flow figcaption { margin-top: 1.25rem; }
+    .flow .node.soon { fill: none; stroke: #8f7b55; stroke-width: 2.5; stroke-dasharray: 5 6; filter: none; }
+    .flow .rail { stroke: var(--ink); stroke-width: 5; stroke-linecap: round; }
+    .flow .rail.soon { stroke: #8f7b55; stroke-width: 3; }
+    .flow .pulse[stroke="#eef1fb"] { stroke: #fff4d8; }
+    .flow .core { fill: url(#sat-yellow); stroke: #a07400; stroke-width: 1.5; filter: url(#raise); }
+    .flow .t, .flow text[text-anchor="middle"] { fill: var(--ink); }
+    .flow .s { fill: var(--ink-2); }
+    .flow .k-lint { fill: var(--t-teal); } .flow .k-view { fill: var(--t-violet); } .flow .k-e2e { fill: var(--t-blue); } .flow .k-perf { fill: var(--t-orange); }
+    .flow figcaption { margin-top: 1.25rem; color: var(--ink-2); }
+    .flow figcaption b { color: var(--ink); }
+    /* the closing banner reads ink on linen */
+    .closing p { color: var(--ink-2); }
+    .closing .btn-alt { color: var(--ink); border-color: var(--ink); }
+    .closing .btn-alt:hover { border-color: var(--t-violet); color: var(--t-violet); }
     /* the logo is stitched in the four yarns */
     .logo rect:nth-of-type(1) { fill: url(#sat-teal); } .logo rect:nth-of-type(2) { fill: url(#sat-violet); }
     .logo rect:nth-of-type(3) { fill: url(#sat-blue); } .logo rect:nth-of-type(4) { fill: url(#sat-orange); }
     .logo svg { filter: drop-shadow(0 1px 1px rgba(20, 10, 0, 0.35)); }
-    /* every section title is underlined by a row of cross stitches */
-    h2::after { content: ""; display: block; width: 240px; max-width: 100%; height: 12px; margin-top: 1.1rem; background: var(--xstitch) repeat-x left center / 48px 12px; }
-    .closing h2::after { margin-left: auto; margin-right: auto; }
-    /* buttons are embroidered patches: a running stitch just inside the edge */
-    .btn-main:not(:focus-visible), .bar nav .pill:not(:focus-visible) { outline: 1.5px dashed rgba(16, 22, 43, 0.55); outline-offset: -5px; }
-    .btn-alt { border-style: dashed; }
-    /* pillars become four patches */
-    .pillars { gap: 1.25rem; border: 0; }
-    .pillars > div:nth-child(n) { border: 2px dashed var(--c); border-radius: 18px; background: var(--patch); box-shadow: 0 10px 22px -14px var(--shadow); }
-    .pillars div:nth-child(1) { --c: var(--teal); } .pillars div:nth-child(2) { --c: var(--violet); }
-    .pillars div:nth-child(3) { --c: var(--blue); } .pillars div:nth-child(4) { --c: var(--orange); }
-    .vs-panel div, .rules li { border: 1.5px dashed var(--stitch); }
-    .sheet div { border-top: 1.5px dashed var(--stitch); }
-    .rules li > code:last-child { border-top: 1.5px dashed var(--stitch); }
-    footer, .legal { border-top: 1.5px dashed var(--stitch); }
-    .plate { border-style: dashed; }
-    .closing { position: relative; margin-top: 9rem; margin-bottom: 3rem; border-radius: 6px; }
     @media (max-width: 960px) {
       .flow { margin-left: auto; margin-right: auto; width: calc(100% - 2.5rem); }
       .rod { left: -0.6rem; right: -0.6rem; }
       .rod::before { left: -0.4rem; } .rod::after { right: -0.4rem; }
     }
     @media (max-width: 760px) {
-      .pillars { gap: 0.9rem; }
-      .pillars > div:nth-child(n) { padding: 1.4rem 0.9rem; }
       .closing .rod { left: -0.25rem; right: -0.25rem; }
     }
-  </style>
-
-  <style>
-    :root { --stitch: #3a4878; --patch: #121a36; --shadow: rgba(0, 0, 0, 0.75);
-      --loop-a: #8f9bbf; --loop-b: #d7deef; --fringe-a: #2b3765; --fringe-b: #4a5a94; --xstitch: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='12' fill='none' stroke-width='2.4' stroke-linecap='round'><path d='M2 2l8 8M10 2l-8 8' stroke='%232dd4bf'/><path d='M14 2l8 8M22 2l-8 8' stroke='%23a78bfa'/><path d='M26 2l8 8M34 2l-8 8' stroke='%2360a5fa'/><path d='M38 2l8 8M46 2l-8 8' stroke='%23fb923c'/></svg>"); }
-    body { background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 4px),
-      repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 4px); }
-    html { scrollbar-color: var(--stitch) var(--bg); accent-color: var(--teal); }
-    ::selection { background: var(--yellow); color: #10162b; }
-    /* the announcement ribbon is woven: thin dark warp threads over the four colours */
-    .strip { background: repeating-linear-gradient(90deg, rgba(12, 18, 38, 0.1) 0 1px, transparent 1px 3px),
-      linear-gradient(90deg, var(--teal), var(--violet), var(--blue), var(--orange)); }
-    .kicker:not(:focus-visible) { outline: 1.5px dashed rgba(12, 18, 38, 0.5); outline-offset: -4px; }
-    .flow { background-color: #111938;
-      background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 5px),
-        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 5px),
-        linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.25));
-      box-shadow: 0 34px 50px -26px #000, inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
-    .flow .node { fill: #0f1630; stroke: url(#sat-cream); }
-    .flow .node.soon { stroke: #5d6a99; }
-    .flow .rail { stroke: #45558f; }
-    .flow .rail.soon { stroke: #45558f; stroke-width: 3; }
-    .vs-panel div, .rules li { box-shadow: 0 14px 26px -18px var(--shadow); }
-    .pillars > div:nth-child(n) { background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 4px); }
-    .closing { background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 5px),
-      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 5px),
-      linear-gradient(120deg, #134e4a, #3b2a7a 45%, #1e3a6e 70%, #7c2d12); box-shadow: 0 34px 50px -26px #000; }
-    .closing::after { background: repeating-linear-gradient(90deg, #2dd4bf 0 3px, transparent 3px 6px, #a78bfa 6px 9px, transparent 9px 12px, #60a5fa 12px 15px, transparent 15px 18px, #fb923c 18px 21px, transparent 21px 24px); }
-    :is(.band pre, .board, .pane, .term):not(:focus-visible) { outline: 1.5px dashed rgba(166, 176, 204, 0.18); outline-offset: -7px; }
   </style>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
-  <svg class="defs" width="0" height="0" aria-hidden="true" focusable="false"><defs><pattern id="sat-teal" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#14b8a6"/><rect width="1.3" height="5" fill="#0f766e"/><rect x="2.6" width="0.9" height="5" fill="#5eead4" opacity="0.75"/></pattern><pattern id="sat-violet" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#8b5cf6"/><rect width="1.3" height="5" fill="#5b21b6"/><rect x="2.6" width="0.9" height="5" fill="#c4b5fd" opacity="0.75"/></pattern><pattern id="sat-blue" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#3b82f6"/><rect width="1.3" height="5" fill="#1e40af"/><rect x="2.6" width="0.9" height="5" fill="#93c5fd" opacity="0.75"/></pattern><pattern id="sat-orange" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#f97316"/><rect width="1.3" height="5" fill="#c2410c"/><rect x="2.6" width="0.9" height="5" fill="#fdba74" opacity="0.75"/></pattern><pattern id="sat-yellow" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#facc15"/><rect width="1.3" height="5" fill="#ca8a04"/><rect x="2.6" width="0.9" height="5" fill="#fef08a" opacity="0.75"/></pattern><pattern id="sat-ink" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#2a3352"/><rect width="1.3" height="5" fill="#141a30"/><rect x="2.6" width="0.9" height="5" fill="#5b6690" opacity="0.75"/></pattern><pattern id="sat-cream" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#e8dcc0"/><rect width="1.3" height="5" fill="#b8a67c"/><rect x="2.6" width="0.9" height="5" fill="#fff8e6" opacity="0.75"/></pattern><filter id="raise" x="-10%" y="-20%" width="120%" height="150%"><feDropShadow dx="0" dy="1.6" stdDeviation="1.3" flood-color="#2a1a05" flood-opacity="0.35"/></filter></defs></svg>
+  <svg class="defs" width="0" height="0" aria-hidden="true" focusable="false"><defs><pattern id="sat-teal" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#14b8a6"/><rect width="1.3" height="5" fill="#0f766e"/><rect x="2.6" width="0.9" height="5" fill="#5eead4" opacity="0.75"/></pattern><pattern id="sat-violet" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#8b5cf6"/><rect width="1.3" height="5" fill="#5b21b6"/><rect x="2.6" width="0.9" height="5" fill="#c4b5fd" opacity="0.75"/></pattern><pattern id="sat-blue" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#3b82f6"/><rect width="1.3" height="5" fill="#1e40af"/><rect x="2.6" width="0.9" height="5" fill="#93c5fd" opacity="0.75"/></pattern><pattern id="sat-orange" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#f97316"/><rect width="1.3" height="5" fill="#c2410c"/><rect x="2.6" width="0.9" height="5" fill="#fdba74" opacity="0.75"/></pattern><pattern id="sat-yellow" width="3.5" height="3.5" patternUnits="userSpaceOnUse" patternTransform="rotate(-20)"><rect width="3.5" height="3.5" fill="#facc15"/><rect width="1" height="3.5" fill="#ca8a04" opacity="0.35"/><rect x="1.9" width="0.7" height="3.5" fill="#fef08a" opacity="0.6"/></pattern><pattern id="sat-ink" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-55)"><rect width="5" height="5" fill="#2a3352"/><rect width="1.3" height="5" fill="#141a30"/><rect x="2.6" width="0.9" height="5" fill="#5b6690" opacity="0.75"/></pattern><filter id="raise" x="-10%" y="-20%" width="120%" height="150%"><feDropShadow dx="0" dy="1.6" stdDeviation="1.3" flood-color="#2a1a05" flood-opacity="0.35"/></filter></defs></svg>
   <aside class="strip" aria-label="Latest release"><span class="rel">v0.7.0 is out: Build the Dockerfile with the go.mod Go version and let lint take several files.</span> <a href="https://github.com/emmanuelperu/arazzo-maestro/releases/tag/v0.7.0">Read the release notes</a></aside>
   <div class="wrap">
     <header class="bar">
@@ -565,16 +541,16 @@
             <text class="t" x="40" y="341">asyncapi.yaml</text><text class="s" x="40" y="363">events, coming soon</text>
             <!-- core -->
             <rect class="core" x="410" y="170" width="190" height="90" rx="18" stroke="#fde047"/>
-            <text class="t" x="505" y="210" text-anchor="middle">arazzo-maestro</text><text class="s" x="505" y="234" text-anchor="middle">one static binary</text>
+            <text class="t" x="505" y="210" text-anchor="middle">arazzo-maestro</text><text class="s" x="505" y="234" text-anchor="middle">one Go binary</text>
             <!-- outputs -->
             <rect class="node" x="760" y="28" width="230" height="64" rx="14" stroke="#2dd4bf"/>
             <text class="t k-lint" x="778" y="57">lint</text><text class="s" x="778" y="78">findings, exit 0 or 1</text>
             <rect class="node" x="760" y="133" width="230" height="64" rx="14" stroke="#a78bfa"/>
             <text class="t k-view" x="778" y="162">view</text><text class="s" x="778" y="183">.html or .mmd pages</text>
             <rect class="node" x="760" y="238" width="230" height="64" rx="14" stroke="#60a5fa"/>
-            <text class="t k-e2e" x="778" y="267">test e2e</text><text class="s" x="778" y="288">Hurl, run anywhere</text>
+            <text class="t k-e2e" x="778" y="267">test gen e2e</text><text class="s" x="778" y="288">Hurl, run anywhere</text>
             <rect class="node" x="760" y="343" width="230" height="64" rx="14" stroke="#fb923c"/>
-            <text class="t k-perf" x="778" y="372">test perf</text><text class="s" x="778" y="393">k6 load scripts</text>
+            <text class="t k-perf" x="778" y="372">test gen perf</text><text class="s" x="778" y="393">k6 load scripts</text>
           </svg>
         </div>
         <svg class="tall" viewBox="0 0 260 572" role="img" aria-labelledby="flow-title-tall flow-desc-tall">
@@ -605,27 +581,27 @@
           <text class="t" x="22" y="160">asyncapi.yaml</text><text class="s" x="22" y="180">events, coming soon</text>
           <!-- core -->
           <rect class="core" x="26" y="226" width="208" height="64" rx="16" stroke="#fde047"/>
-          <text class="t" x="130" y="252" text-anchor="middle">arazzo-maestro</text><text class="s" x="130" y="274" text-anchor="middle">one static binary</text>
+          <text class="t" x="130" y="252" text-anchor="middle">arazzo-maestro</text><text class="s" x="130" y="274" text-anchor="middle">one Go binary</text>
           <!-- outputs -->
           <rect class="node" x="18" y="326" width="232" height="50" rx="12" stroke="#2dd4bf"/>
           <text class="t k-lint" x="30" y="347">lint</text><text class="s" x="30" y="366">findings, exit 0 or 1</text>
           <rect class="node" x="18" y="388" width="232" height="50" rx="12" stroke="#a78bfa"/>
           <text class="t k-view" x="30" y="409">view</text><text class="s" x="30" y="428">.html or .mmd pages</text>
           <rect class="node" x="18" y="450" width="232" height="50" rx="12" stroke="#60a5fa"/>
-          <text class="t k-e2e" x="30" y="471">test e2e</text><text class="s" x="30" y="490">Hurl, run anywhere</text>
+          <text class="t k-e2e" x="30" y="471">test gen e2e</text><text class="s" x="30" y="490">Hurl, run anywhere</text>
           <rect class="node" x="18" y="512" width="232" height="50" rx="12" stroke="#fb923c"/>
-          <text class="t k-perf" x="30" y="533">test perf</text><text class="s" x="30" y="552">k6 load scripts</text>
+          <text class="t k-perf" x="30" y="533">test gen perf</text><text class="s" x="30" y="552">k6 load scripts</text>
         </svg>
-        <figcaption>A workflow and its contracts in, four outputs out. No server, no runtime, no network unless you ask for it.</figcaption>
+        <figcaption><b>Arazzo is Italian for tapestry:</b> a workflow weaves API calls together, each step's outputs carried into the next. A workflow and its contracts in, four outputs out; the CLI makes no network call unless you ask for it.</figcaption>
       </figure>
     </div>
 
     <div class="wrap">
       <div class="pillars">
-        <div><b>One binary</b><span>Static Go, nothing to install first, where most API tooling starts with a Node or Python runtime.</span></div>
-        <div><b>Plain HTML out</b><span>One file per workflow, opened from disk or hosted anywhere static.</span></div>
+        <div><b>One binary</b><span>A self-contained Go executable: no Node or Python runtime to install first.</span></div>
+        <div><b>Plain HTML out</b><span>One file per workflow, for any static host. Styles still load from the Tailwind CDN for now.</span></div>
         <div><b>Scratch image</b><span>The Docker image is the binary alone, with no OS layer underneath it.</span></div>
-        <div><b>Files you keep</b><span>Hurl and k6 tests as plain text, versioned and edited like the rest of the repo.</span></div>
+        <div><b>Files you keep</b><span><code>test gen</code> writes Hurl and k6 files you commit and review like the rest of the repo.</span></div>
       </div>
     </div>
 
@@ -651,7 +627,7 @@
           <div class="vs-panel vs-with">
             <div><h3>CI fails first</h3><p><code>lint</code> resolves every reference inside the file and every <code>operationId</code> against the contract, reports each broken one and exits 1.</p></div>
             <div><h3>One page per workflow</h3><p><code>view</code> writes a page anyone can open in a browser, inputs to outputs, every expression visible.</p></div>
-            <div><h3>Tests from the source</h3><p><code>test</code> regenerates Hurl and k6 from the workflow itself, so they cannot drift.</p></div>
+            <div><h3>Tests from the source</h3><p><code>test gen</code> writes Hurl and k6 from the workflow itself. Regenerate them in CI and they follow every change.</p></div>
           </div>
         </div>
       </div>
@@ -661,7 +637,7 @@
       <div class="wrap">
         <p class="kicker" style="--c: var(--teal)">In action</p>
         <h2 id="demo-lint-title">Three renames. Three stale references. One run.</h2>
-        <p class="intro">A step, an output and a retry target were renamed in <code>shop.arazzo.yaml</code>. The YAML is still valid and the OpenAPI contract has not changed, so a schema check sees nothing. <code>lint</code> follows every expression and names the three places that still use the old names.</p>
+        <p class="intro">A step, an output and a retry target were renamed in <code>shop.arazzo.yaml</code>. The YAML is still valid and the OpenAPI contract has not changed, so a schema check sees nothing. <code>lint</code> follows every expression and names the three places that still use the old names, each by its YAML path.</p>
         <figure class="demo" aria-label="A lint session on shop.arazzo.yaml after three renames">
           <div class="pane editor" role="img" aria-label="shop.arazzo.yaml, the three lines that still use the old names. Line 66 references $steps.list-catalog, a step renamed catalog. Line 120 references $steps.pay.outputs.transactionId, an output renamed txId. Line 185 retries stepId pay-refused, a step renamed retry-payment. Each line is then corrected to the new name.">
             <p class="pane-tab">shop.arazzo.yaml</p>
@@ -688,12 +664,12 @@ Error: 3 issue(s) found</span><span class="later">
     <section id="commands" aria-labelledby="commands-title">
       <div class="wrap">
         <p class="kicker">Commands</p>
-        <h2 id="commands-title">Four commands. One binary.</h2>
+        <h2 id="commands-title">Lint, view, test. One binary.</h2>
         <p class="intro">Linting, rendering and generating tests need nothing but the binary. Running the tests is left to <a href="https://hurl.dev">Hurl</a> and <a href="https://k6.io">k6</a>, two proven open source runners, rather than a home-made one.</p>
 
         <div class="band c-lint">
           <div>
-            <h3><code>lint</code> catches it before CI does</h3>
+            <h3><code>lint</code> catches it before review does</h3>
             <p>Official JSON Schema first, then every expression and action target inside the file, then every step checked against the OpenAPI contract it calls.</p>
           </div>
           <pre class="wrap-lines" tabindex="0" role="group" aria-label="lint session"><span class="p">$</span> arazzo-maestro lint checkout.arazzo.yaml
@@ -725,8 +701,10 @@ Error: 1 issue(s) found</pre>
         <div class="band c-e2e">
           <div>
             <h3><code>test run e2e</code> replays it for real</h3>
-            <p>Each step becomes a <a href="https://hurl.dev">Hurl</a> request and outputs become captures that feed the next step. Point it at staging, a mock or production, with <code>hurl</code> on your PATH; workflow inputs come in as variables.</p>
-            <pre class="mini" tabindex="0" role="group" aria-label="test run command"><span class="p">$</span> arazzo-maestro test run e2e shop.arazzo.yaml \
+            <p>Each step becomes a <a href="https://hurl.dev">Hurl</a> request and outputs become captures that feed the next step. <code>test gen e2e</code> writes the files to commit; <code>test run e2e</code> generates and runs them in one go against staging or a mock, with <code>hurl</code> on your PATH. Workflow inputs come in as variables.</p>
+            <pre class="mini wrap-lines" tabindex="0" role="group" aria-label="e2e commands"><span class="p">$</span> arazzo-maestro test gen e2e shop.arazzo.yaml
+<span class="cmt"># writes dist/<wbr>e2e/<wbr>hurl/<wbr>shop/<wbr>*.hurl</span>
+<span class="p">$</span> arazzo-maestro test run e2e shop.arazzo.yaml \
     --base-url https://staging.example.com/<wbr>api/<wbr>v1 \
     --variable productId=p-001 --variable orderId=ord-1 \
     --variable acceptLanguage=en</pre>
@@ -760,7 +738,7 @@ Failed files:      0 (0.0%)</pre>
           <figure class="board perf" aria-label="k6 run of happy-path-checkout.k6.js">
             <div role="img" aria-label="50 virtual users for 30 seconds against a local mock. Each virtual user loops through list-catalog, get-product, add-to-cart and pay, and all four checks pass at 100 percent.">
             <div class="board-top"><span>happy-path-checkout.k6.js</span><span class="clock">elapsed <b class="sec"></b>/30 s</span></div>
-            <p class="wf">50 virtual users, colour = the step each one is on</p>
+            <p class="wf">50 virtual users, color = the step each one is on</p>
             <ol class="vus"><li style="--d:-0.82s"></li><li style="--d:-0.38s"></li><li style="--d:-1.01s"></li><li style="--d:-0.12s"></li><li style="--d:-0.18s"></li><li style="--d:-1.37s"></li><li style="--d:-0.24s"></li><li style="--d:-0.93s"></li><li style="--d:-1.49s"></li><li style="--d:-0.14s"></li><li style="--d:-1.29s"></li><li style="--d:-0.54s"></li><li style="--d:-0.09s"></li><li style="--d:-0.22s"></li><li style="--d:-1.11s"></li><li style="--d:-1.07s"></li><li style="--d:-0.17s"></li><li style="--d:-0.61s"></li><li style="--d:-0.23s"></li><li style="--d:-1.41s"></li><li style="--d:-1.08s"></li><li style="--d:-0.15s"></li><li style="--d:-1.44s"></li><li style="--d:-0.31s"></li><li style="--d:-0.57s"></li><li style="--d:-1.49s"></li><li style="--d:-0.15s"></li><li style="--d:-1.47s"></li><li style="--d:-1.49s"></li><li style="--d:-1.01s"></li><li style="--d:-0.12s"></li><li style="--d:-0.56s"></li><li style="--d:-0.11s"></li><li style="--d:-1.42s"></li><li style="--d:-0.34s"></li><li style="--d:-0.74s"></li><li style="--d:-1.07s"></li><li style="--d:-0.36s"></li><li style="--d:-1.38s"></li><li style="--d:-0.30s"></li><li style="--d:-1.46s"></li><li style="--d:-0.78s"></li><li style="--d:-1.43s"></li><li style="--d:-0.46s"></li><li style="--d:-0.26s"></li><li style="--d:-1.48s"></li><li style="--d:-1.46s"></li><li style="--d:-0.48s"></li><li style="--d:-0.95s"></li><li style="--d:-0.24s"></li></ol>
             <ol class="pods"><li class="s1"><span class="sid">list-catalog</span><span class="call">GET /<wbr>products</span><span class="code">&#10003; 200, 100%</span></li><li class="s2"><span class="sid">get-product</span><span class="call">GET /<wbr>products/<wbr>{productId}</span><span class="code">&#10003; 200, 100%</span></li><li class="s3"><span class="sid">add-to-cart</span><span class="call">POST /<wbr>cart/<wbr>items</span><span class="code">&#10003; 201, 100%</span></li><li class="s4"><span class="sid">pay</span><span class="call">POST /<wbr>orders/<wbr>{orderId}/<wbr>payment</span><span class="code">&#10003; 200, 100%</span></li></ol>
             </div>
@@ -806,8 +784,8 @@ Failed files:      0 (0.0%)</pre>
     ghcr.io/<wbr>emmanuelperu/<wbr>arazzo-maestro:latest \
     lint workflow.arazzo.yaml</pre>
             <div>
-              <p>A <code>FROM scratch</code> image of about 20 MB: no shell, no libc, nothing but the binary.</p>
-              <p>Every image is signed with cosign. More in the <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/RECIPES.md#docker">Docker recipe</a>.</p>
+              <p>A <code>FROM scratch</code> image of about 20 MB: no shell, no libc, nothing but the binary. It runs <code>lint</code>, <code>view</code> and <code>test gen</code>; <code>test run e2e</code> needs <code>hurl</code>, which the image does not ship.</p>
+              <p>The multi-arch manifests are signed with cosign. No CA certificates inside: mount the host's (<code>-v /etc/ssl/certs:/etc/ssl/certs:ro</code>) before using <code>--allow-remote</code>. More in the <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/RECIPES.md#docker">Docker recipe</a>.</p>
             </div>
           </div>
           <div class="tab-panel in-bin">
@@ -868,12 +846,12 @@ Failed files:      0 (0.0%)</pre>
         <h2 id="specs-title">Under the hood.</h2>
         <dl class="sheet">
           <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 6h7M7.3 8.2l3.4 7.6M16.7 8.2l-3.4 7.6"/></svg>Arazzo</dt><dd>1.0, and 1.1 in part. Every rule is mapped in the <a href="https://github.com/emmanuelperu/arazzo-maestro/blob/main/docs/SPEC_COMPLIANCE.md">spec compliance matrix</a>.</dd></div>
-          <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>Sources</dt><dd>Local OpenAPI files. HTTPS on <code>--allow-remote</code>: 2 MiB, 5 s, 2 redirects, plain HTTP always refused.</dd></div>
+          <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>Sources</dt><dd>Local OpenAPI files. HTTPS on <code>--allow-remote</code>, by default 2 MiB, 5 s and 2 redirects, each adjustable; plain HTTP always refused.</dd></div>
           <div class="c-lint"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>lint</dt><dd>Official JSON Schema, reference and flow rules inside the file, then <code>operationId</code> resolution against the contract. Every rule always on: errors exit 1, warnings do not.</dd></div>
           <div class="c-view"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>view</dt><dd>HTML or Mermaid. Light, dark and pb33f themes, or your own <code>themes.yml</code>, contrast-audited at load. Portrait or landscape.</dd></div>
           <div class="c-e2e"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>test e2e</dt><dd><a href="https://hurl.dev">Hurl</a> files with captures chained step to step, run against any <code>--base-url</code>, with an optional HTML report.</dd></div>
           <div class="c-perf"><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18a9 9 0 0 1 18 0"/><path d="M12 18l4.5-6M6 18h0M18 18h0"/><circle cx="12" cy="18" r="1.3"/></svg>test perf</dt><dd><a href="https://k6.io">k6</a> scripts with virtual users, duration and thresholds, <code>BASE_URL</code> read from the environment.</dd></div>
-          <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>Runtime</dt><dd>Go, no cgo, four direct dependencies. One static binary of about 20 MB.</dd></div>
+          <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>Runtime</dt><dd>Go, no cgo, four direct dependencies. One self-contained binary of about 20 MB.</dd></div>
           <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Supply chain</dt><dd>cosign keyless signatures, SBOM, SHA-256 checksums, <a href="https://scorecard.dev/viewer/?uri=github.com/emmanuelperu/arazzo-maestro">OpenSSF Scorecard</a>.</dd></div>
         </dl>
       </div>
@@ -886,7 +864,7 @@ Failed files:      0 (0.0%)</pre>
         <p>Open source, Apache 2.0, signed releases with an SBOM.</p>
         <div class="cta">
           <a class="btn btn-main" href="https://github.com/emmanuelperu/arazzo-maestro/releases">Download v0.7.0</a>
-          <a class="btn btn-alt" href="#install" style="border-color:#e2e8f5">Install it</a>
+          <a class="btn btn-alt" href="#install">Install it</a>
         </div>
       </section>
     </div>
