@@ -523,11 +523,15 @@
     .flip:hover { border-color: #a07400; box-shadow: 0 0 0 3px #a07400, 0 6px 14px -8px rgba(27, 35, 64, 0.8); }
     .flip .turn { flex: none; width: 18px; min-width: 0; height: 18px; }
     /* a dog-eared corner: the cloth lifts at the bottom right and shows its back, gold thread and all */
-    .fold { position: absolute; z-index: 4; right: 0; bottom: 0; width: 3rem; height: 3rem; cursor: pointer;
+    .flow { --fold: 3rem; }
+    /* the fringe is folded up with the corner, so it stops where the fold starts */
+    .flow::after { right: max(0.9rem, var(--fold)); }
+    .fold { position: absolute; z-index: 4; right: 0; bottom: 0; width: var(--fold); height: var(--fold); cursor: pointer;
       background: linear-gradient(315deg, var(--bg) 0 50%, transparent 50%),
         linear-gradient(135deg, transparent 0 calc(50% + 1.1rem), #a07400 calc(50% + 1.1rem) calc(50% + 1.1rem + 3px), transparent 0),
         linear-gradient(315deg, transparent 50%, #d6c398 50%, #c6b088);
       filter: drop-shadow(-3px -3px 3px rgba(60, 40, 10, 0.35)); }
+    .flow:has(#flip:checked) { --fold: 0px; }
     .flow:has(#flip:checked) .fold { visibility: hidden; }
     .flow:has(#flip:focus-visible) .flip { outline: 3px solid var(--ink); outline-offset: 3px; }
     .back-note p { margin: 0 0 0.9rem; color: var(--ink-2); }
@@ -548,7 +552,8 @@
       .flow:has(#flip:checked) { transform: perspective(2400px) rotateY(180deg); }
       .flow:has(#flip:checked) .back { transform: scaleX(-1); }
       .fold { transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1), height 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
-      .flow:has(.flip:hover, .fold:hover, #flip:focus-visible) .fold { width: 4.5rem; height: 4.5rem; }
+      .flow::after { transition: right 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+      .flow:has(.flip:hover, .fold:hover, #flip:focus-visible):not(:has(#flip:checked)) { --fold: 4.5rem; }
     }
     @media (max-width: 900px) {
       .face.back { grid-template-columns: minmax(0, 1fr); align-content: start; }
@@ -606,6 +611,7 @@
       .vus, .live, .legend span::before { forced-color-adjust: none; }
       .closing .mark { border-image: none; }
       .fold { display: none; }
+      .flow { --fold: 0px; }
       .board:not(.perf) .pods li::before { display: none; }
     }
 
