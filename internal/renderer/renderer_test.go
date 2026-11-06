@@ -148,7 +148,6 @@ func TestRenderWorkflowContainsExpectedSections(t *testing.T) {
 
 	for _, want := range []string{
 		"<!doctype html>",
-		"cdn.tailwindcss.com",
 		"happy-path-checkout",
 		"list-catalog",
 		"add-to-cart",

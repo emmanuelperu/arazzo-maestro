@@ -240,7 +240,7 @@ Parameters, outputs, success criteria and runtime expressions (including the emb
 
 These are **engineering constraints**, not afterthoughts. The rules are formalised in [`.agents/rules/`](./.agents/rules/) and enforced by reviews and tests:
 
-- **Eco-design**: 1 network request at page load (the Tailwind CDN script, the only JavaScript on the page), ~29 kB HTML, ~4.5 kB gzipped, no fonts loaded from third parties, single Go binary (~20 MB) packaged in a `FROM scratch` Docker image.
+- **Eco-design**: 0 network requests at page load and no JavaScript (the Tailwind CSS the page uses is embedded), ~34 kB HTML, ~6 kB gzipped, no fonts loaded from third parties, single Go binary (~20 MB) packaged in a `FROM scratch` Docker image.
 - **Accessibility**: WCAG 2.2 AA contrasts (4.5:1 on body text), semantic HTML (`<main>`, `<section>`, `<h1>`→`<h2>`→`<h3>`), `aria-hidden` on decorative icons, visible focus, `prefers-reduced-motion` honoured, no info conveyed by colour alone, fluid `rem` sizing.
 
 ### 🧰 Built-in CLI
@@ -357,8 +357,8 @@ Core (parse, lint, render, themes, e2e + perf test generation, landscape and Mer
 
 | Metric | Value |
 |---|---|
-| Generated HTML (`happy-path-checkout.html`) | ~29 kB raw, ~4.5 kB gzipped |
-| Network requests at page load | 1 (Tailwind CDN, to be internalised) |
+| Generated HTML (`happy-path-checkout.html`) | ~34 kB raw, ~6 kB gzipped, CSS included |
+| Network requests at page load | 0 |
 | Binary size (`-s -w -trimpath`) | ~20 MB |
 | Docker image (`FROM scratch`) | ~20 MB |
 | Direct dependencies | 4 (`cobra`, `yaml.v3`, `jsonschema`, `libopenapi`) |

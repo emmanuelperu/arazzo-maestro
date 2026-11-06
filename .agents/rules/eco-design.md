@@ -10,8 +10,7 @@
 ### R1, No external resource that isn't strictly necessary
 
 The generated HTML loads **only** the resources required to render. As
-of today: only the Tailwind CDN (eventually to be internalised, see
-R8).
+of today: none, the CSS is embedded in the page (R8).
 
 **Forbidden without an explicit waiver:**
 
@@ -63,16 +62,18 @@ where transitions are needed (focus, hover…).
 Any PR touching HTML rendering must report:
 
 - Generated HTML size for `examples/shop.arazzo.yaml` (gzipped and raw)
-- Number of requests at page load (= 1 today, Tailwind CDN)
+- Number of requests at page load (= 0 today)
 
 Regression > 10 % → explicit discussion in the PR.
 
-### R8, Internalise the CSS eventually
+### R8, Internalise the CSS
 
-The Tailwind CDN is a pragmatic compromise for the POC. Eventually:
-extract the strictly used CSS via `tailwindcss --content` at build
-time and embed it in the binary (via `//go:embed`), reaching zero
-network requests at page load.
+Done: `make css` runs the Tailwind v3 standalone CLI with `--content`
+over the templates and `renderer.go`, the minified output
+(`internal/renderer/templates/tailwind.css`) is committed and embedded
+via `//go:embed`, and every page inlines it. Zero network requests at
+page load. A template that starts using a class the committed CSS lacks
+fails `TestEmbeddedCSSCoversTemplateClasses`: rerun `make css`.
 
 ### R9, No polling, no unsolicited watcher
 
@@ -91,6 +92,6 @@ If a `watch` mode is added, it must be **opt-in** (`--watch`) and use
 
 ## Current baseline
 
-- HTML `happy-path-checkout.html`: ~29 kB raw, ~4.5 kB gzipped
-- Requests at page load: 1 (Tailwind CDN)
+- HTML `happy-path-checkout.html`: ~34 kB raw, ~6 kB gzipped (CSS included)
+- Requests at page load: 0
 - Binary: ~20 MB with `-s -w -trimpath` (~30 MB without)

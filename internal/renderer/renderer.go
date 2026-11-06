@@ -26,6 +26,12 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
+// tailwindCSS holds the Tailwind utilities the templates use, extracted at
+// build time (`make css`) and inlined so a rendered page makes no request.
+//
+//go:embed templates/tailwind.css
+var tailwindCSS string
+
 // embeddedExprRe matches the spec's embedded form: a runtime expression
 // wrapped in {} curly braces inside a string value.
 var embeddedExprRe = regexp.MustCompile(`\{\$[^{}]+\}`)
@@ -40,7 +46,7 @@ func isRuntimeExpression(v any) bool {
 // template.HTML so html/template does not re-escape it.
 func renderValue(v any) template.HTML {
 	if v == nil {
-		return `<span class="text-muted italic">null</span>`
+		return `<span class="italic">null</span>`
 	}
 	switch t := v.(type) {
 	case string:
@@ -52,17 +58,17 @@ func renderValue(v any) template.HTML {
 		h := embeddedExprRe.ReplaceAllStringFunc(html.EscapeString(t), func(m string) string {
 			return `<span class="runtime">` + m + `</span>`
 		})
-		return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">"%s"</code>`, h))
+		return template.HTML(fmt.Sprintf(`<code class="font-mono">"%s"</code>`, h))
 	case bool:
-		return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">%t</code>`, t))
+		return template.HTML(fmt.Sprintf(`<code class="font-mono">%t</code>`, t))
 	case int, int64, int32, float32, float64:
-		return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">%v</code>`, formatNumber(t)))
+		return template.HTML(fmt.Sprintf(`<code class="font-mono">%v</code>`, formatNumber(t)))
 	default:
 		raw, err := json.Marshal(v)
 		if err != nil {
-			return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">%s</code>`, html.EscapeString(fmt.Sprint(v))))
+			return template.HTML(fmt.Sprintf(`<code class="font-mono">%s</code>`, html.EscapeString(fmt.Sprint(v))))
 		}
-		return template.HTML(fmt.Sprintf(`<code class="font-mono text-primary">%s</code>`, html.EscapeString(string(raw))))
+		return template.HTML(fmt.Sprintf(`<code class="font-mono">%s</code>`, html.EscapeString(string(raw))))
 	}
 }
 
@@ -89,7 +95,7 @@ func formatNumber(v any) string {
 // substitute.
 func renderPayload(v any) template.HTML {
 	if v == nil {
-		return `<span class="text-muted italic">empty</span>`
+		return `<span class="italic">empty</span>`
 	}
 	probe, err := json.Marshal(v)
 	if err != nil {
@@ -215,6 +221,8 @@ func buildTemplate() (*template.Template, error) {
 			return template.CSS(theme.FontStack(name))
 		},
 		"add1": func(i int) int { return i + 1 },
+		// tailwindCSS is trusted, build-time generated CSS.
+		"tailwindCSS": func() template.CSS { return template.CSS(tailwindCSS) },
 		// opPathTarget decodes an operationPath reference into a short
 		// "METHOD /path" label, or "" when the reference is not the
 		// canonical spec form (the raw string is shown instead).

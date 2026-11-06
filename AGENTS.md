@@ -79,8 +79,9 @@ Originally a Python POC (now removed), migrated to Go in May 2026.
   `--allow-remote` (#106)
 - Stdlib `html/template` for HTML rendering
 - Stdlib `embed` for templates + JSON Schema + built-in themes
-- Tailwind CSS via CDN (the only external runtime dep of the generated
-  HTML; to be internalised later, eco-design rule R8)
+- Tailwind CSS v3, the classes the templates use extracted by `make css`
+  (standalone CLI, only needed to regenerate) and embedded: rendered
+  pages make no network request (eco-design rule R8)
 
 No JS framework. No Node. No cgo. No Python.
 
@@ -184,6 +185,7 @@ make test                            # go test ./...
 make vet                             # go vet ./...
 make lint                            # arazzo-maestro lint examples/*.arazzo.yaml
 make dist                            # render every example into dist/<example>/{light,dark,pb33f}/
+make css TAILWIND=<path>             # regenerate the embedded Tailwind CSS after a template changes its classes
 make hurl                            # generate Hurl e2e tests under examples/generated/e2e/hurl/
 make perf                            # generate k6 perf tests under examples/generated/perf/k6/
 make clean                           # rm -rf dist bin examples/generated

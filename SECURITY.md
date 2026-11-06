@@ -59,7 +59,7 @@ In scope:
 
 Out of scope:
 
-- Issues in Tailwind CSS (CDN dependency, report upstream).
+- Issues in Tailwind CSS itself (its generated CSS is embedded; report upstream).
 - Issues in third-party Go modules: please report directly to the
   module maintainer. We will pick up the fix via `go mod tidy` once a
   patched version is available.
