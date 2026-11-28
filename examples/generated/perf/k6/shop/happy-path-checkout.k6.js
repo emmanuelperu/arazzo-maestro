@@ -5,6 +5,8 @@
 // Base URL: override with `k6 run -e BASE_URL=<endpoint> <file>`.
 //   default (OpenAPI servers): https://shop.example.com/api/v1
 //
+// Success criteria: 6 of 6 checked
+//
 // Inputs: override each with `-e <name>=<value>`.
 //   - productId (string)
 //   - orderId (string)
@@ -18,6 +20,13 @@ const BASE_URL = __ENV.BASE_URL || "https://shop.example.com/api/v1";
 const productId = __ENV["productId"] || "prod-001";
 const orderId = __ENV["orderId"] || "order-001";
 const acceptLanguage = __ENV["acceptLanguage"] || "fr-FR";
+
+// Success-criteria helpers: Arazzo compares strings case-insensitively
+// and coerces numeric strings for ordering operators.
+function bodyAt(r, path) { try { return path === "" ? r.json() : r.json(path); } catch (e) { return undefined; } }
+function headerOf(r, name) { const k = Object.keys(r.headers).find((h) => h.toLowerCase() === name.toLowerCase()); return k === undefined ? undefined : r.headers[k]; }
+function sameText(v, s) { return typeof v === "string" && v.toLowerCase() === s.toLowerCase(); }
+function asNumber(v) { return typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN; }
 
 export const options = {
   vus: 1,
@@ -49,9 +58,9 @@ export default function () {
     "quantity": 2
   };
   const add_to_cartRes = http.request('POST', `${BASE_URL}/cart/items`, JSON.stringify(add_to_cartBody), { headers: { "Content-Type": "application/json", "Accept-Language": acceptLanguage } });
-  // successCriteria (not translated): $response.body#/totalPrice > 0
   check(add_to_cartRes, {
     "add-to-cart: $statusCode == 201": (r) => r.status === 201,
+    "add-to-cart: $response.body#/totalPrice > 0": (r) => asNumber(bodyAt(r, "totalPrice")) > 0,
   });
   const add_to_cart_cartTotal = add_to_cartRes.json("totalPrice");
 
@@ -67,9 +76,9 @@ export default function () {
     "method": "card"
   };
   const payRes = http.request('POST', `${BASE_URL}/orders/${orderId}/payment`, JSON.stringify(payBody), { headers: { "Content-Type": "application/json", "Accept-Language": acceptLanguage } });
-  // successCriteria (not translated): $response.body#/status == "OK"
   check(payRes, {
     "pay: $statusCode == 200": (r) => r.status === 200,
+    "pay: $response.body#/status == 'OK'": (r) => sameText(bodyAt(r, "status"), "OK"),
   });
   const pay_transactionId = payRes.json("transactionId");
 }

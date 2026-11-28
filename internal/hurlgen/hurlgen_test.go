@@ -1,6 +1,7 @@
 package hurlgen
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -778,26 +779,53 @@ func TestGenerateChainsStepCaptureToLaterStepReference(t *testing.T) {
 	assertContains(t, out, "Authorization: {{auth_token}}")
 }
 
-func TestGenerateEmitsSuccessCriteriaAsAssertComments(t *testing.T) {
-	wf := model.Workflow{
-		WorkflowID: "wf",
-		Steps: []model.Step{
-			{
-				StepID:      "list",
-				OperationID: "listProducts",
-				SuccessCriteria: []model.SuccessCriterion{
-					{Condition: "$statusCode == 200"},
-					{Condition: "$response.body#/items != []"},
-				},
-			},
-		},
+func TestGenerateTranslatesSuccessCriteriaToAsserts(t *testing.T) {
+	tests := []struct {
+		name      string
+		crits     []string
+		status    string
+		asserts   []string
+		unchecked []string
+	}{
+		{name: "single status equality is the status line", crits: []string{"$statusCode == 201"}, status: "HTTP 201"},
+		{name: "status range", crits: []string{"$statusCode >= 500"}, asserts: []string{"status >= 500"}},
+		{name: "two status equalities stay asserts", crits: []string{"$statusCode == 200", "$statusCode == 201"}, asserts: []string{"status == 200", "status == 201"}},
+		{name: "string is case-insensitive", crits: []string{"$response.body#/status == 'OK'"}, asserts: []string{`jsonpath "$.status" matches /(?i)^OK$/`}},
+		{name: "double-quoted string tolerated", crits: []string{`$response.body#/status != "REFUSED"`}, asserts: []string{`jsonpath "$.status" not matches /(?i)^REFUSED$/`}},
+		{name: "string regex escaping", crits: []string{"$response.body#/p == 'a/b.c (x)'"}, asserts: []string{`jsonpath "$.p" matches /(?i)^a\/b\.c \(x\)$/`}},
+		{name: "numeric ordering coerces", crits: []string{"$response.body#/totalPrice > 0"}, asserts: []string{`jsonpath "$.totalPrice" toFloat > 0`}},
+		{name: "numeric equality", crits: []string{"$response.body#/items/0/qty == 2"}, asserts: []string{`jsonpath "$.items[0].qty" == 2`}},
+		{name: "boolean", crits: []string{"$response.body#/paid == true"}, asserts: []string{`jsonpath "$.paid" == true`}},
+		{name: "whole body null", crits: []string{"$response.body != null"}, asserts: []string{`jsonpath "$" != null`}},
+		{name: "header", crits: []string{"$response.header.Content-Type == 'application/json'"}, asserts: []string{`header "Content-Type" matches /(?i)^application\/json$/`}},
+		{name: "compound stays a comment", crits: []string{"$statusCode == 200 && $response.body != null"}, unchecked: []string{"# not checked: $statusCode == 200 && $response.body != null"}},
+		{name: "array literal stays a comment", crits: []string{"$response.body#/items != []"}, unchecked: []string{"# not checked: $response.body#/items != []"}},
+		{name: "exponent stays a comment", crits: []string{"$response.body#/n > 1e3"}, unchecked: []string{"# not checked: $response.body#/n > 1e3"}},
+		{name: "string ordering stays a comment", crits: []string{"$response.body#/s > 'a'"}, unchecked: []string{"# not checked: $response.body#/s > 'a'"}},
 	}
-	out, _ := Generate(wf, map[string]*oasresolver.Source{
-		"shop": loadSource(t, shopSpec),
-	})
-	assertContains(t, out, "[Asserts]")
-	assertContains(t, out, "# $statusCode == 200")
-	assertContains(t, out, "# $response.body#/items != []")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var crits []model.SuccessCriterion
+			for _, c := range tt.crits {
+				crits = append(crits, model.SuccessCriterion{Condition: c})
+			}
+			wf := model.Workflow{WorkflowID: "wf", Steps: []model.Step{{StepID: "list", OperationID: "listProducts", SuccessCriteria: crits}}}
+			out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
+			status := tt.status
+			if status == "" {
+				status = "HTTP *"
+			}
+			assertContains(t, out, "\n"+status+"\n")
+			for _, a := range append(tt.asserts, tt.unchecked...) {
+				assertContains(t, out, "\n"+a+"\n")
+			}
+			checked := len(tt.crits) - len(tt.unchecked)
+			assertContains(t, out, fmt.Sprintf("# Success criteria: %d of %d checked", checked, len(tt.crits)))
+			if len(tt.asserts)+len(tt.unchecked) == 0 {
+				assertNotContains(t, out, "[Asserts]")
+			}
+		})
+	}
 }
 
 func TestGenerateFallsBackToBaseUrlPlaceholderWhenServerMissing(t *testing.T) {
@@ -1162,8 +1190,8 @@ func TestGenerateDescribesTypedCriteriaAndRequiredInputs(t *testing.T) {
 	out, _ := Generate(wf, map[string]*oasresolver.Source{"shop": loadSource(t, shopSpec)})
 	assertContains(t, out, "- username (string, required)")
 	assertContains(t, out, "- pageSize (integer)")
-	assertContains(t, out, "# $statusCode == 200")
-	assertContains(t, out, "# [jsonpath draft-goessner-dispatch-jsonpath-00] $.pets[0].id == 1  (context: $response.body)")
+	assertContains(t, out, "HTTP 200\n")
+	assertContains(t, out, "# not checked: [jsonpath draft-goessner-dispatch-jsonpath-00] $.pets[0].id == 1  (context: $response.body)")
 }
 
 func TestGenerateNotesDottedInputNames(t *testing.T) {

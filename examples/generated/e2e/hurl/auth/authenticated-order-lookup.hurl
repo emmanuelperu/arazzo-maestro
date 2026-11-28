@@ -4,6 +4,8 @@
 # Base URL (required): pass via `hurl --variable baseUrl=<endpoint>`
 #   default (OpenAPI servers): https://orders.example.com/api/v1
 #
+# Success criteria: 3 of 3 checked
+#
 # Inputs (pass via `hurl --variable name=value`):
 #   - username (string)
 #   - password (string)
@@ -20,9 +22,7 @@ Content-Type: application/json
 }
 ```
 
-HTTP *
-[Asserts]
-# $statusCode == 200
+HTTP 200
 [Captures]
 login_token: jsonpath "$.token"
 
@@ -33,9 +33,7 @@ Authorization: Bearer {{login_token}}
 [QueryStringParams]
 page: 0
 
-HTTP *
-[Asserts]
-# $statusCode == 200
+HTTP 200
 [Captures]
 list-orders_firstOrderId: jsonpath "$.items[0].id"
 
@@ -44,8 +42,6 @@ list-orders_firstOrderId: jsonpath "$.items[0].id"
 GET {{baseUrl}}/orders/{{list-orders_firstOrderId}}
 Authorization: Bearer {{login_token}}
 
-HTTP *
-[Asserts]
-# $statusCode == 200
+HTTP 200
 [Captures]
 get-order_orderStatus: jsonpath "$.status"

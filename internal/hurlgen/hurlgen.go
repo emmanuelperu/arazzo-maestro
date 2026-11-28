@@ -5,9 +5,11 @@
 //
 //	step                      -> one HTTP request block
 //	step.outputs              -> [Captures]
-//	step.successCriteria      -> comments inside [Asserts]
-//	                             (the Arazzo condition mini-language
-//	                             is not translated to Hurl predicates)
+//	step.successCriteria      -> the status line and [Asserts]
+//	                             (simple conditions on $statusCode,
+//	                             $response.body and $response.header
+//	                             against a literal; anything else stays
+//	                             a `# not checked:` comment)
 //	parameters in=header      -> header lines
 //	parameters in=query       -> [QueryStringParams]
 //	parameters in=path        -> substituted into the request URL
@@ -53,6 +55,7 @@ import (
 	"encoding/json"
 	"fmt"
 	neturl "net/url"
+	"regexp"
 	"strings"
 
 	"github.com/emmanuelperu/arazzo-maestro/internal/expr"
@@ -234,6 +237,13 @@ func writeHeader(b *strings.Builder, wf model.Workflow, defaultBase string) {
 	if defaultBase != "" {
 		fmt.Fprintf(b, "#   default (OpenAPI servers): %s\n", defaultBase)
 	}
+	if checked, total := criteriaCounts(wf.Steps); total > 0 {
+		fmt.Fprintf(b, "#\n# Success criteria: %d of %d checked", checked, total)
+		if checked < total {
+			b.WriteString("; the others stay `# not checked:` comments")
+		}
+		b.WriteString("\n")
+	}
 	if len(wf.Inputs) > 0 {
 		b.WriteString("#\n# Inputs (pass via `hurl --variable name=value`):\n")
 		dotted := false
@@ -329,8 +339,7 @@ func (tr *translator) writeStep(b *strings.Builder, s model.Step) {
 	tr.writeCookies(b, s.Parameters)
 	tr.writeBody(b, s.RequestBody, effective, unresolved, ct, ctKnown)
 
-	b.WriteString("\nHTTP *\n")
-	writeAsserts(b, s.SuccessCriteria)
+	writeResponse(b, s.SuccessCriteria)
 	tr.writeCaptures(b, s.StepID, s.Outputs)
 }
 
@@ -546,14 +555,113 @@ func (tr *translator) translateBodyExprs(v any) any {
 	}
 }
 
-func writeAsserts(b *strings.Builder, crits []model.SuccessCriterion) {
-	if len(crits) == 0 {
+// writeResponse emits the status line and the [Asserts] block. A single
+// `$statusCode == N` criterion becomes the `HTTP N` status line; every
+// other translatable criterion becomes an assert, and the rest stay
+// `# not checked:` comments so a partial translation is visible.
+func writeResponse(b *strings.Builder, crits []model.SuccessCriterion) {
+	status := "*"
+	var lines []string
+	statusEq := 0
+	for _, c := range crits {
+		if cond, ok := translatable(c); ok && cond.Subject == expr.SubjectStatus && cond.Op == "==" {
+			statusEq++
+		}
+	}
+	for _, c := range crits {
+		cond, ok := translatable(c)
+		switch {
+		case !ok:
+			lines = append(lines, "# not checked: "+c.Describe())
+		case statusEq == 1 && cond.Subject == expr.SubjectStatus && cond.Op == "==":
+			status = cond.Value
+		default:
+			lines = append(lines, hurlAssert(cond))
+		}
+	}
+	fmt.Fprintf(b, "\nHTTP %s\n", status)
+	if len(lines) == 0 {
 		return
 	}
 	b.WriteString("[Asserts]\n")
-	for _, c := range crits {
-		fmt.Fprintf(b, "# %s\n", c.Describe())
+	for _, l := range lines {
+		b.WriteString(l + "\n")
 	}
+}
+
+// translatable parses a criterion and reports whether it maps to a Hurl
+// assert: simple type only, and Hurl literals have no exponent form and
+// no ordering on strings, booleans or null.
+func translatable(c model.SuccessCriterion) (expr.Condition, bool) {
+	if !c.IsSimple() {
+		return expr.Condition{}, false
+	}
+	cond, ok := expr.ParseCondition(c.Condition)
+	if !ok {
+		return expr.Condition{}, false
+	}
+	ordering := cond.Op != "==" && cond.Op != "!="
+	switch {
+	case cond.Kind == expr.LiteralNumber && strings.ContainsAny(cond.Value, "eE"):
+		return expr.Condition{}, false
+	case ordering && cond.Kind != expr.LiteralNumber:
+		return expr.Condition{}, false
+	case cond.Subject == expr.SubjectBody:
+		if _, ok := jsonPointerToJSONPath(cond.Pointer); cond.Pointer != "" && !ok {
+			return expr.Condition{}, false
+		}
+	}
+	return cond, true
+}
+
+// hurlAssert renders a translatable condition as one assert line. Strings
+// compare case-insensitively and numeric strings are coerced for ordering
+// operators, both as the Arazzo spec requires; Hurl's == is
+// case-sensitive and does not coerce, hence the regex and toFloat forms.
+func hurlAssert(c expr.Condition) string {
+	var query string
+	switch c.Subject {
+	case expr.SubjectStatus:
+		return fmt.Sprintf("status %s %s", c.Op, c.Value)
+	case expr.SubjectHeader:
+		query = fmt.Sprintf("header %q", c.HeaderName)
+	default:
+		path := "$"
+		if c.Pointer != "" {
+			path, _ = jsonPointerToJSONPath(c.Pointer)
+		}
+		query = fmt.Sprintf("jsonpath %q", path)
+	}
+	switch {
+	case c.Kind == expr.LiteralString:
+		pred := "matches"
+		if c.Op == "!=" {
+			pred = "not matches"
+		}
+		re := strings.ReplaceAll(regexp.QuoteMeta(c.Value), "/", `\/`)
+		return fmt.Sprintf("%s %s /(?i)^%s$/", query, pred, re)
+	case c.Kind == expr.LiteralNumber && c.Op != "==" && c.Op != "!=":
+		return fmt.Sprintf("%s toFloat %s %s", query, c.Op, c.Value)
+	default:
+		return fmt.Sprintf("%s %s %s", query, c.Op, c.Value)
+	}
+}
+
+// criteriaCounts returns how many success criteria of the request steps
+// become checks, out of the total.
+func criteriaCounts(steps []model.Step) (checked, total int) {
+	for _, s := range steps {
+		if s.WorkflowID != "" {
+			continue
+		}
+		for _, c := range s.SuccessCriteria {
+			total++
+			if _, ok := translatable(c); ok {
+				checked++
+			}
+		}
+	}
+	return checked, total
 }
 
 // writeCaptures emits the step's outputs as a Hurl [Captures] block.

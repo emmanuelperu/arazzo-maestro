@@ -5,6 +5,8 @@
 // Base URL: override with `k6 run -e BASE_URL=<endpoint> <file>`.
 //   default (OpenAPI servers): https://shop.example.com/api/v1
 //
+// Success criteria: 4 of 4 checked
+//
 // Inputs: override each with `-e <name>=<value>`.
 //   - orderId (string)
 //   - acceptLanguage (string)
@@ -16,6 +18,13 @@ const BASE_URL = __ENV.BASE_URL || "https://shop.example.com/api/v1";
 
 const orderId = __ENV["orderId"] || "order-001";
 const acceptLanguage = __ENV["acceptLanguage"] || "fr-FR";
+
+// Success-criteria helpers: Arazzo compares strings case-insensitively
+// and coerces numeric strings for ordering operators.
+function bodyAt(r, path) { try { return path === "" ? r.json() : r.json(path); } catch (e) { return undefined; } }
+function headerOf(r, name) { const k = Object.keys(r.headers).find((h) => h.toLowerCase() === name.toLowerCase()); return k === undefined ? undefined : r.headers[k]; }
+function sameText(v, s) { return typeof v === "string" && v.toLowerCase() === s.toLowerCase(); }
+function asNumber(v) { return typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN; }
 
 export const options = {
   vus: 1,
@@ -35,9 +44,9 @@ export default function () {
     "method": "card"
   };
   const payRes = http.request('POST', `${BASE_URL}/orders/${orderId}/payment`, JSON.stringify(payBody), { headers: { "Content-Type": "application/json", "Accept-Language": acceptLanguage } });
-  // successCriteria (not translated): $response.body#/status == "OK"
   check(payRes, {
     "pay: $statusCode == 200": (r) => r.status === 200,
+    "pay: $response.body#/status == 'OK'": (r) => sameText(bodyAt(r, "status"), "OK"),
   });
   const pay_paymentStatus = payRes.json("status");
 

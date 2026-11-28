@@ -78,7 +78,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 
 | Element | Status | Notes |
 |---|---|---|
-| Criterion `condition` (simple grammar) | 🟡 | k6 translates the `$statusCode <op> <number>` subset to real `check()`s; everything else is an explicit comment in both generators (never guessed) |
+| Criterion `condition` (simple grammar) | 🟡 | Both generators assert `$statusCode`, `$response.body[#/ptr]` and `$response.header.<name>` compared with a literal (case-insensitive strings, numeric strings coerced for ordering, per the spec); `&&`, `\|\|`, grouping and expression right-hand sides stay explicit `not checked:` comments (never guessed), counted in each file's header (#132) |
 | Criterion `context` / `type` (`simple`/`regex`/`jsonpath`/`xpath`) | ✅ | Schema enforces "context required with type"; both carried through the model, rendered, and named in untranslated-criterion comments; typed criteria are never translated as the simple grammar (#51) |
 | Expression Type Object versions | ✅ | 1.1 values `rfc9535` and `jsonpointer`/`rfc6901` accepted since #47 (per the spec's Expression Type table, xpath versions stay 10/20/30); carried through the model and rendered, in both the schema's flat form (`version` next to `type`) and the spec prose's nested form (#51) |
 | `retryAfter` | ✅ | Decimal seconds end to end (model `float64`, rendered `after Ns`) |
@@ -92,7 +92,7 @@ flagged with a named comment instead of shipping verbatim (#56).
 | `$inputs.name#/ptr`, `$steps...outputs.name#/ptr` | ✅ existence + ordering | ✅ highlighted | Step outputs: ✅ derived capture folding the pointer into the source jsonpath (Hurl) / JS navigation of the parsed value (k6). Inputs: ✅ per-reference parse in k6; flagged in Hurl, which has no render-time sub-access on a variable (verified against hurl 8.0.1) | 🟡 (#49) |
 | `$response.body#/ptr` (captures) | n/a | ✅ | ✅ | ✅ |
 | `$response.body` (whole body) | n/a | ✅ | ✅ `jsonpath "$"` / `res.json()` | ✅ |
-| `$statusCode` | n/a | ✅ | ✅ captures + k6 checks | ✅ |
+| `$statusCode` | n/a | ✅ | ✅ captures + checks (Hurl and k6) | ✅ |
 | Embedded `{$expr}` in strings | n/a | ✅ | ✅ (declared `$inputs`/`$steps` only) | 🟡 |
 | `$response.header/...`, `$request.*` (captures) | n/a | ✅ | 🟡 explicit `unsupported` marker | 🟡 |
 | `$url`, `$method`, `$request.*`, `$message.*`, `$outputs.*`, `$workflows.*`, `$components.*`, `$self` (inline) | ❌ | 🟡 highlighted if `$`-prefixed | ✅ named `unsupported` comment by the request | ✅ #56 |
