@@ -658,7 +658,7 @@ func hurlAssert(c expr.Condition) string {
 // become checks, out of the total.
 func criteriaCounts(steps []model.Step) (checked, total int) {
 	for _, s := range steps {
-		if s.WorkflowID != "" {
+		if s.WorkflowID != "" || s.IsAsync() {
 			continue
 		}
 		for _, c := range s.SuccessCriteria {

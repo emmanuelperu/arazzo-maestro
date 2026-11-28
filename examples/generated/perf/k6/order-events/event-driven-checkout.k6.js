@@ -5,6 +5,8 @@
 // Base URL: override with `k6 run -e BASE_URL=<endpoint> <file>`.
 //   default (OpenAPI servers): https://orders.example.com/api/v1
 //
+// Success criteria: 3 of 3 checked
+//
 // Inputs: override each with `-e <name>=<value>`.
 //   - correlationId (string)
 //   - productId (integer)
@@ -16,6 +18,13 @@ const BASE_URL = __ENV.BASE_URL || "https://orders.example.com/api/v1";
 
 const correlationId = __ENV["correlationId"] || '';
 const productId = __ENV["productId"] || 42;
+
+// Success-criteria helpers: Arazzo compares strings case-insensitively
+// and coerces numeric strings for ordering operators.
+function bodyAt(r, path) { try { return path === "" ? r.json() : r.json(path); } catch (e) { return undefined; } }
+function headerOf(r, name) { const k = Object.keys(r.headers).find((h) => h.toLowerCase() === name.toLowerCase()); return k === undefined ? undefined : r.headers[k]; }
+function sameText(v, s) { return typeof v === "string" && v.toLowerCase() === s.toLowerCase(); }
+function asNumber(v) { return typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN; }
 
 export const options = {
   vus: 1,
@@ -49,9 +58,9 @@ export default function () {
   // Step: getOrder
   // Read the order back once the payment is captured.
   const getOrderRes = http.request('GET', `${BASE_URL}/orders/${placeOrder_orderId}`, null, { headers: {} });
-  // successCriteria (not translated): $response.body#/status == 'paid'
   check(getOrderRes, {
     "getOrder: $statusCode == 200": (r) => r.status === 200,
+    "getOrder: $response.body#/status == 'paid'": (r) => sameText(bodyAt(r, "status"), "paid"),
   });
   const getOrder_status = getOrderRes.json("status");
 }

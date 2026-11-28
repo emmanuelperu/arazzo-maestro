@@ -753,7 +753,7 @@ function asNumber(v) { return typeof v === "number" ? v : typeof v === "string" 
 // or a header.
 func needsCriteriaHelpers(steps []model.Step) bool {
 	for _, s := range steps {
-		if s.WorkflowID != "" {
+		if s.WorkflowID != "" || s.IsAsync() {
 			continue
 		}
 		for _, c := range s.SuccessCriteria {
@@ -769,7 +769,7 @@ func needsCriteriaHelpers(steps []model.Step) bool {
 // become checks, out of the total.
 func criteriaCounts(steps []model.Step) (checked, total int) {
 	for _, s := range steps {
-		if s.WorkflowID != "" {
+		if s.WorkflowID != "" || s.IsAsync() {
 			continue
 		}
 		for _, c := range s.SuccessCriteria {

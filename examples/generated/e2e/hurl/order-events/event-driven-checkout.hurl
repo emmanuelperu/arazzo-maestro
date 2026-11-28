@@ -4,6 +4,8 @@
 # Base URL (required): pass via `hurl --variable baseUrl=<endpoint>`
 #   default (OpenAPI servers): https://orders.example.com/api/v1
 #
+# Success criteria: 3 of 3 checked
+#
 # Inputs (pass via `hurl --variable name=value`):
 #   - correlationId (string)
 #   - productId (integer)
@@ -21,9 +23,7 @@ Content-Type: application/json
 }
 ```
 
-HTTP *
-[Asserts]
-# $statusCode == 202
+HTTP 202
 [Captures]
 placeOrder_orderId: jsonpath "$.id"
 placeOrder_total: jsonpath "$.total"
@@ -41,9 +41,8 @@ placeOrder_total: jsonpath "$.total"
 # Read the order back once the payment is captured.
 GET {{baseUrl}}/orders/{{placeOrder_orderId}}
 
-HTTP *
+HTTP 200
 [Asserts]
-# $statusCode == 200
-# $response.body#/status == 'paid'
+jsonpath "$.status" matches /(?i)^paid$/
 [Captures]
 getOrder_status: jsonpath "$.status"
