@@ -1,6 +1,6 @@
 module github.com/emmanuelperu/arazzo-maestro
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/pb33f/libopenapi v0.41.8
