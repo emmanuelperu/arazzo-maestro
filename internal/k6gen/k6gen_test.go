@@ -614,7 +614,7 @@ func TestGenerateOmitsCheckWhenNoCriterionTranslates(t *testing.T) {
 			StepID:      "list",
 			OperationID: "listProducts",
 			SuccessCriteria: []model.SuccessCriterion{
-				{Condition: `$response.body#/status == "OK"`},
+				{Condition: "$response.body#/items != []"},
 				{Condition: "$statusCode == abc"},
 				{Condition: "$statusCode <="},
 				{Condition: "$statusCode ~ 200"},
@@ -622,9 +622,48 @@ func TestGenerateOmitsCheckWhenNoCriterionTranslates(t *testing.T) {
 		}},
 	}
 	out := gen(t, wf, shopSources(t), defaultOpts())
-	assertContains(t, out, "// successCriteria (not translated): $statusCode == abc")
-	assertContains(t, out, "// successCriteria (not translated): $statusCode <=")
+	assertContains(t, out, "// not checked: $statusCode == abc")
+	assertContains(t, out, "// not checked: $statusCode <=")
+	assertContains(t, out, "// Success criteria: 0 of 4 checked; the others stay `// not checked:` comments")
 	assertNotContains(t, out, "check(")
+	assertNotContains(t, out, "function bodyAt")
+}
+
+func TestGenerateTranslatesBodyAndHeaderCriteria(t *testing.T) {
+	tests := []struct {
+		cond, want string
+	}{
+		{"$response.body#/status == 'OK'", `sameText(bodyAt(r, "status"), "OK")`},
+		{`$response.body#/status != "REFUSED"`, `!sameText(bodyAt(r, "status"), "REFUSED")`},
+		{"$response.body#/note == 'it''s'", `sameText(bodyAt(r, "note"), "it's")`},
+		{"$response.body#/totalPrice > 0", `asNumber(bodyAt(r, "totalPrice")) > 0`},
+		{"$response.body#/n <= 1e3", `asNumber(bodyAt(r, "n")) <= 1e3`},
+		{"$response.body#/items/0/qty == 2", `bodyAt(r, "items.0.qty") === 2`},
+		{"$response.body#/paid != true", `bodyAt(r, "paid") !== true`},
+		{"$response.body != null", `bodyAt(r, "") !== null`},
+		{"$response.header.Content-Type == 'application/json'", `sameText(headerOf(r, "Content-Type"), "application/json")`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.cond, func(t *testing.T) {
+			wf := model.Workflow{WorkflowID: "wf", Steps: []model.Step{{
+				StepID: "list", OperationID: "listProducts",
+				SuccessCriteria: []model.SuccessCriterion{{Condition: tt.cond}},
+			}}}
+			out := gen(t, wf, shopSources(t), defaultOpts())
+			assertContains(t, out, "(r) => "+tt.want+",")
+			assertContains(t, out, "function bodyAt(r, path)")
+			assertContains(t, out, "// Success criteria: 1 of 1 checked\n")
+		})
+	}
+}
+
+func TestGenerateKeepsStringOrderingAsComment(t *testing.T) {
+	wf := model.Workflow{WorkflowID: "wf", Steps: []model.Step{{
+		StepID: "list", OperationID: "listProducts",
+		SuccessCriteria: []model.SuccessCriterion{{Condition: "$response.body#/s > 'a'"}},
+	}}}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	assertContains(t, out, "// not checked: $response.body#/s > 'a'")
 }
 
 func TestGenerateFallsBackOnUnknownQualifiedSource(t *testing.T) {
@@ -693,7 +732,7 @@ func TestGenerateTranslatesStatusCodeCriteriaToChecks(t *testing.T) {
 	assertContains(t, out, `"list: $statusCode == 200": (r) => r.status === 200,`)
 	assertContains(t, out, `"list: $statusCode != 500": (r) => r.status !== 500,`)
 	// The non-status condition is not guessed at, only commented.
-	assertContains(t, out, "// successCriteria (not translated): $response.body#/items != []")
+	assertContains(t, out, "// not checked: $response.body#/items != []")
 }
 
 func TestGenerateUnescapesAndEscapesJSONPointerForGJSON(t *testing.T) {
@@ -1041,7 +1080,7 @@ func TestGenerateTypedCriteriaAreNotTranslated(t *testing.T) {
 	out := gen(t, wf, shopSources(t), defaultOpts())
 	assertContains(t, out, "- username (string, required)")
 	assertContains(t, out, `"list: $statusCode == 200": (r) => r.status === 200,`)
-	assertContains(t, out, "// successCriteria (not translated): [regex] $statusCode == 200  (context: $response.body)")
+	assertContains(t, out, "// not checked: [regex] $statusCode == 200  (context: $response.body)")
 }
 
 func TestGenerateInputIdentCollisionIsSuffixed(t *testing.T) {

@@ -37,7 +37,7 @@ Arazzo step features translated:
 | `parameters` in=cookie     | `[Cookies]` block                             |
 | `parameters` in=querystring | appended to the request URL                  |
 | `step.outputs`             | `[Captures]` with `jsonpath` / `status`       |
-| `step.successCriteria`     | comments inside `[Asserts]`                   |
+| `step.successCriteria`     | status line + `[Asserts]` (see below)         |
 | `requestBody.contentType`  | `Content-Type:` header (falls back to the operation's declared type when omitted) |
 | `requestBody.replacements` | applied to the payload (RFC 6901 target) before substitution, echoed as comments |
 | `$inputs.foo`              | `{{foo}}` (Hurl variable)                     |
@@ -46,6 +46,21 @@ Arazzo step features translated:
 | `$steps.s.outputs.o#/x/0`  | `{{s_o_x_0}}` (derived capture at step `s`, pointer folded into the source jsonpath) |
 | `$response.body#/x/y`      | `jsonpath "$.x.y"`                            |
 | `$statusCode`              | `status`                                      |
+
+### Success criteria
+
+Simple conditions comparing the response with a literal become real checks, in Hurl and k6 alike:
+
+| Arazzo condition | Hurl | k6 `check()` |
+|---|---|---|
+| `$statusCode == 201` (the step's only status equality) | `HTTP 201` status line | `r.status === 201` |
+| other `$statusCode <op> N` | `status >= 500` | `r.status >= 500` |
+| `$response.body#/status == 'OK'` | `jsonpath "$.status" matches /(?i)^OK$/` | `sameText(bodyAt(r, "status"), "OK")` |
+| `$response.body#/total > 0` | `jsonpath "$.total" toFloat > 0` | `asNumber(bodyAt(r, "total")) > 0` |
+| `$response.body#/paid == true`, `... != null` | `jsonpath "$.paid" == true` | `bodyAt(r, "paid") === true` |
+| `$response.header.X-Id == 'a'` | `header "X-Id" matches /(?i)^a$/` | `sameText(headerOf(r, "X-Id"), "a")` |
+
+String comparisons are case-insensitive and numeric strings are coerced for ordering operators, as the Arazzo spec requires. String literals use single quotes (`'OK'`, `''` escapes a quote); double quotes are tolerated. Anything else (`&&`, `||`, grouping, an expression on the right-hand side, a typed `regex`/`jsonpath`/`xpath` criterion, an exponent literal in Hurl) stays a `not checked:` comment, and each generated file's header says how many criteria are checked, so a partial translation is visible.
 
 `$inputs.foo#/x` stays flagged as untranslated in Hurl: a variable
 cannot be sub-accessed at render time (member access on a structured
@@ -91,7 +106,7 @@ k6 run -e BASE_URL=https://staging.example.com -e productId=p-001 \
   dist/perf/k6/shop/happy-path-checkout.k6.js
 ```
 
-Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and status-code success criteria become `check()` predicates (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are substituted too (`"$inputs.productId"` becomes the `productId` constant; the e2e generator emits `{{productId}}`, unquoted when the input's declared type is numeric or boolean), as is the spec's embedded form: `"Bearer {$inputs.token}"` becomes a JS template literal in k6 and `"Bearer {{token}}"` in Hurl. Payload `replacements` are applied (JSON-pointer target) before substitution, in both generators. Only whole-string expressions and braced `{$expr}` occurrences resolving to a declared input or earlier step output are substituted; anything else stays a literal. k6 constants are assigned at declaration time in one table: when two names sanitise to the same JS identifier (`user.name` vs `user_name`), the later one gets a numeric suffix (`user_name_2`) so each input keeps its own environment variable, and references translate by exact Arazzo name, never by identifier coincidence. Drill is a planned lighter alternative.
+Workflow steps become `http.request(...)` calls, outputs become captures (`res.json(...)`, `res.status`) chained into later steps, and success criteria become `check()` predicates as described in [Success criteria](#success-criteria) (other conditions are emitted as comments rather than guessed at). Runtime expressions inside a request body are substituted too (`"$inputs.productId"` becomes the `productId` constant; the e2e generator emits `{{productId}}`, unquoted when the input's declared type is numeric or boolean), as is the spec's embedded form: `"Bearer {$inputs.token}"` becomes a JS template literal in k6 and `"Bearer {{token}}"` in Hurl. Payload `replacements` are applied (JSON-pointer target) before substitution, in both generators. Only whole-string expressions and braced `{$expr}` occurrences resolving to a declared input or earlier step output are substituted; anything else stays a literal. k6 constants are assigned at declaration time in one table: when two names sanitise to the same JS identifier (`user.name` vs `user_name`), the later one gets a numeric suffix (`user_name_2`) so each input keeps its own environment variable, and references translate by exact Arazzo name, never by identifier coincidence. Drill is a planned lighter alternative.
 
 The perf-only flags (`--vus`, `--duration`, `--threshold`) live on `test gen perf` so `test gen perf --help` documents exactly what makes sense for load testing; `test gen e2e --help` stays focused on functional concerns. Both subcommands share the same underlying workflow IR, so adding a new format is a per-template change, not a CLI redesign.
 

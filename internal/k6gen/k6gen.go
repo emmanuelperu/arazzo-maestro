@@ -5,8 +5,9 @@
 //
 //	step                      -> one http.request(...) call
 //	step.outputs              -> const captures from the response
-//	step.successCriteria      -> check() entries (status criteria only;
-//	                             other conditions are emitted as comments)
+//	step.successCriteria      -> check() entries (simple conditions on
+//	                             status, body and headers against a
+//	                             literal; others stay comments)
 //	parameters in=header      -> the request headers object
 //	parameters in=query       -> the request URL query string
 //	parameters in=path        -> substituted into the request URL
@@ -83,6 +84,9 @@ func Generate(wf model.Workflow, sources map[string]*oasresolver.Source, opts Op
 	writeImports(&b)
 	writeBaseURL(&b, base)
 	writeInputs(&b, wf.Inputs, ids, subAccessedInputs(wf, ids))
+	if needsCriteriaHelpers(wf.Steps) {
+		b.WriteString(criteriaHelpers)
+	}
 	writeOptions(&b, opts)
 	writeDefaultFunc(&b, wf, sources, ids)
 	return b.String(), nil
@@ -97,6 +101,13 @@ func writeHeader(b *strings.Builder, wf model.Workflow, defaultBase string) {
 	b.WriteString("// Base URL: override with `k6 run -e BASE_URL=<endpoint> <file>`.\n")
 	if defaultBase != "" {
 		fmt.Fprintf(b, "//   default (OpenAPI servers): %s\n", defaultBase)
+	}
+	if checked, total := criteriaCounts(wf.Steps); total > 0 {
+		fmt.Fprintf(b, "//\n// Success criteria: %d of %d checked", checked, total)
+		if checked < total {
+			b.WriteString("; the others stay `// not checked:` comments")
+		}
+		b.WriteString("\n")
 	}
 	if len(wf.Inputs) > 0 {
 		b.WriteString("//\n// Inputs: override each with `-e <name>=<value>`.\n")
@@ -479,10 +490,9 @@ func bodyExprSentinel(base string, i int) string {
 }
 
 // writeChecks emits a single check() call grouping the step's success
-// criteria. Status-code conditions become real predicates; conditions in
-// the broader Arazzo mini-language are emitted as comments rather than
-// guessed at, so the script never asserts something it did not actually
-// translate.
+// criteria. Simple conditions against a literal become real predicates;
+// anything else is emitted as a comment rather than guessed at, so the
+// script never asserts something it did not actually translate.
 func writeChecks(b *strings.Builder, resVar, stepID string, crits []model.SuccessCriterion) {
 	if len(crits) == 0 {
 		return
@@ -490,17 +500,15 @@ func writeChecks(b *strings.Builder, resVar, stepID string, crits []model.Succes
 	var predicates []string
 	var unsupported []string
 	for _, c := range crits {
-		// Only the simple mini-language is translated; a typed criterion
-		// (regex/jsonpath/xpath) is in another language entirely.
-		if pred, ok := translateCondition(c.Condition); ok && c.IsSimple() {
+		if cond, ok := translatable(c); ok {
 			predicates = append(predicates, fmt.Sprintf("    %s: (r) => %s,",
-				jsString(stepID+": "+c.Condition), pred))
+				jsString(stepID+": "+c.Condition), predicate(cond)))
 		} else {
 			unsupported = append(unsupported, c.Describe())
 		}
 	}
 	for _, u := range unsupported {
-		fmt.Fprintf(b, "  // successCriteria (not translated): %s\n", u)
+		fmt.Fprintf(b, "  // not checked: %s\n", u)
 	}
 	if len(predicates) == 0 {
 		return
@@ -675,27 +683,96 @@ func translateCaptureExpr(resVar, s string) string {
 	}
 }
 
-// translateCondition maps the status-code subset of the Arazzo success
-// criteria mini-language to a JS boolean expression over the response r.
-// It returns ok=false for any condition it does not understand.
-func translateCondition(cond string) (string, bool) {
-	c := strings.TrimSpace(cond)
-	if !strings.HasPrefix(c, "$statusCode") {
-		return "", false
+// translatable parses a criterion and reports whether it maps to a check
+// predicate: simple type only, and ordering operators only on numbers.
+func translatable(c model.SuccessCriterion) (expr.Condition, bool) {
+	if !c.IsSimple() {
+		return expr.Condition{}, false
 	}
-	rest := strings.TrimSpace(strings.TrimPrefix(c, "$statusCode"))
-	for _, op := range []struct{ arazzo, js string }{
-		{"==", "==="}, {"!=", "!=="}, {">=", ">="}, {"<=", "<="}, {">", ">"}, {"<", "<"},
-	} {
-		if strings.HasPrefix(rest, op.arazzo) {
-			operand := strings.TrimSpace(strings.TrimPrefix(rest, op.arazzo))
-			if !isNumber(operand) {
-				return "", false
+	cond, ok := expr.ParseCondition(c.Condition)
+	if !ok || (cond.Op != "==" && cond.Op != "!=" && cond.Kind != expr.LiteralNumber) {
+		return expr.Condition{}, false
+	}
+	return cond, true
+}
+
+// predicate renders a translatable condition as a JS boolean over the
+// response r. Strings compare case-insensitively and numeric strings are
+// coerced for ordering operators, as the Arazzo spec requires; the
+// helpers come from criteriaHelpers.
+func predicate(c expr.Condition) string {
+	if c.Subject == expr.SubjectStatus {
+		return fmt.Sprintf("r.status %s %s", jsOp(c.Op), c.Value)
+	}
+	value := fmt.Sprintf("headerOf(r, %s)", jsString(c.HeaderName))
+	if c.Subject == expr.SubjectBody {
+		value = fmt.Sprintf("bodyAt(r, %s)", jsString(jsonPointerToGJSON(c.Pointer)))
+	}
+	switch {
+	case c.Kind == expr.LiteralString && c.Op == "==":
+		return fmt.Sprintf("sameText(%s, %s)", value, jsString(c.Value))
+	case c.Kind == expr.LiteralString:
+		return fmt.Sprintf("!sameText(%s, %s)", value, jsString(c.Value))
+	case c.Kind == expr.LiteralNumber && c.Op != "==" && c.Op != "!=":
+		return fmt.Sprintf("asNumber(%s) %s %s", value, c.Op, c.Value)
+	default:
+		return fmt.Sprintf("%s %s %s", value, jsOp(c.Op), c.Value)
+	}
+}
+
+func jsOp(op string) string {
+	switch op {
+	case "==":
+		return "==="
+	case "!=":
+		return "!=="
+	}
+	return op
+}
+
+// criteriaHelpers are emitted once when a check reads the body or a
+// header: reads never throw on a non-JSON body or a missing header, so a
+// failed read fails the check instead of aborting the iteration.
+const criteriaHelpers = `// Success-criteria helpers: Arazzo compares strings case-insensitively
+// and coerces numeric strings for ordering operators.
+function bodyAt(r, path) { try { return path === "" ? r.json() : r.json(path); } catch (e) { return undefined; } }
+function headerOf(r, name) { const k = Object.keys(r.headers).find((h) => h.toLowerCase() === name.toLowerCase()); return k === undefined ? undefined : r.headers[k]; }
+function sameText(v, s) { return typeof v === "string" && v.toLowerCase() === s.toLowerCase(); }
+function asNumber(v) { return typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN; }
+
+`
+
+// needsCriteriaHelpers reports whether any emitted check reads the body
+// or a header.
+func needsCriteriaHelpers(steps []model.Step) bool {
+	for _, s := range steps {
+		if s.WorkflowID != "" {
+			continue
+		}
+		for _, c := range s.SuccessCriteria {
+			if cond, ok := translatable(c); ok && cond.Subject != expr.SubjectStatus {
+				return true
 			}
-			return fmt.Sprintf("r.status %s %s", op.js, operand), true
 		}
 	}
-	return "", false
+	return false
+}
+
+// criteriaCounts returns how many success criteria of the request steps
+// become checks, out of the total.
+func criteriaCounts(steps []model.Step) (checked, total int) {
+	for _, s := range steps {
+		if s.WorkflowID != "" {
+			continue
+		}
+		for _, c := range s.SuccessCriteria {
+			total++
+			if _, ok := translatable(c); ok {
+				checked++
+			}
+		}
+	}
+	return checked, total
 }
 
 // exprIdent reports whether s is an inline Arazzo runtime expression
@@ -821,16 +898,4 @@ func jsonMarshal(v any, prefix, indent string) (string, error) {
 		return "", err
 	}
 	return strings.TrimRight(buf.String(), "\n"), nil
-}
-
-func isNumber(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
 }

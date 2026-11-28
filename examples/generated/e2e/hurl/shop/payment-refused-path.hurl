@@ -4,6 +4,8 @@
 # Base URL (required): pass via `hurl --variable baseUrl=<endpoint>`
 #   default (OpenAPI servers): https://shop.example.com/api/v1
 #
+# Success criteria: 3 of 3 checked
+#
 # Inputs (pass via `hurl --variable name=value`):
 #   - orderId (string)
 #   - acceptLanguage (string)
@@ -21,9 +23,7 @@ Content-Type: application/json
 }
 ```
 
-HTTP *
-[Asserts]
-# $statusCode == 201
+HTTP 201
 
 # Step: pay-refused
 # Pay with a card that triggers a bank refusal. The bank may
@@ -44,7 +44,6 @@ Content-Type: application/json
 }
 ```
 
-HTTP *
+HTTP 200
 [Asserts]
-# $statusCode == 200
-# $response.body#/status == "REFUSED"
+jsonpath "$.status" matches /(?i)^REFUSED$/

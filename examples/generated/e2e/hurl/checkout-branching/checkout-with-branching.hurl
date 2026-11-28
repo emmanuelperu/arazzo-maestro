@@ -4,6 +4,8 @@
 # Base URL (required): pass via `hurl --variable baseUrl=<endpoint>`
 #   default (OpenAPI servers): https://shop.example.com/api/v1
 #
+# Success criteria: 4 of 4 checked
+#
 # Inputs (pass via `hurl --variable name=value`):
 #   - orderId (string)
 #   - acceptLanguage (string)
@@ -25,10 +27,9 @@ Content-Type: application/json
 }
 ```
 
-HTTP *
+HTTP 200
 [Asserts]
-# $statusCode == 200
-# $response.body#/status == "OK"
+jsonpath "$.status" matches /(?i)^OK$/
 [Captures]
 pay_paymentStatus: jsonpath "$.status"
 
@@ -36,9 +37,7 @@ pay_paymentStatus: jsonpath "$.status"
 # Payment accepted, confirm the order and capture the receipt id.
 POST {{baseUrl}}/orders/{{orderId}}/confirm
 
-HTTP *
-[Asserts]
-# $statusCode == 200
+HTTP 200
 [Captures]
 confirm-order_confirmationId: jsonpath "$.confirmationId"
 
@@ -46,8 +45,6 @@ confirm-order_confirmationId: jsonpath "$.confirmationId"
 # Payment refused, cancel the order and release reserved stock.
 POST {{baseUrl}}/orders/{{orderId}}/cancel
 
-HTTP *
-[Asserts]
-# $statusCode == 200
+HTTP 200
 [Captures]
 cancel-order_cancellationReason: jsonpath "$.reason"

@@ -5,6 +5,8 @@
 // Base URL: override with `k6 run -e BASE_URL=<endpoint> <file>`.
 //   default (OpenAPI servers): https://orders.example.com/api/v1
 //
+// Success criteria: 3 of 3 checked
+//
 // Inputs: override each with `-e <name>=<value>`.
 //   - username (string)
 //   - password (string)
