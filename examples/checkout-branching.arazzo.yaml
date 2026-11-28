@@ -57,7 +57,7 @@ workflows:
             cvv: "123"
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.body#/status == "OK"
+          - condition: $response.body#/status == 'OK'
         onSuccess:
           - name: paymentAccepted
             type: goto

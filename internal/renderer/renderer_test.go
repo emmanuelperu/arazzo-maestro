@@ -339,6 +339,9 @@ func TestRenderWorkflowLandscapeTogglesLayoutClass(t *testing.T) {
 	if !strings.Contains(landscape, `class="min-h-screen layout-landscape"`) {
 		t.Errorf("landscape output must add the layout-landscape body class")
 	}
+	if !strings.Contains(landscape, ".layout-landscape main { max-width: none; }") {
+		t.Errorf("landscape main must not be width-capped, the step row scrolls instead (#134)")
+	}
 }
 
 func TestWriteWorkflowWritesFile(t *testing.T) {

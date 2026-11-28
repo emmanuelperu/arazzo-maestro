@@ -111,7 +111,7 @@ workflows:
             cvv: "123"
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.body#/status == "OK"
+          - condition: $response.body#/status == 'OK'
         outputs:
           transactionId: $response.body#/transactionId
 
@@ -178,7 +178,7 @@ workflows:
             cvv: "456"
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.body#/status == "REFUSED"
+          - condition: $response.body#/status == 'REFUSED'
         onFailure:
           - name: retry-on-transient-failure
             type: retry

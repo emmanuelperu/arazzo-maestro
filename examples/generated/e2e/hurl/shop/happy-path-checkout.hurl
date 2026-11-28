@@ -4,6 +4,8 @@
 # Base URL (required): pass via `hurl --variable baseUrl=<endpoint>`
 #   default (OpenAPI servers): https://shop.example.com/api/v1
 #
+# Success criteria: 6 of 6 checked
+#
 # Inputs (pass via `hurl --variable name=value`):
 #   - productId (string)
 #   - orderId (string)
@@ -17,9 +19,7 @@ Accept-Language: {{acceptLanguage}}
 page: 0
 size: 10
 
-HTTP *
-[Asserts]
-# $statusCode == 200
+HTTP 200
 [Captures]
 list-catalog_firstProductId: jsonpath "$.items[0].id"
 
@@ -28,9 +28,7 @@ list-catalog_firstProductId: jsonpath "$.items[0].id"
 GET {{baseUrl}}/products/{{list-catalog_firstProductId}}
 Accept-Language: {{acceptLanguage}}
 
-HTTP *
-[Asserts]
-# $statusCode == 200
+HTTP 200
 [Captures]
 get-product_productName: jsonpath "$.name"
 
@@ -47,10 +45,9 @@ Content-Type: application/json
 }
 ```
 
-HTTP *
+HTTP 201
 [Asserts]
-# $statusCode == 201
-# $response.body#/totalPrice > 0
+jsonpath "$.totalPrice" toFloat > 0
 [Captures]
 add-to-cart_cartTotal: jsonpath "$.totalPrice"
 
@@ -71,9 +68,8 @@ Content-Type: application/json
 }
 ```
 
-HTTP *
+HTTP 200
 [Asserts]
-# $statusCode == 200
-# $response.body#/status == "OK"
+jsonpath "$.status" matches /(?i)^OK$/
 [Captures]
 pay_transactionId: jsonpath "$.transactionId"
