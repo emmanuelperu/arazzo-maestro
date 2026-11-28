@@ -60,6 +60,22 @@ func OperationPathTarget(ref string) (method, path string, ok bool) {
 	return OperationPointerTarget(pointer)
 }
 
+// ChannelPathTarget decodes the channel name a channelPath value points
+// at ('{$sourceDescriptions.<name>.url}#/channels/<channel>'), without
+// loading the AsyncAPI document. ok is false when the value is not that
+// form.
+func ChannelPathTarget(ref string) (sourceName, channel string, ok bool) {
+	sourceName, pointer, ok := SplitOperationPath(ref)
+	if !ok {
+		return "", "", false
+	}
+	name, found := strings.CutPrefix(pointer, "/channels/")
+	if !found || name == "" || strings.Contains(name, "/") {
+		return "", "", false
+	}
+	return sourceName, expr.UnescapeJSONPointer(name), true
+}
+
 // OperationPointerTarget decodes a '/paths/<escaped-path>/<method>' JSON
 // Pointer into the method (uppercased) and the unescaped path template.
 func OperationPointerTarget(pointer string) (method, path string, ok bool) {

@@ -232,6 +232,12 @@ func buildTemplate() (*template.Template, error) {
 			}
 			return ""
 		},
+		// channelTarget decodes a channelPath reference into the channel
+		// name, or "" when the reference is not the spec form.
+		"channelTarget": func(ref string) string {
+			_, channel, _ := oasresolver.ChannelPathTarget(ref)
+			return channel
+		},
 		// isLocalWorkflowRef reports whether a step workflowId names a
 		// workflow of this document (and thus a sibling HTML page), as
 		// opposed to the $sourceDescriptions.<name>.<workflowId> form.

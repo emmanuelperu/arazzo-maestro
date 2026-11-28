@@ -112,7 +112,7 @@ func lintSemantic(doc *model.ArazzoDocument) []Issue {
 		sourceNames[s.Name] = true
 	}
 	for i := range doc.Workflows {
-		issues = append(issues, lintWorkflow(&doc.Workflows[i], workflowIDs, sourceNames, doc.Components)...)
+		issues = append(issues, lintWorkflow(&doc.Workflows[i], doc, workflowIDs, sourceNames)...)
 	}
 	return issues
 }
@@ -163,7 +163,8 @@ func checkUniqueWorkflowIDs(doc *model.ArazzoDocument) []Issue {
 	return issues
 }
 
-func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool, comps model.Components) []Issue {
+func lintWorkflow(wf *model.Workflow, doc *model.ArazzoDocument, workflowIDs, sourceNames map[string]bool) []Issue {
+	comps := doc.Components
 	var issues []Issue
 	path := "workflows[" + wf.WorkflowID + "]"
 
@@ -244,6 +245,11 @@ func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool, 
 		if step.WorkflowID != "" {
 			issues = append(issues, checkWorkflowRef(step.WorkflowID, workflowIDs, sourceNames, stepPath+".workflowId")...)
 		}
+		for _, dep := range step.DependsOn {
+			issues = append(issues, checkStepDependsOn(dep, step.StepID, wf, doc, sourceNames, stepPath+".dependsOn")...)
+		}
+		issues = append(issues, checkAsyncFields(step, doc.SourceDescriptions, stepPath)...)
+		issues = append(issues, checkStepsRef(step.CorrelationID, wf, stepPath+".correlationId", i)...)
 		for pi, p := range step.Parameters {
 			if p.Inherited {
 				// Validated once at the workflow level above.
@@ -293,6 +299,106 @@ func lintWorkflow(wf *model.Workflow, workflowIDs, sourceNames map[string]bool, 
 		}
 	}
 	return issues
+}
+
+// checkStepDependsOn validates one step-level dependsOn entry. Per the
+// spec it is a stepId of the current workflow,
+// $workflows.<workflowId>.steps.<stepId> for another workflow of this
+// document, or $sourceDescriptions.<name>.<workflowId>.steps.<stepId>
+// for a workflow of another Arazzo document.
+func checkStepDependsOn(dep, selfID string, wf *model.Workflow, doc *model.ArazzoDocument, sourceNames map[string]bool, path string) []Issue {
+	issue := func(format string, args ...any) []Issue {
+		return []Issue{{Severity: SeverityError, Path: path, Message: fmt.Sprintf(format, args...)}}
+	}
+	if !strings.HasPrefix(dep, "$") {
+		if dep == selfID {
+			return issue("step %q cannot depend on itself", dep)
+		}
+		if _, step := findStep(wf, dep); step == nil {
+			return issue("step %q does not exist in this workflow", dep)
+		}
+		return nil
+	}
+	if rest, ok := strings.CutPrefix(dep, "$workflows."); ok {
+		wfID, stepID, found := strings.Cut(rest, ".steps.")
+		if !found || wfID == "" || stepID == "" {
+			return issue("malformed dependsOn reference %q: expected $workflows.<workflowId>.steps.<stepId>", dep)
+		}
+		for i := range doc.Workflows {
+			if doc.Workflows[i].WorkflowID != wfID {
+				continue
+			}
+			if _, step := findStep(&doc.Workflows[i], stepID); step == nil {
+				return issue("dependsOn reference %q: step %q does not exist in workflow %q", dep, stepID, wfID)
+			}
+			return nil
+		}
+		return issue("dependsOn reference %q: workflow %q does not exist in this document", dep, wfID)
+	}
+	if rest, ok := strings.CutPrefix(dep, "$sourceDescriptions."); ok {
+		name, target, found := strings.Cut(rest, ".")
+		wfID, stepID, hasStep := strings.Cut(target, ".steps.")
+		if !found || name == "" || !hasStep || wfID == "" || stepID == "" {
+			return issue("malformed dependsOn reference %q: expected $sourceDescriptions.<name>.<workflowId>.steps.<stepId>", dep)
+		}
+		if !sourceNames[name] {
+			return issue("dependsOn reference %q: source description %q does not exist", dep, name)
+		}
+		return nil
+	}
+	return issue("malformed dependsOn reference %q: expected a stepId, $workflows.<workflowId>.steps.<stepId> or $sourceDescriptions.<name>.<workflowId>.steps.<stepId>", dep)
+}
+
+// checkAsyncFields warns about AsyncAPI step fields that cannot apply:
+// per the spec, action is "only applicable for asyncapi steps" and
+// correlationId "only applicable to asyncapi steps with action receive".
+func checkAsyncFields(step model.Step, sources []model.SourceDescription, path string) []Issue {
+	var issues []Issue
+	if step.Action != "" {
+		if typ := stepTargetType(step, sources); typ != "" && typ != "an asyncapi source" {
+			issues = append(issues, Issue{
+				Severity: SeverityWarning,
+				Path:     path + ".action",
+				Message:  fmt.Sprintf("action only applies to steps on an asyncapi source, not %s", typ),
+			})
+		}
+	}
+	if step.CorrelationID != "" && step.Action != "receive" {
+		issues = append(issues, Issue{
+			Severity: SeverityWarning,
+			Path:     path + ".correlationId",
+			Message:  "correlationId only applies to steps with action: receive",
+		})
+	}
+	return issues
+}
+
+// stepTargetType names what a step calls: the type of the source its
+// operation reference lands on ("openapi" when omitted), "a workflow",
+// or "" when the source cannot be told (other passes report that).
+// A typed source reads as "an <type> source".
+func stepTargetType(step model.Step, sources []model.SourceDescription) string {
+	var name string
+	switch {
+	case step.ChannelPath != "":
+		return "an asyncapi source"
+	case step.WorkflowID != "":
+		return "a workflow"
+	case step.OperationID != "":
+		source, _, qualified := parseOperationRef(step.OperationID)
+		if !qualified && len(sources) == 1 {
+			source = sources[0].Name
+		}
+		name = source
+	case step.OperationPath != "":
+		name, _, _ = oasresolver.SplitOperationPath(step.OperationPath)
+	}
+	for _, s := range sources {
+		if s.Name == name && name != "" {
+			return "an " + typeOrDefault(s.Type) + " source"
+		}
+	}
+	return ""
 }
 
 // checkAction validates an action's transition target and criteria.

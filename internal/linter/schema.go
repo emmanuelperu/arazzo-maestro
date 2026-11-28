@@ -11,9 +11,9 @@
 // explicitly labelled "non-authoritative").
 //
 // Caveat: 1.1 added structural features the 1.0 schema does not know
-// ($self, channelPath, in: querystring, asyncapi sources, new criterion
-// expression versions), so spec-valid 1.1 documents using them are
-// currently rejected; see docs/SPEC_COMPLIANCE.md. When OAI publishes
+// ($self, the AsyncAPI step fields, in: querystring, asyncapi sources,
+// new criterion expression versions); patchSchemaVersionPattern grafts
+// them on, see docs/SPEC_COMPLIANCE.md. When OAI publishes
 // the 1.1 schema, we'll embed it and drop the patch.
 
 package linter
@@ -70,7 +70,8 @@ func loadArazzoSchema() (*jsonschema.Schema, error) {
 // patchSchemaVersionPattern relaxes the `arazzo` field pattern so 1.1.x
 // documents validate, and grafts the structural additions of spec 1.1.0
 // onto the 1.0 schema so spec-valid 1.1 documents stop failing lint:
-// `$self` (root), `channelPath` (step), `in: querystring` (parameter),
+// `$self` (root), `channelPath`, `action`, `correlationId`, `timeout`
+// and `dependsOn` (step), `in: querystring` (parameter),
 // `type: asyncapi` (source description), and the 1.1 criterion
 // expression types/versions. See file header for rationale.
 func patchSchemaVersionPattern(raw []byte) ([]byte, error) {
@@ -113,6 +114,13 @@ func patchSchemaVersionPattern(raw []byte) ([]byte, error) {
 	stepProps["channelPath"] = map[string]any{"type": "string"}
 	oneOf, _ := step["oneOf"].([]any)
 	step["oneOf"] = append(oneOf, map[string]any{"required": []any{"channelPath"}})
+
+	// Step action, correlationId, timeout and dependsOn, spec 1.1 Step
+	// Object fixed fields: all optional.
+	stepProps["action"] = map[string]any{"type": "string", "enum": []any{"send", "receive"}}
+	stepProps["correlationId"] = map[string]any{"type": "string"}
+	stepProps["timeout"] = map[string]any{"type": "integer"}
+	stepProps["dependsOn"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
 
 	// Criterion expression types, spec 1.1 L1105-1106: jsonpointer added,
 	// jsonpath gains rfc9535.

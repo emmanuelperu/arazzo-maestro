@@ -1045,6 +1045,26 @@ func TestGenerateWorkflowStepEmitsNoRequest(t *testing.T) {
 	assertContains(t, out, "http.request('GET', `${BASE_URL}/products`")
 }
 
+func TestGenerateAsyncStepEmitsNoRequest(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "confirm", ChannelPath: "{$sourceDescriptions.events.url}#/channels/orderConfirmed",
+				Action: "receive", Outputs: []model.OutputEntry{{Name: "orderId", Expression: "$message.payload#/orderId"}},
+				SuccessCriteria: []model.SuccessCriterion{{Condition: "$message.payload#/status == 'captured'"}}},
+			{StepID: "list", OperationID: "listProducts", SuccessCriteria: []model.SuccessCriterion{{Condition: "$statusCode == 200"}}},
+		},
+	}
+	out := gen(t, wf, shopSources(t), defaultOpts())
+	// A message step emits nothing, so its criteria are not counted.
+	assertContains(t, out, "// Success criteria: 1 of 1 checked\n")
+	assertContains(t, out, "// not supported: AsyncAPI receive step; no message sent or received, no request generated")
+	assertContains(t, out, "// warning: outputs orderId are not captured")
+	assertNotContains(t, out, "__unresolved__")
+	assertNotContains(t, out, "const confirm_orderId")
+	assertContains(t, out, "http.request('GET', `${BASE_URL}/products`")
+}
+
 func TestGenerateComponentParameters(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",

@@ -23,6 +23,7 @@
 - [x] Spec-compliance wave (PRs #78 to #90): shared runtime-expression parser (`internal/expr`), requestBody `contentType` + `replacements` (`internal/payload`), `operationPath` resolution, honest degradation of `workflowId` steps, `components` reusable objects inlined at parse time, workflow-level `parameters`/`successActions`/`failureActions` defaults, `workflow.dependsOn` (parse + lint + render), criterion `context`/`type` badges, JSON-pointer sub-access on `$inputs`/`$steps` references
 - [x] HTTPS `sourceDescriptions` behind the opt-in `--allow-remote` (bounded size, timeout and redirects; plain HTTP always refused) ([#106](https://github.com/emmanuelperu/arazzo-maestro/issues/106))
 - [x] Tailwind CSS internalised: the classes the templates use are extracted at build time (`make css`) and embedded, so a rendered page makes no network request
+- [x] AsyncAPI steps (Arazzo 1.1): `channelPath`, `action`, `correlationId`, `timeout` and step `dependsOn` parsed, linted and rendered, an event-driven example (`order-events.arazzo.yaml`), message steps skipped by the generators with a named comment ([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75))
 
 ## Planned
 
@@ -35,4 +36,4 @@
 - [ ] Watch mode (`--watch`) using `fsnotify`
 - [ ] Test generation: wire authentication from OpenAPI `securitySchemes` ([#45](https://github.com/emmanuelperu/arazzo-maestro/issues/45))
 - [ ] Hurl generation: literal double braces in request bodies collide with Hurl templating ([#33](https://github.com/emmanuelperu/arazzo-maestro/issues/33))
-- [ ] AsyncAPI: parse locally, add an async example and render it ([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75))
+- [ ] AsyncAPI: resolve the AsyncAPI document (channels, operations, `action` matching) ([#75](https://github.com/emmanuelperu/arazzo-maestro/issues/75); the async step fields, an example and their rendering shipped)

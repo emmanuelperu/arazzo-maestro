@@ -1,0 +1,92 @@
+arazzo: "1.1.0"
+info:
+  title: Event-driven checkout
+  version: "1.0.0"
+  summary: HTTP calls and AsyncAPI messages in one workflow
+  description: >
+    Places an order over HTTP, sends the payment request as a message,
+    waits for the matching payment confirmation, then reads the order
+    back. The two message steps reference an AsyncAPI 3.0 document;
+    one correlation id ties the HTTP request and both messages together.
+sourceDescriptions:
+  - name: ordersApi
+    url: ./order-events-api.yaml
+    type: openapi
+  - name: orderEvents
+    url: ./order-events-asyncapi.yaml
+    type: asyncapi
+workflows:
+  - workflowId: event-driven-checkout
+    summary: Place an order, pay by message, confirm over HTTP
+    description: >
+      Four steps across two sources. The receive step waits at most ten
+      seconds for a confirmation carrying the same correlation id; without
+      one, the step fails and so does the workflow.
+    inputs:
+      type: object
+      properties:
+        correlationId:
+          type: string
+          description: Generated per run, so parallel checkouts never match each other's messages.
+        productId:
+          type: integer
+          default: 42
+    steps:
+      - stepId: placeOrder
+        description: Create the order; it waits for payment.
+        operationId: $sourceDescriptions.ordersApi.placeOrder
+        parameters:
+          - name: X-Correlation-Id
+            in: header
+            value: $inputs.correlationId
+        requestBody:
+          contentType: application/json
+          payload:
+            productId: $inputs.productId
+            quantity: 1
+        successCriteria:
+          - condition: $statusCode == 202
+        outputs:
+          orderId: $response.body#/id
+          total: $response.body#/total
+      - stepId: requestPayment
+        description: Ask the payment service to charge the order.
+        operationId: $sourceDescriptions.orderEvents.requestPayment
+        action: send
+        parameters:
+          - name: correlationId
+            in: header
+            value: $inputs.correlationId
+        requestBody:
+          payload:
+            orderId: $steps.placeOrder.outputs.orderId
+            amount: $steps.placeOrder.outputs.total
+      - stepId: awaitPaymentConfirmed
+        description: Wait for the confirmation of this checkout's payment.
+        operationId: $sourceDescriptions.orderEvents.receivePaymentConfirmed
+        action: receive
+        correlationId: $inputs.correlationId
+        timeout: 10000
+        dependsOn:
+          - requestPayment
+        successCriteria:
+          - condition: $message.payload#/status == 'captured'
+        outputs:
+          paymentId: $message.payload#/paymentId
+      - stepId: getOrder
+        description: Read the order back once the payment is captured.
+        operationId: $sourceDescriptions.ordersApi.getOrder
+        dependsOn:
+          - awaitPaymentConfirmed
+        parameters:
+          - name: orderId
+            in: path
+            value: $steps.placeOrder.outputs.orderId
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == 'paid'
+        outputs:
+          status: $response.body#/status
+    outputs:
+      orderId: $steps.placeOrder.outputs.orderId
+      paymentId: $steps.awaitPaymentConfirmed.outputs.paymentId

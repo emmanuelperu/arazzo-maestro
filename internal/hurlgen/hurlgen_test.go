@@ -1119,6 +1119,31 @@ func TestGenerateWorkflowStepEmitsNoRequest(t *testing.T) {
 	assertContains(t, out, "GET {{baseUrl}}/products")
 }
 
+func TestGenerateAsyncStepEmitsNoRequest(t *testing.T) {
+	wf := model.Workflow{
+		WorkflowID: "wf",
+		Steps: []model.Step{
+			{StepID: "place", OperationID: "$sourceDescriptions.events.placeOrder", Action: "send"},
+			{StepID: "confirm", ChannelPath: "{$sourceDescriptions.events.url}#/channels/orderConfirmed",
+				Action: "receive", CorrelationID: "$inputs.correlationId", Timeout: 6000,
+				Outputs:         []model.OutputEntry{{Name: "orderId", Expression: "$message.payload#/orderId"}},
+				SuccessCriteria: []model.SuccessCriterion{{Condition: "$message.payload#/status == 'captured'"}}},
+			{StepID: "list", OperationID: "listProducts", SuccessCriteria: []model.SuccessCriterion{{Condition: "$statusCode == 200"}}},
+		},
+	}
+	out, _ := Generate(wf, map[string]*oasresolver.Source{
+		"shop": loadSource(t, shopSpec),
+	})
+	// A message step emits nothing, so its criteria are not counted.
+	assertContains(t, out, "# Success criteria: 1 of 1 checked\n")
+	assertContains(t, out, "# not supported: AsyncAPI send step; no message sent or received, no request generated")
+	assertContains(t, out, "# not supported: AsyncAPI receive step; no message sent or received, no request generated")
+	assertContains(t, out, "# warning: outputs orderId are not captured")
+	assertNotContains(t, out, "__unresolved__")
+	assertNotContains(t, out, "[Captures]")
+	assertContains(t, out, "GET {{baseUrl}}/products")
+}
+
 func TestGenerateComponentParameters(t *testing.T) {
 	wf := model.Workflow{
 		WorkflowID: "wf",

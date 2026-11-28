@@ -92,21 +92,41 @@ func (in InputProperty) TypeLabel() string {
 }
 
 // Step is one entry of a workflow's `steps` array. OperationID,
-// OperationPath and WorkflowID are mutually exclusive per the Arazzo
-// step oneOf; the schema pass reports violations, the model just holds
-// whichever was declared.
+// OperationPath, WorkflowID and ChannelPath are mutually exclusive per
+// the Arazzo step oneOf; the schema pass reports violations, the model
+// just holds whichever was declared.
 type Step struct {
 	StepID          string
 	Description     string
 	OperationID     string
 	OperationPath   string
 	WorkflowID      string
+	ChannelPath     string   // AsyncAPI channel reference (Arazzo 1.1)
+	Action          string   // "send" or "receive", AsyncAPI steps only
+	CorrelationID   string   // matches a received message to its request
+	Timeout         int      // milliseconds to wait before the step fails, 0 when unset
+	DependsOn       []string // steps that must complete first
 	Parameters      []Parameter
 	RequestBody     *RequestBody
 	SuccessCriteria []SuccessCriterion
 	Outputs         []OutputEntry
 	OnSuccess       []SuccessAction
 	OnFailure       []FailureAction
+}
+
+// IsAsync reports whether the step sends or receives a message on an
+// AsyncAPI channel instead of calling an HTTP operation.
+func (s Step) IsAsync() bool {
+	return s.ChannelPath != "" || s.Action != ""
+}
+
+// AsyncKind names an AsyncAPI step for generated comments, e.g.
+// "AsyncAPI receive step".
+func (s Step) AsyncKind() string {
+	if s.Action == "" {
+		return "AsyncAPI step"
+	}
+	return "AsyncAPI " + s.Action + " step"
 }
 
 // SuccessAction is one entry of a step's `onSuccess` array. Per the

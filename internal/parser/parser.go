@@ -508,6 +508,16 @@ func parseStep(n *yaml.Node) (model.Step, error) {
 			step.OperationPath = scalarString(kv.Value)
 		case "workflowId":
 			step.WorkflowID = scalarString(kv.Value)
+		case "channelPath":
+			step.ChannelPath = scalarString(kv.Value)
+		case "action":
+			step.Action = scalarString(kv.Value)
+		case "correlationId":
+			step.CorrelationID = scalarString(kv.Value)
+		case "timeout":
+			step.Timeout = scalarInt(kv.Value)
+		case "dependsOn":
+			step.DependsOn = parseStringSequence(kv.Value)
 		case "parameters":
 			step.Parameters = parseParameters(kv.Value)
 		case "requestBody":

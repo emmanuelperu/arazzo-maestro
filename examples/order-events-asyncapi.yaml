@@ -1,0 +1,84 @@
+asyncapi: 3.0.0
+info:
+  title: Order Events
+  version: 1.0.0
+  description: Payment messages of the event-driven checkout, described from the checkout client's side. Orders themselves go through the HTTP API in order-events-api.yaml.
+defaultContentType: application/json
+channels:
+  paymentRequested:
+    address: payments.requested
+    description: Payment requests for placed orders.
+    messages:
+      paymentRequested:
+        $ref: "#/components/messages/PaymentRequested"
+  paymentConfirmed:
+    address: payments.confirmed
+    description: Outcome of each payment request.
+    messages:
+      paymentConfirmed:
+        $ref: "#/components/messages/PaymentConfirmed"
+operations:
+  requestPayment:
+    action: send
+    summary: Ask the payment service to charge an order.
+    channel:
+      $ref: "#/channels/paymentRequested"
+    messages:
+      - $ref: "#/channels/paymentRequested/messages/paymentRequested"
+  receivePaymentConfirmed:
+    action: receive
+    summary: Learn whether the charge went through.
+    channel:
+      $ref: "#/channels/paymentConfirmed"
+    messages:
+      - $ref: "#/channels/paymentConfirmed/messages/paymentConfirmed"
+components:
+  correlationIds:
+    checkout:
+      description: Shared by the order request and every payment message of the same checkout.
+      location: $message.header#/correlationId
+  messages:
+    PaymentRequested:
+      name: PaymentRequested
+      correlationId:
+        $ref: "#/components/correlationIds/checkout"
+      headers:
+        $ref: "#/components/schemas/CheckoutHeaders"
+      payload:
+        type: object
+        required: [orderId, amount]
+        properties:
+          orderId:
+            type: string
+            description: Order to charge.
+          amount:
+            type: number
+            description: Amount to charge, in euros.
+    PaymentConfirmed:
+      name: PaymentConfirmed
+      correlationId:
+        $ref: "#/components/correlationIds/checkout"
+      headers:
+        $ref: "#/components/schemas/CheckoutHeaders"
+      payload:
+        type: object
+        required: [orderId, status, paymentId]
+        properties:
+          orderId:
+            type: string
+            description: Order the payment belongs to.
+          status:
+            type: string
+            enum: [captured, refused]
+            description: Outcome of the charge.
+          paymentId:
+            type: string
+            description: Payment identifier, for refunds and reconciliation.
+  schemas:
+    CheckoutHeaders:
+      type: object
+      required: [correlationId]
+      properties:
+        correlationId:
+          type: string
+          description: Checkout correlation identifier.

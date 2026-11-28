@@ -123,6 +123,9 @@ examples/                    Naming convention:
 ├── checkout-branching-api.yaml      OpenAPI contract for checkout-branching.arazzo.yaml
 ├── auth.arazzo.yaml         Sample Arazzo, login token chained into authenticated calls
 ├── auth-api.yaml            OpenAPI contract for auth.arazzo.yaml
+├── order-events.arazzo.yaml Sample Arazzo 1.1, HTTP calls + AsyncAPI send/receive steps
+├── order-events-api.yaml    OpenAPI contract for order-events.arazzo.yaml
+├── order-events-asyncapi.yaml  AsyncAPI 3.0 contract for order-events.arazzo.yaml
 └── generated/               `make hurl` / `make perf` output (checked in)
 docs/                        Deep guides: ROADMAP, SPEC_COMPLIANCE,
                              TEST_GENERATION, RECIPES
